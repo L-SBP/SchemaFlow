@@ -1,0 +1,129 @@
+# docker-compose.yml
+version: '3.8'
+
+services:
+  # ======================
+  # 系统元数据库 (PostgreSQL)
+  # ======================
+  postgres-meta:
+    image: postgres:15
+    restart: always
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_DB: app_meta
+      POSTGRES_USER: appuser
+      POSTGRES_PASSWORD: meta_secure_2025
+    volumes:
+      - ./data/postgres:/var/lib/postgresql/data
+
+  # ======================
+  # 用户业务数据库 (MySQL)
+  # ======================
+  mysql-user:
+    image: mysql:8.0
+    restart: always
+    ports:
+      - "3306:3306"
+    environment:
+      MYSQL_ROOT_PASSWORD: root_secure_2025
+      MYSQL_DATABASE: default_proj
+      MYSQL_USER: appuser
+      MYSQL_PASSWORD: user_secure_2025
+      MYSQL_DEFAULT_AUTHENTICATION_PLUGIN: mysql_native_password
+    command: >
+      --default-authentication-plugin=mysql_native_password
+      --sql-mode=NO_ENGINE_SUBSTITUTION
+    volumes:
+      - ./data/mysql:/var/lib/mysql
+
+  # ======================
+  # Redis (缓存 + Celery Broker)
+  # ======================
+  redis:
+    image: redis:7-alpine
+    restart: always
+    ports:
+      - "6379:6379"
+    volumes:
+      - ./data/redis:/data
+
+  # ======================
+  # 后端 API (FastAPI)
+  # ======================
+  backend:
+    build:
+      context: ./src/backend
+      dockerfile: Dockerfile.dev
+    ports:
+      - "8000:8000"
+    environment:
+      - POSTGRES_SERVER=postgres-meta
+      - POSTGRES_PORT=5432
+      - POSTGRES_DB=app_meta
+      - POSTGRES_USER=appuser
+      - POSTGRES_PASSWORD=meta_secure_2025
+      - MYSQL_HOST=mysql-user
+      - MYSQL_PORT=3306
+      - MYSQL_USER=appuser
+      - MYSQL_PASSWORD=user_secure_2025
+      - REDIS_URL=redis://redis:6379/0
+      - CELERY_BROKER_URL=redis://redis:6379/0
+      - CELERY_RESULT_BACKEND=redis://redis:6379/0
+    depends_on:
+      - postgres-meta
+      - mysql-user
+      - redis
+    volumes:
+      - ./backend:/app
+    command: ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]
+
+  # ======================
+  # Celery Worker
+  # ======================
+  celery-worker:
+    build:
+      context: ./src/backend
+      dockerfile: Dockerfile.dev
+    environment:
+      - POSTGRES_SERVER=postgres-meta
+      - POSTGRES_PORT=5432
+      - POSTGRES_DB=app_meta
+      - POSTGRES_USER=appuser
+      - POSTGRES_PASSWORD=meta_secure_2025
+      - MYSQL_HOST=mysql-user
+      - MYSQL_PORT=3306
+      - MYSQL_USER=appuser
+      - MYSQL_PASSWORD=user_secure_2025
+      - REDIS_URL=redis://redis:6379/0
+      - CELERY_BROKER_URL=redis://redis:6379/0
+      - CELERY_RESULT_BACKEND=redis://redis:6379/0
+    depends_on:
+      - redis
+      - backend
+    volumes:
+      - ./backend:/app
+    command: ["celery", "-A", "main.celery_app", "worker", "--loglevel=info"]
+
+  # # ======================
+  # # 前端 (React + Vite)
+  # # ======================
+  # frontend:
+  #   build:
+  #     context: ./src/frontend
+  #     dockerfile: Dockerfile.dev
+  #   ports:
+  #     - "3000:3000"
+  #     - "3001:3001"  # Vite HMR
+  #   volumes:
+  #     - ./frontend:/app
+  #     - /app/node_modules  # 避免覆盖 node_modules
+  #   environment:
+  #     - VITE_API_BASE_URL=http://localhost:8000/api/v1
+  #   depends_on:
+  #     - backend
+
+volumes:
+  postgres:
+  mysql:
+  redis:
