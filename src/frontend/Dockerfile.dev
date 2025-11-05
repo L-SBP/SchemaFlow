@@ -1,0 +1,11 @@
+# ./src/frontend/Dockerfile.dev
+FROM node:18-alpine
+
+WORKDIR /app
+
+# 安装依赖（利用 Docker 层缓存）
+COPY package*.json ./
+RUN npm ci --silent
+
+# 启动 Vite 开发服务器
+CMD ["npm", "run", "dev"]
