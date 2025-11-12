@@ -75,7 +75,7 @@ services:
       - mysql-user
       - redis
     volumes:
-      - ./backend:/app
+      - ./src/backend:/app
     command: ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]
 
   # ======================
@@ -102,7 +102,7 @@ services:
       - redis
       - backend
     volumes:
-      - ./backend:/app
+      - ./src/backend:/app
     command: ["celery", "-A", "main.celery_app", "worker", "--loglevel=info"]
 
   # # ======================
