@@ -1,7 +1,7 @@
 from sqlalchemy import Column, Integer, DateTime, Text, ForeignKey, CheckConstraint, Index
 from sqlalchemy.sql import func
 
-from src.backend.app.core.database import Base
+from app.core.database import Base
 
 class UnbanRequest(Base):
     __tablename__ = "unban_request"
@@ -71,4 +71,3 @@ class UnbanRequest(Base):
         nullable=False,
         comment='记录创建时间'
     )
-

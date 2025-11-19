@@ -1,7 +1,7 @@
 from sqlalchemy import Column, Text, Integer, Index, CheckConstraint, ForeignKey, DateTime
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.sql import func
-from src.backend.app.core.database import Base
+from app.core.database import Base
 
 class AIGeneratedStatement(Base):
     __tablename__ = "ai_generated_statement"

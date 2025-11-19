@@ -1,11 +1,12 @@
-# backend/Dockerfile.dev
 FROM python:3.10-slim
 
 WORKDIR /app
 
-RUN pip config set global.index-url https://pypi.tuna.tsinghua.edu.cn/simple
+RUN pip config set global.index-url https://mirrors.aliyun.com/pypi/simple/ && \
+    pip config set global.trusted-host mirrors.aliyun.com
 
 COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+RUN ls -la requirements.txt
+RUN pip install --no-cache-dir -r requirements.txt || (echo "❌ 依赖安装失败!"; exit 1)
 
 COPY . .

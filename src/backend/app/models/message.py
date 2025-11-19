@@ -1,7 +1,7 @@
 from sqlalchemy import Column, Integer, Text, Boolean, CheckConstraint, Index, DateTime, ForeignKey
 from sqlalchemy.sql import func
 
-from src.backend.app.core.database import Base
+from app.core.database import Base
 
 class Message(Base):
     __tablename__ = 'message'

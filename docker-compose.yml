@@ -1,129 +1,88 @@
-# docker-compose.yml
 version: '3.8'
-
 services:
-  # ======================
-  # 系统元数据库 (PostgreSQL)
-  # ======================
+  # 1. PostgreSQL (系统元数据 - 存储用户归属关系、日志等)
   postgres-meta:
     image: postgres:15
     restart: always
     ports:
-      - "127.0.0.1:5432:5432"
+      - "5432:5432"
     environment:
-      POSTGRES_DB: app_meta
-      POSTGRES_USER: appuser
-      POSTGRES_PASSWORD: meta_secure_2025
+      POSTGRES_DB: auto_db_deployment
+      POSTGRES_USER: admin
+      POSTGRES_PASSWORD: secure_2025
+    command: >
+      postgres -c listen_addresses='*'
+      -c max_connections=100
     volumes:
-      - ./data/postgres:/var/lib/postgresql/data
+      - postgres_data:/var/lib/postgresql/data
+      - ./init-db/postgres-init.sh:/docker-entrypoint-initdb.d/init.sh:ro
+    networks:
+      - app-network
 
-  # ======================
-  # 用户业务数据库 (MySQL)
-  # ======================
+  # 2. MySQL (用户业务资源池 - 动态创建库的地方)
   mysql-user:
     image: mysql:8.0
     restart: always
     ports:
-      - "3306:3306"
+      - "3306:3306"  # 开发环境必需，生产环境建议仅暴露给内网或限制IP
     environment:
+      # 【关键】这是你的后端用来创建新库的“上帝账号”
       MYSQL_ROOT_PASSWORD: root_secure_2025
-      MYSQL_DATABASE: default_proj
-      MYSQL_USER: appuser
-      MYSQL_PASSWORD: user_secure_2025
+      # 下面这些只是默认创建的一个空库，实际业务中可能用不到，但留着也可以用于健康检查
+      MYSQL_DATABASE: default_check_db
+      MYSQL_USER: check_user
+      MYSQL_PASSWORD: check_password
       MYSQL_DEFAULT_AUTHENTICATION_PLUGIN: mysql_native_password
     command: >
       --default-authentication-plugin=mysql_native_password
-      --sql-mode=NO_ENGINE_SUBSTITUTION
+      --character-set-server=utf8mb4
+      --collation-server=utf8mb4_unicode_ci
+      --bind-address=0.0.0.0
     volumes:
-      - ./data/mysql:/var/lib/mysql
+      - mysql_data:/var/lib/mysql
+    networks:
+      - app-network
 
-  # ======================
-  # Redis (缓存 + Celery Broker)
-  # ======================
+  # 3. Redis
   redis:
     image: redis:7-alpine
     restart: always
     ports:
       - "6379:6379"
+    command: >
+      redis-server 
+      --bind 0.0.0.0
+      --requirepass secure_redis_2025
+      --appendonly yes
     volumes:
-      - ./data/redis:/data
+      - redis_data:/data
+    networks:
+      - app-network
 
-  # ======================
-  # 后端 API (FastAPI)
-  # ======================
-  backend:
-    build:
-      context: ./src/backend
-      dockerfile: Dockerfile.dev
-    ports:
-      - "8000:8000"
-    environment:
-      - POSTGRES_SERVER=postgres-meta
-      - POSTGRES_PORT=5432
-      - POSTGRES_DB=app_meta
-      - POSTGRES_USER=appuser
-      - POSTGRES_PASSWORD=meta_secure_2025
-      - MYSQL_HOST=mysql-user
-      - MYSQL_PORT=3306
-      - MYSQL_USER=appuser
-      - MYSQL_PASSWORD=user_secure_2025
-      - REDIS_URL=redis://redis:6379/0
-      - CELERY_BROKER_URL=redis://redis:6379/0
-      - CELERY_RESULT_BACKEND=redis://redis:6379/0
-    depends_on:
-      - postgres-meta
-      - mysql-user
-      - redis
-    volumes:
-      - ./src/backend:/app
-    command: ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]
 
-  # ======================
-  # Celery Worker
-  # ======================
-  celery-worker:
-    build:
-      context: ./src/backend
-      dockerfile: Dockerfile.dev
-    environment:
-      - POSTGRES_SERVER=postgres-meta
-      - POSTGRES_PORT=5432
-      - POSTGRES_DB=app_meta
-      - POSTGRES_USER=appuser
-      - POSTGRES_PASSWORD=meta_secure_2025
-      - MYSQL_HOST=mysql-user
-      - MYSQL_PORT=3306
-      - MYSQL_USER=appuser
-      - MYSQL_PASSWORD=user_secure_2025
-      - REDIS_URL=redis://redis:6379/0
-      - CELERY_BROKER_URL=redis://redis:6379/0
-      - CELERY_RESULT_BACKEND=redis://redis:6379/0
-    depends_on:
-      - redis
-      - backend
-    volumes:
-      - ./src/backend:/app
-    command: ["celery", "-A", "main.celery_app", "worker", "--loglevel=info"]
-
-  # # ======================
-  # # 前端 (React + Vite)
-  # # ======================
-  frontend:
-    build:
-      context: ./src/frontend
-      dockerfile: Dockerfile.dev
-    ports:
-      - "3000:3000"      # Vite dev server
-      - "3001:3001"      # Vite HMR WebSocket (关键！)
-    volumes:
-      - ./src/frontend:/app
-      - /app/node_modules  # 避免主机 node_modules 覆盖容器内的
-    environment:
-      - VITE_API_BASE_URL=http://host.docker.internal:8000/api/v1
-    depends_on:
-      - backend
+# # 前端 (React + Vite) - 双环境适配
+#  frontend:
+#    build:
+#      context: ./src/frontend
+#      dockerfile: Dockerfile.dev
+#    ports:
+#      - "3000:3000"
+#      - "3001:3001"  # HMR WebSocket
+#    volumes:
+#      - ./src/frontend:/app
+#      - /app/node_modules
+#    environment:
+#      - VITE_API_BASE_URL=${VITE_API_BASE_URL}  # 从环境变量读取（双环境适配）
+#    depends_on:
+#      - backend
+#    networks:
+#      - app-network
 
 volumes:
-  postgres:
-  mysql:
-  redis:
+  postgres_data:
+  mysql_data:
+  redis_data:
+
+networks:
+  app-network:
+    driver: bridge

@@ -2,7 +2,7 @@ from sqlalchemy import Column, Integer, Text, String, DateTime, ForeignKey, Inde
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.sql import func
 
-from src.backend.app.core.database import Base
+from app.core.database import Base
 
 class QueryResult(Base):
     __tablename__ = 'query_result'
