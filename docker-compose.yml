@@ -1,145 +1,66 @@
+version: '3.8'
 services:
-  # 系统元数据库 (PostgreSQL) - 支持Radmin局域网访问
+  # 1. PostgreSQL (系统元数据 - 存储用户归属关系、日志等)
   postgres-meta:
     image: postgres:15
     restart: always
     ports:
       - "5432:5432"
     environment:
-      POSTGRES_DB: ${POSTGRES_DB}
-      POSTGRES_USER: ${POSTGRES_USER}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: auto_db_deployment
+      POSTGRES_USER: admin
+      POSTGRES_PASSWORD: secure_2025
     command: >
       postgres -c listen_addresses='*'
       -c max_connections=100
     volumes:
       - postgres_data:/var/lib/postgresql/data
-      - ./init-db/postgres-init.sh:/docker-entrypoint-initdb.d/init.sh:ro  # 初始化脚本
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
-      interval: 5s
-      timeout: 30s
-      retries: 10
-      start_period: 10s
+      - ./init-db/postgres-init.sh:/docker-entrypoint-initdb.d/init.sh:ro
     networks:
       - app-network
 
-  # 用户业务数据库 (MySQL)
+  # 2. MySQL (用户业务资源池 - 动态创建库的地方)
   mysql-user:
     image: mysql:8.0
     restart: always
     ports:
-      - "3306:3306"
+      - "3306:3306"  # 开发环境必需，生产环境建议仅暴露给内网或限制IP
     environment:
-      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
-      MYSQL_DATABASE: ${MYSQL_DATABASE}
-      MYSQL_USER: ${MYSQL_USER}
-      MYSQL_PASSWORD: ${MYSQL_PASSWORD}
+      # 【关键】这是你的后端用来创建新库的“上帝账号”
+      MYSQL_ROOT_PASSWORD: root_secure_2025
+      # 下面这些只是默认创建的一个空库，实际业务中可能用不到，但留着也可以用于健康检查
+      MYSQL_DATABASE: default_check_db
+      MYSQL_USER: check_user
+      MYSQL_PASSWORD: check_password
       MYSQL_DEFAULT_AUTHENTICATION_PLUGIN: mysql_native_password
     command: >
       --default-authentication-plugin=mysql_native_password
-      --sql-mode=NO_ENGINE_SUBSTITUTION
+      --character-set-server=utf8mb4
+      --collation-server=utf8mb4_unicode_ci
       --bind-address=0.0.0.0
-      --skip-name-resolve
     volumes:
       - mysql_data:/var/lib/mysql
-    healthcheck:
-      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u${MYSQL_USER}", "-p${MYSQL_PASSWORD}"]
-      interval: 5s
-      timeout: 30s
-      retries: 10
-      start_period: 10s
     networks:
       - app-network
 
-  # Redis（缓存+Celery Broker）- 修复安全漏洞
+  # 3. Redis
   redis:
     image: redis:7-alpine
     restart: always
     ports:
-      - "6379:6379"  # 修复：移除0.0.0.0前缀
+      - "6379:6379"
     command: >
-      redis-server --bind 0.0.0.0 
-      --requirepass ${REDIS_PASSWORD}
+      redis-server 
+      --bind 0.0.0.0
+      --requirepass secure_redis_2025
       --appendonly yes
-    environment:
-      REDIS_PASSWORD: ${REDIS_PASSWORD}
     volumes:
       - redis_data:/data
-    healthcheck:
-      test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD}", "ping"]  # 带密码健康检查
-      interval: 5s
-      timeout: 30s
-      retries: 10
-      start_period: 5s
     networks:
       - app-network
 
-  # 后端 API (FastAPI) - 双环境兼容
-  backend:
-    build:
-      context: ./src/backend
-      dockerfile: Dockerfile.dev
-    ports:
-      - "8000:8000"
-    environment:
-      - POSTGRES_SERVER=postgres-meta  # Docker内部服务名（双环境通用）
-      - POSTGRES_PORT=5432
-      - POSTGRES_DB=${POSTGRES_DB}
-      - POSTGRES_USER=${POSTGRES_USER}
-      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
-      - MYSQL_HOST=mysql-user
-      - MYSQL_PORT=3306
-      - MYSQL_USER=${MYSQL_USER}
-      - MYSQL_PASSWORD=${MYSQL_PASSWORD}
-      - REDIS_URL=redis://:${REDIS_PASSWORD}@redis:6379/0  # 带密码连接Redis
-      - CELERY_BROKER_URL=redis://:${REDIS_PASSWORD}@redis:6379/0
-      - CELERY_RESULT_BACKEND=redis://:${REDIS_PASSWORD}@redis:6379/0
-    depends_on:
-      postgres-meta:
-        condition: service_healthy
-      mysql-user:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
-    volumes:
-      - ./src/backend/app:/app
-    working_dir: /app
-    command: ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]
-    user: "${UID:-1000}:${GID:-1000}"
-    networks:
-      - app-network
 
-  # Celery Worker
-  celery-worker:
-    build:
-      context: ./src/backend
-      dockerfile: Dockerfile.dev
-    environment:
-      - POSTGRES_SERVER=postgres-meta
-      - POSTGRES_PORT=5432
-      - POSTGRES_DB=${POSTGRES_DB}
-      - POSTGRES_USER=${POSTGRES_USER}
-      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
-      - MYSQL_HOST=mysql-user
-      - MYSQL_PORT=3306
-      - MYSQL_USER=${MYSQL_USER}
-      - MYSQL_PASSWORD=${MYSQL_PASSWORD}
-      - REDIS_URL=redis://:${REDIS_PASSWORD}@redis:6379/0
-      - CELERY_BROKER_URL=redis://:${REDIS_PASSWORD}@redis:6379/0
-      - CELERY_RESULT_BACKEND=redis://:${REDIS_PASSWORD}@redis:6379/0
-    depends_on:
-      - redis
-      - backend
-    volumes:
-      - ./src/backend/app:/app
-    working_dir: /app
-    command: ["celery", "-A", "celery_app:celery_app", "worker", "--loglevel=info"]
-    user: "${UID:-1000}:${GID:-1000}"
-    networks:
-      - app-network
-
-  # 前端 (React + Vite) - 双环境适配
+# # 前端 (React + Vite) - 双环境适配
 #  frontend:
 #    build:
 #      context: ./src/frontend
@@ -157,13 +78,11 @@ services:
 #    networks:
 #      - app-network
 
-# 数据卷（双环境数据持久化）
 volumes:
   postgres_data:
   mysql_data:
   redis_data:
 
-# 自定义网络（避免端口冲突，服务名解析稳定）
 networks:
   app-network:
     driver: bridge
