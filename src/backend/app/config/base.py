@@ -1,0 +1,107 @@
+from pydantic_settings import BaseSettings
+from pydantic import SecretStr
+from sqlalchemy import URL
+
+class Appconfig(BaseSettings):
+    """
+    FastAPI的应用配置
+    """
+    # 应用名称
+    name: str
+    # 应用描述
+    description: str
+    # 应用接口
+    api: str
+    # 应用主机地址
+    host: str
+    # 应用端口
+    port: int
+    # uvicorn应用入口
+    uvicorn: str
+    # 应用版本
+    version: str
+    # 是否自动重载
+    reload: bool
+
+class DatabaseConfig(BaseSettings):
+    """
+    PostgresSQL数据库配置
+    """
+
+    # 数据库主机地址
+    host: str
+    # 数据库端口
+    port: int
+    # 数据库用户名
+    username: str
+    # 数据库密码
+    password: SecretStr
+    # 数据库名称
+    database: str
+    # 数据库连接配置
+    driver: str
+    # 是否开启sqlalchemy日志
+    echo: bool
+    # 允许溢出连接池大小的最大连接数
+    max_overflow: int
+    # 连接池大小
+    pool_size: int
+    # 池回收连接的时间间隔
+    pool_recycle: int
+    # 连接池中没有线程可用时，最多等待的时间
+    pool_timeout: int
+
+    @property
+    def sqlalchemy_database_url(self) -> URL:
+        return URL.create(
+            drivername=self.driver,
+            username=self.username,
+            password=self.password.get_secret_value(),
+            host=self.host,
+            port=self.port,
+            database=self.database,
+        )
+
+
+class RedisConfig(BaseSettings):
+    """
+    Redis数据库配置
+    """
+
+    # Redis主机地址
+    host: str
+    # Redis端口
+    port: int
+    # Redis用户名
+    username: str
+    # Redis密码
+    password: str
+    # Redis数据库索引
+    db: int
+
+class LogConfig(BaseSettings):
+    """
+    日志配置
+    """
+    # 日志文件级别
+    file_level: str
+    # 日志控制台级别
+    console_level: str
+    # 日志保存时间
+    retention: str
+    # 日志轮转时间
+    rotation: str
+
+class BaseConfig(BaseSettings):
+    """
+    基础配置
+    """
+
+    # 应用配置
+    app: Appconfig
+    # PostgresSQL数据库配置
+    db: DatabaseConfig
+    # Redis配置
+    redis: RedisConfig
+    # 日志配置
+    log: LogConfig
