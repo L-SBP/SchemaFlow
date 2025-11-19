@@ -1,8 +1,5 @@
 data/
 # Logs
-.env
-.env.dev
-.env.prod
 logs
 *.log
 npm-debug.log*
