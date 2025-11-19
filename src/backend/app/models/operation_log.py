@@ -1,7 +1,7 @@
 from sqlalchemy import Column, Integer, Text, String, Boolean, CheckConstraint, DateTime, ForeignKey, Index
 from sqlalchemy.sql import func
 
-from src.backend.app.core.database import Base
+from app.core.database import Base
 
 class OperationLog(Base):
     __tablename__ = 'operation_log'

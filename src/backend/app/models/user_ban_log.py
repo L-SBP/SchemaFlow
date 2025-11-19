@@ -2,7 +2,7 @@ from sqlalchemy import Column, Integer, Text, CheckConstraint, DateTime, Foreign
 from sqlalchemy.sql import func
 from sqlalchemy.dialects.postgresql import INTERVAL
 
-from src.backend.app.core.database import Base
+from app.core.database import Base
 
 class UserBanLog(Base):
     __tablename__ = "user_ban_log"
