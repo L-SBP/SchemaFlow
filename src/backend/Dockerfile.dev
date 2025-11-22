@@ -1,40 +1,12 @@
-# 1. 选择基础镜像
-# 建议使用 python:3.10-slim 或 3.11-slim，体积小且包含大多数必要环境
-FROM python:3.11-slim
+FROM python:3.10-slim
 
-# 2. 设置环境变量
-# 防止 Python 生成 .pyc 文件
-ENV PYTHONDONTWRITEBYTECODE=1
-# 确保控制台输出直接打印，不被缓存 (这对查看 Docker 日志很重要)
-ENV PYTHONUNBUFFERED=1
-
-# 3. 设置工作目录
 WORKDIR /app
 
-# 4. 安装系统级依赖
-# 虽然很多库提供了 binary 版本，但有些底层库（如 cryptography, psycopg2）可能仍需要编译工具
-# 如果构建过程中报错找不到 gcc 或 .h 文件，需要把这段注释打开
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    build-essential \
-    libpq-dev \
-    && rm -rf /var/lib/apt/lists/*
+RUN pip config set global.index-url https://mirrors.aliyun.com/pypi/simple/ && \
+    pip config set global.trusted-host mirrors.aliyun.com
 
-# 5. 复制依赖文件
-# 关键步骤：先只复制 requirements.txt，这样只有当依赖变动时，才会重新执行 pip install
 COPY requirements.txt .
+RUN ls -la requirements.txt
+RUN pip install --no-cache-dir -r requirements.txt || (echo "❌ 依赖安装失败!"; exit 1)
 
-# 6. 安装 Python 依赖
-# --no-cache-dir 可以减小镜像体积
-RUN pip install --no-cache-dir --upgrade pip && \
-    pip install --no-cache-dir -r requirements.txt
-
-# 7. 复制项目代码
-# 将当前目录下的所有文件复制到容器的 /app 目录
 COPY . .
-
-# 8. 暴露端口 (根据您的 uvicorn设置，通常是 8000)
-EXPOSE 8000
-
-# 9. 启动命令
-# 注意：这里假设您的入口文件是 main.py，且 app 实例名为 app
-CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]

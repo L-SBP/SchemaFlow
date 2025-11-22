@@ -2,7 +2,7 @@
 import axios, { AxiosInstance, AxiosError, InternalAxiosRequestConfig } from 'axios';
 
 // 基础配置
-const BASE_URL = 'http://localhost:8000';
+const BASE_URL = import.meta.env.VITE_API_BASE_URL || 'https://api.dbplatform.example/v1';
 
 const client: AxiosInstance = axios.create({
   baseURL: BASE_URL,
