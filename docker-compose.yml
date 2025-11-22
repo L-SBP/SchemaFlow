@@ -1,8 +1,14 @@
 version: '3.8'
+
 services:
-  # 1. PostgreSQL (系统元数据 - 存储用户归属关系、日志等)
+  # -----------------------------------------------------------------------------
+  # 1. 基础设施服务 (数据库 & 缓存)
+  # -----------------------------------------------------------------------------
+
+  # PostgreSQL (后端业务数据库)
   postgres-meta:
     image: postgres:15
+    container_name: meta_postgres
     restart: always
     ports:
       - "5432:5432"
@@ -11,77 +17,149 @@ services:
       POSTGRES_USER: admin
       POSTGRES_PASSWORD: secure_2025
     command: >
-      postgres -c listen_addresses='*'
-      -c max_connections=100
+      postgres -c listen_addresses='*' -c max_connections=100
     volumes:
       - postgres_data:/var/lib/postgresql/data
-      - ./init-db/postgres-init.sh:/docker-entrypoint-initdb.d/init.sh:ro
+      # 如果你有初始化脚本，请取消下面的注释
+      # - ./init-db/postgres-init.sh:/docker-entrypoint-initdb.d/init.sh:ro
     networks:
       - app-network
 
-  # 2. MySQL (用户业务资源池 - 动态创建库的地方)
+  # MySQL (用户生成的数据库实例资源池)
   mysql-user:
     image: mysql:8.0
+    container_name: user_mysql
     restart: always
     ports:
-      - "3306:3306"  # 开发环境必需，生产环境建议仅暴露给内网或限制IP
+      - "3306:3306"
     environment:
-      # 【关键】这是你的后端用来创建新库的“上帝账号”
       MYSQL_ROOT_PASSWORD: root_secure_2025
-      # 下面这些只是默认创建的一个空库，实际业务中可能用不到，但留着也可以用于健康检查
       MYSQL_DATABASE: default_check_db
       MYSQL_USER: check_user
       MYSQL_PASSWORD: check_password
       MYSQL_DEFAULT_AUTHENTICATION_PLUGIN: mysql_native_password
     command: >
-      --default-authentication-plugin=mysql_native_password
-      --character-set-server=utf8mb4
-      --collation-server=utf8mb4_unicode_ci
-      --bind-address=0.0.0.0
+      --default-authentication-plugin=mysql_native_password --character-set-server=utf8mb4 --collation-server=utf8mb4_unicode_ci --bind-address=0.0.0.0
     volumes:
       - mysql_data:/var/lib/mysql
     networks:
       - app-network
 
-  # 3. Redis
+  # Redis (缓存 & 消息队列)
   redis:
     image: redis:7-alpine
+    container_name: redis
     restart: always
     ports:
       - "6379:6379"
-    command: >
-      redis-server 
-      --bind 0.0.0.0
-      --requirepass secure_redis_2025
-      --appendonly yes
+    # 注意：你的 backend/app/celery_app.py 中硬编码了 redis://redis:6379/0 (无密码)
+    # 为了匹配代码，这里暂时去掉 --requirepass，或者你需要修改代码中的 broker URL
+    command: redis-server --bind 0.0.0.0 --appendonly yes
     volumes:
       - redis_data:/data
     networks:
       - app-network
 
+  # -----------------------------------------------------------------------------
+  # 2. 应用服务 (后端 & 任务队列 & 前端)
+  # -----------------------------------------------------------------------------
 
-# # 前端 (React + Vite) - 双环境适配
-#  frontend:
-#    build:
-#      context: ./src/frontend
-#      dockerfile: Dockerfile.dev
-#    ports:
-#      - "3000:3000"
-#      - "3001:3001"  # HMR WebSocket
-#    volumes:
-#      - ./src/frontend:/app
-#      - /app/node_modules
-#    environment:
-#      - VITE_API_BASE_URL=${VITE_API_BASE_URL}  # 从环境变量读取（双环境适配）
-#    depends_on:
-#      - backend
-#    networks:
-#      - app-network
+  # 后端 API 服务 (FastAPI)
+  backend:
+    build:
+      context: ./src/backend
+      dockerfile: Dockerfile.dev
+    container_name: backend
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./src/backend:/app
+    environment:
+      # --- Pydantic BaseSettings 覆盖配置 (使用双下划线映射嵌套配置) ---
+      # 覆盖 config.yaml 中的 db 部分
+      - DB__HOST=postgres-meta
+      - DB__PORT=5432
+      - DB__USERNAME=admin
+      - DB__PASSWORD=secure_2025
+      - DB__DATABASE=auto_db_deployment
 
+      # 覆盖 config.yaml 中的 redis 部分
+      - REDIS__HOST=redis
+      - REDIS__PORT=6379
+
+      # 覆盖 config.yaml 中的 app 部分
+      - APP__HOST=0.0.0.0
+
+      # 如果代码中有逻辑读取这些非标准变量，保留它们以防万一
+      - POSTGRES_SERVER=postgres-meta
+      - POSTGRES_USER=admin
+      - POSTGRES_PASSWORD=secure_2025
+      - REDIS_HOST=redis
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+    depends_on:
+      - postgres-meta
+      - redis
+    networks:
+      - app-network
+
+  # Celery Worker (异步任务处理)
+  celery_worker:
+    build:
+      context: ./src/backend
+      dockerfile: Dockerfile.dev
+    container_name: celery
+    environment:
+      # 同样注入配置以确保 Worker 能连接到正确的 DB 和 Redis
+      - DB__HOST=postgres-meta
+      - DB__PORT=5432
+      - DB__USERNAME=admin
+      - DB__PASSWORD=secure_2025
+      - DB__DATABASE=auto_db_deployment
+      - REDIS__HOST=redis
+      - REDIS__PORT=6379
+      # 显式覆盖 Celery Broker URL (以防代码没读配置)
+      - CELERY_BROKER_URL=redis://redis:6379/0
+      - CELERY_RESULT_BACKEND=redis://redis:6379/0
+    # 启动命令
+    command: celery -A app.celery_app worker --loglevel=info
+    depends_on:
+      - redis
+      - backend
+    volumes:
+      - ./src/backend:/app
+    networks:
+      - app-network
+
+  # 前端服务 (React + Vite)
+  frontend:
+    build:
+      context: ./src/frontend
+      dockerfile: Dockerfile.dev
+    container_name: frontend
+    ports:
+      - "3000:3000"
+      - "3001:3001" # HMR 端口
+    volumes:
+      - ./src/frontend:/app
+      - /app/node_modules
+    environment:
+      # 浏览器访问的后端地址
+      - VITE_API_BASE_URL=http://localhost:8000
+      # 如果你需要传入 Gemini Key
+      # - GEMINI_API_KEY=${GEMINI_API_KEY}
+    depends_on:
+      - backend
+    networks:
+      - app-network
+
+# -----------------------------------------------------------------------------
+# 数据卷 & 网络定义
+# -----------------------------------------------------------------------------
 volumes:
   postgres_data:
   mysql_data:
   redis_data:
+
 
 networks:
   app-network:

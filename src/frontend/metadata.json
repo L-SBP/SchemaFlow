@@ -1,0 +1,5 @@
+{
+  "name": "AI-DB Auto Deploy",
+  "description": "An intelligent database management platform powered by Gemini, allowing natural language interaction for schema generation, querying, and analysis.",
+  "requestFramePermissions": []
+}
