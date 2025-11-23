@@ -7,7 +7,7 @@ import { UserRole } from '../types';
 
 // 2.3 登录请求参数
 export interface LoginRequest {
-  username: string; // 文档中可能是 email，但 Login.tsx 使用 username，请根据后端实际情况调整
+  username: string;
   password: string;
 }
 
