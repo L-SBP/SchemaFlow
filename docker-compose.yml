@@ -143,7 +143,7 @@ services:
       - /app/node_modules
     environment:
       # 浏览器访问的后端地址
-      - VITE_API_BASE_URL=http://localhost:8000
+      - VITE_API_BASE_URL=/api
       # 如果你需要传入 Gemini Key
       # - GEMINI_API_KEY=${GEMINI_API_KEY}
     depends_on:
