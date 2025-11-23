@@ -138,7 +138,6 @@ services:
     container_name: frontend
     ports:
       - "3000:3000"
-      - "3001:3001" # HMR 端口
     volumes:
       - ./src/frontend:/app
       - /app/node_modules

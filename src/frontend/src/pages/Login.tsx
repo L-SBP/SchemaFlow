@@ -138,7 +138,7 @@ export const Login: React.FC<LoginProps> = ({ onLogin }) => {
 
         <form onSubmit={handleSubmit} className="space-y-4">
           <Input
-            label="用户名 / 邮箱" // 登录时通常支持两者，提示语微调
+            label="用户名" // 登录时通常支持两者，提示语微调
             value={username}
             onChange={e => setUsername(e.target.value)}
             placeholder={isRegister ? "设置用户名" : "输入用户名或邮箱"}
