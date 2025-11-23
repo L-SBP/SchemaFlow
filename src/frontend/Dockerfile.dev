@@ -1,5 +1,6 @@
 # ./src/frontend/Dockerfile.dev
-FROM node:18-alpine
+# 使用满足 Vite 要求的 Node 版本（20.x+）
+FROM node:20-alpine
 
 WORKDIR /app
 
