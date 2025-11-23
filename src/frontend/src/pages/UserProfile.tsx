@@ -1,6 +1,6 @@
 import React from 'react';
-import { User, Project, UserRole, UserStatus } from '../types';
-import { Card, Button, Tag } from '../components/UI';
+import { User, Project, UserRole, UserStatus } from '../types.ts';
+import { Card, Button, Tag } from '../components/UI.tsx';
 import { ArrowLeft, Clock, Database, Shield, MapPin, Globe } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from 'recharts';
 

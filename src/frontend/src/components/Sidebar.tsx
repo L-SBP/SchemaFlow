@@ -1,7 +1,7 @@
 
 import React from 'react';
 import { LayoutDashboard, MessageSquare, Database, Users, FileText, Bell } from 'lucide-react';
-import { UserRole } from '../types';
+import { UserRole } from '../types.ts';
 
 interface SidebarProps {
   role: UserRole;

@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
-import { Card, Button, Input, Tag } from '../components/UI';
+import { Card, Button, Input, Tag } from '../components/UI.tsx';
 import { Save, User as UserIcon } from 'lucide-react';
-import { UserRole } from '../types';
+import { UserRole } from '../types.ts';
 
 interface ProfileProps {
   user: { name: string; role: UserRole } | null;

@@ -1,9 +1,9 @@
 
 import React, { useState, useRef, useEffect } from 'react';
-import { Project, Message, QueryResult, ChartData, ChatSession } from '../types';
-import { Button } from '../components/UI';
+import { Project, Message, QueryResult, ChartData, ChatSession } from '../types.ts';
+import { Button } from '../components/UI.tsx';
 import { Send, BarChart as BarChartIcon, Table as TableIcon, Plus, MessageSquare, Edit2, Trash2, Check, X, ChevronLeft, Loader2, Sparkles, AlertTriangle, Play, Ban, CheckCircle2 } from 'lucide-react';
-import { generateSQL, summarizeData } from '../services/geminiService';
+import { generateSQL, summarizeData } from '../services/geminiService.ts';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 
 interface WorkspaceProps {

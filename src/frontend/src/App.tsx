@@ -1,19 +1,19 @@
 
 import React, { useState } from 'react';
-import { Sidebar } from './components/Sidebar';
-import { Header } from './components/Header';
-import { Login } from './pages/Login';
-import { Dashboard } from './pages/Dashboard';
-import { Workspace } from './pages/Workspace';
-import { AdminPanel } from './pages/Admin';
-import { AdminAnnouncements } from './pages/AdminAnnouncements';
-import { UserProfile } from './pages/UserProfile';
-import { Reports } from './pages/Reports';
-import { Glossary } from './pages/Glossary';
-import { Profile } from './pages/Profile';
-import { AdminStatus } from './pages/AdminStatus';
-import { Announcements } from './pages/Announcements';
-import { UserRole, Project, User, Announcement, UserStatus } from './types';
+import { Sidebar } from './components/Sidebar.tsx';
+import { Header } from './components/Header.tsx';
+import { Login } from './pages/Login.tsx';
+import { Dashboard } from './pages/Dashboard.tsx';
+import { Workspace } from './pages/Workspace.tsx';
+import { AdminPanel } from './pages/Admin.tsx';
+import { AdminAnnouncements } from './pages/AdminAnnouncements.tsx';
+import { UserProfile } from './pages/UserProfile.tsx';
+import { Reports } from './pages/Reports.tsx';
+import { Glossary } from './pages/Glossary.tsx';
+import { Profile } from './pages/Profile.tsx';
+import { AdminStatus } from './pages/AdminStatus.tsx';
+import { Announcements } from './pages/Announcements.tsx';
+import { UserRole, Project, User, Announcement, UserStatus } from './types.ts';
 
 // Mock initial projects
 const INITIAL_PROJECTS: Project[] = [

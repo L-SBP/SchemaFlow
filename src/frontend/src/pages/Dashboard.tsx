@@ -1,8 +1,8 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Project } from '../types';
-import { Card, Button, Tag, Modal, Input, ProgressBar, Steps } from '../components/UI';
+import { Project } from '../types.ts';
+import { Card, Button, Tag, Modal, Input, ProgressBar, Steps } from '../components/UI.tsx';
 import { Plus, Database, Server, Clock, ArrowRight, Terminal, Loader2, CheckCircle2, BrainCircuit, Code2, PlayCircle, Sparkles } from 'lucide-react';
-import { generateSchema } from '../services/geminiService';
+import { generateSchema } from '../services/geminiService.ts';
 
 interface DashboardProps {
   projects: Project[];
