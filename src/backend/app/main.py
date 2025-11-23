@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 # src/backend/app/main.py
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -109,3 +110,10 @@ if __name__ == "__main__":
     print("API Documentation: http://localhost:8001/docs")
     print("Chat Endpoint: POST /api/v1/chat/chat")
     uvicorn.run(app, host="0.0.0.0", port=8001, reload=True)
+=======
+import uvicorn
+from server import config
+
+if __name__ == "__main__":
+    uvicorn.run(config.app.uvicorn, host=config.app.host, port=config.app.port, reload=config.app.reload)
+>>>>>>> develop

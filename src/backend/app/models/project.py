@@ -1,7 +1,7 @@
 from sqlalchemy import Column, Integer, String, Text, DateTime, ForeignKey, CheckConstraint, Index
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.sql import func
-from src.backend.app.core.database import Base
+from app.core.database import Base
 
 
 class Project(Base):

@@ -1,7 +1,7 @@
 from sqlalchemy import Column, Text, String, Integer, DateTime, CheckConstraint, Index, ForeignKey
 from sqlalchemy.sql import func
 
-from src.backend.app.core.database import Base
+from app.core.database import Base
 
 class ViolationLog(Base):
     __tablename__ = "violation_log"

@@ -1,7 +1,7 @@
 from sqlalchemy import Column, Integer, CheckConstraint, Text, DateTime, String, ForeignKey, Index
 from sqlalchemy.sql import func
 
-from src.backend.app.core.database import Base
+from app.core.database import Base
 
 class UserProfileChangeLog(Base):
     __tablename__ = "user_profile_change_log"
