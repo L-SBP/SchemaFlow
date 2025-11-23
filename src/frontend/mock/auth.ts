@@ -5,7 +5,7 @@ export default [
   // 1. 发送注册验证码
   // 对应 authApi.sendRegisterCode -> POST /auth/register/send-code
   {
-    url: '/api/auth/register/send-code', // 注意：这里不需要加 /api 前缀，除非你的 client.ts baseURL 里有 /api
+    url: '/api/auth/register/send-code',
     method: 'post',
     response: ({ body }) => {
       console.log('Mock: 收到发送验证码请求', body);

@@ -24,7 +24,7 @@ export default defineConfig(({ command, mode }) => {
         '/api': {
           // 关键点：这里必须写 "backend"，因为 Vite 是在容器里运行的，
           // 它能解析 Docker 网络里的服务名
-          target: 'http://backend:8000',
+          target: 'http://host.docker.internal:8000',
           changeOrigin: true,
           // 如果后端接口本身不带 /api 前缀，需要把路径里的 /api 去掉
           // rewrite: (path) => path.replace(/^\/api/, '') 
