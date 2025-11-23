@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { UserRole } from '../types';
+import { UserRole } from '../types.ts';
 import { LogOut, User as UserIcon, Settings } from 'lucide-react';
 
 interface HeaderProps {

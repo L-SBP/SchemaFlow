@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
-import { Button, Input } from '../components/UI';
-import { UserRole } from '../types';
-import { authApi } from '../api/auth'; // 引入 API 模块
+import { Button, Input } from '../components/UI.tsx';
+import { UserRole } from '../types.ts';
+import { authApi } from '../api/auth.ts'; // 引入 API 模块
 
 interface LoginProps {
   onLogin: (role: UserRole, username: string) => void;

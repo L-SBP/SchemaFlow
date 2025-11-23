@@ -1,9 +1,9 @@
 
 import React, { useState } from 'react';
-import { Card, Button, Tag, ProgressBar } from '../components/UI';
+import { Card, Button, Tag, ProgressBar } from '../components/UI.tsx';
 import { Activity, Server, Shield, Users, AlertTriangle, Zap, CheckCircle2, Clock } from 'lucide-react';
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ComposedChart, Bar, Line, Legend } from 'recharts';
-import { User, UserRole, RiskEvent } from '../types';
+import { User, UserRole, RiskEvent } from '../types.ts';
 
 // Mock Data
 const MOCK_ADMINS: User[] = [

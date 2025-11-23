@@ -1,7 +1,7 @@
 
 import React, { useState, useRef } from 'react';
-import { Project, GlossaryTerm } from '../types';
-import { Card, Button, Input, Modal, Tag } from '../components/UI';
+import { Project, GlossaryTerm } from '../types.ts';
+import { Card, Button, Input, Modal, Tag } from '../components/UI.tsx';
 import { Database, Plus, Search, FileUp, FileDown, Trash2, Edit2, Book, Filter, AlertCircle } from 'lucide-react';
 
 interface GlossaryProps {

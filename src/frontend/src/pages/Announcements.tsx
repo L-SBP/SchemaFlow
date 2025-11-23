@@ -1,7 +1,7 @@
 
 import React, { useState } from 'react';
-import { Announcement } from '../types';
-import { Card, Button, Modal, Tag } from '../components/UI';
+import { Announcement } from '../types.ts';
+import { Card, Button, Modal, Tag } from '../components/UI.tsx';
 import { Megaphone, Bell, Calendar } from 'lucide-react';
 
 interface AnnouncementsProps {
