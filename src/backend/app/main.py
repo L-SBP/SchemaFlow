@@ -1,3 +1,4 @@
+import uvicorn
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
@@ -77,6 +78,5 @@ async def health():
     return {"status": "healthy", "service": "chat-backend"}
 
 if __name__ == "__main__":
-    import uvicorn
     print("🚀 Starting AI Database Platform Chat Server...")
     uvicorn.run(app, host="0.0.0.0", port=8000)
