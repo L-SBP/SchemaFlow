@@ -1,7 +1,7 @@
 // src/api/auth.ts
-import client from './client';
+import client from './client.ts';
 // 假设您现有的 UserRole 定义在 types 目录
-import { UserRole } from '../types';
+import { UserRole } from '../types.ts';
 
 // --- 类型定义 (参考 API 文档 V1.3) ---
 

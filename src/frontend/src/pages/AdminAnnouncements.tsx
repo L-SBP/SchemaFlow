@@ -1,7 +1,7 @@
 
 import React, { useState } from 'react';
-import { Announcement } from '../types';
-import { Card, Button, Tag, Input, Modal } from '../components/UI';
+import { Announcement } from '../types.ts';
+import { Card, Button, Tag, Input, Modal } from '../components/UI.tsx';
 import { Plus, Edit, Trash, Megaphone } from 'lucide-react';
 
 interface AdminAnnouncementsProps {

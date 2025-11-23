@@ -1,5 +1,5 @@
 import { GoogleGenAI, GenerateContentResponse } from "@google/genai";
-import { Message } from "../types";
+import { Message } from "../types.ts";
 
 // Initialize the client
 const apiKey = process.env.API_KEY || ''; 

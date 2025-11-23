@@ -1,7 +1,7 @@
 
 import React, { useState, useMemo } from 'react';
-import { Project, Report, ReportType, QueryResult } from '../types';
-import { Card, Button, Modal, Input, Tag, Steps } from '../components/UI';
+import { Project, Report, ReportType, QueryResult } from '../types.ts';
+import { Card, Button, Modal, Input, Tag, Steps } from '../components/UI.tsx';
 import { Plus, BarChart2, PieChart, TrendingUp, Download, Trash2, Edit2, Filter, Database, Table as TableIcon, ScatterChart, ArrowRight, ArrowLeft, Save } from 'lucide-react';
 import { BarChart, Bar, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart as RePieChart, Pie, Cell, ScatterChart as ReScatterChart, Scatter, ZAxis } from 'recharts';
 
