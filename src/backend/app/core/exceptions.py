@@ -24,6 +24,11 @@ class UsernameHasBeenRegisteredException(BusinessException):
     def __init__(self):
         super().__init__(code=400, message="Username has been registered")
 
+class SendVerificationCodeFailedException(BusinessException):
+    """发送验证码失败"""
+    def __init__(self):
+        super().__init__(code=500, message="Failed to send verification code")
+
 class CodeInvalidException(BusinessException):
     """验证码无效或已过期"""
     def __init__(self):
