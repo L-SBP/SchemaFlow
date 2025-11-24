@@ -2,11 +2,10 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 
-from app.core.config import get_config
-from app.core.database import PsqlHelper
-from app.utils.log import log
-
-config = get_config()
+from core.config import config
+from core.log import log
+from core.database import PsqlHelper
+from api.v1.api import api_router
 
 async def startup_services(app: FastAPI):
     """
@@ -46,9 +45,11 @@ async def lifespan(app: FastAPI):
     log.info("app shutdown")
     await close_services(app)
 
-app = FastAPI(
+my_app = FastAPI(
     title=config.app.name,
     description=config.app.description,
     version=config.app.version,
     lifespan=lifespan,
 )
+
+my_app.include_router(api_router, prefix=config.app.api)
