@@ -54,10 +54,8 @@ dev:
     port: 6379
     # Redis数据库索引
     db: 0
-    # Redis用户名
-    username: ""
     # Redis密码
-    password: ""
+    password: "secure_redis_2025"
 
   log:
     # 文件日志级别
@@ -76,6 +74,20 @@ dev:
     algorithm: HS256
     # JWT访问令牌有效期
     expire_time: 10080  # 60 * 24 * 7 minutes
+
+  smtp:
+    # SMTP服务器
+    host: smtp.qq.com
+    # SMTP端口
+    port: 465
+    # 发送者名称
+    sender_name: "auto_db_deployment"
+    # 发送者邮箱
+    sender: 2803234009@qq.com
+    # 授权码
+    key: "bfujmrhgwroudhei"
+    # 验证码有效期
+    expire_time_seconds: 300
 
 
 # 生产环境
@@ -107,8 +119,7 @@ prod:
     host: localhost
     port: 6379
     db: 0
-    username: ""
-    password: ""
+    password: "secure_redis_2025"
 
   log:
     file_level: DEBUG
@@ -120,3 +131,11 @@ prod:
     secret_key: "prod_secret_key" # 占位，后面会生成强密钥
     algorithm: HS256
     expire_time: 1440  # 60 * 24 minutes
+
+  smtp:
+    host: smtp.qq.com
+    port: 465
+    sender_name: "auto_db_deployment"
+    sender: 2803234009@qq.com
+    key: "bfujmrhgwroudhei"
+    expire_time_seconds: 300
