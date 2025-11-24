@@ -8,6 +8,8 @@ yarn-error.log*
 pnpm-debug.log*
 lerna-debug.log*
 
+src/backend/app/auto_db_deployment.egg-info
+
 __pycache__/
 *.pyc
 *.pyo
