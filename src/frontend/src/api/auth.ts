@@ -49,7 +49,7 @@ export const authApi = {
    * @param email 用户邮箱
    */
   sendRegisterCode: (email: string) => {
-    return client.post<void, void>('/auth/register/send-code', { email });
+    return client.post<void, void>('/v1/auth/register/send-code', { email });
   },
 
   /**
@@ -57,7 +57,7 @@ export const authApi = {
    * @param data 注册表单数据
    */
   register: (data: RegisterRequest) => {
-    return client.post<any, RegisterResponse>('/auth/register', data);
+    return client.post<any, RegisterResponse>('/v1/auth/register', data);
   },
 
   /**
@@ -65,7 +65,7 @@ export const authApi = {
    * @param data 登录凭证
    */
   login: (data: LoginRequest) => {
-    return client.post<any, LoginResponse>('/auth/login', data);
+    return client.post<any, LoginResponse>('/v1/auth/login', data);
   },
 
   /**
@@ -73,6 +73,6 @@ export const authApi = {
    * 注意：需要 Token，client 拦截器会自动添加
    */
   logout: () => {
-    return client.post<void, void>('/auth/logout');
+    return client.post<void, void>('/v1/auth/logout');
   },
 };
