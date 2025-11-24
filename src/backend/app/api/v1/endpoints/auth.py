@@ -4,7 +4,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from datetime import datetime, timezone
 
 from schema.unified_response import NoContentResponse, UnifiedSuccessResponse, ErrorResponse, LoginData
-from schema.auth import UserSendCode, UserRegister
+from schema.auth import UserSendCode, UserRegister, UserLogin
 
 from api.v1.deps import get_db
 from models import user_account as user_account_model, user_login_history
@@ -91,7 +91,7 @@ async def register(
 @auth_router.post("/login", response_model=UnifiedSuccessResponse[LoginData])
 async def login(
         request: Request,
-        payload: OAuth2PasswordRequestForm = Depends(),
+        payload: UserLogin,
         db: AsyncSession = Depends(get_db)
 ):
     """
