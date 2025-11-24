@@ -65,3 +65,5 @@ class UserBanLog(Base):
         nullable=False,
         comment="记录创建时间"
     )
+    class Config:
+        from_attributes = True

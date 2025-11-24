@@ -2,8 +2,7 @@ import sys
 from functools import lru_cache
 from loguru import logger
 
-from app.utils.profile import Profile
-from app.server import config
+from .profile import Profile
 
 class LogHelper:
     """
@@ -32,22 +31,23 @@ class LogHelper:
             "{thread.name} | "
             "<cyan>{module}</cyan>.<cyan>{function}</cyan> | "
             "<level>{level}</level> | "
+            "{message}"
         )
         
-        # 添加控制台输出
+        # 添加控制台输出 (default levels until config is loaded)
         self.logger.add(
             sink=sys.stdout,
             format=formatter,
-            level=config.log.console_level,
+            level="INFO",
         )
         
-        # 添加文件输出
+        # 添加文件输出 (default levels until config is loaded)
         self.logger.add(
             sink=log_file_path,
             format=formatter,
-            level=config.log.file_level,
-            rotation=config.log.rotation,
-            retention=config.log.retention,
+            level="DEBUG",
+            rotation="500 MB",
+            retention="10 days",
             encoding="utf-8"
         )
 

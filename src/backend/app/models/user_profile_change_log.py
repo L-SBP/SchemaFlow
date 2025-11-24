@@ -57,3 +57,5 @@ class UserProfileChangeLog(Base):
         nullable=False,
         comment='操作设备信息'
     )
+    class Config:
+        from_attributes = True

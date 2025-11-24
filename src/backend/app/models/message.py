@@ -50,3 +50,5 @@ class Message(Base):
         server_default=func.now(),
         comment='创建时间'
     )
+    class Config:
+        from_attributes = True

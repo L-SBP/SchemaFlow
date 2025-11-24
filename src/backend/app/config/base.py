@@ -92,6 +92,34 @@ class LogConfig(BaseSettings):
     # 日志轮转时间
     rotation: str
 
+class JWTConfig(BaseSettings):
+    """
+    JWT配置
+    """
+    # JWT密钥
+    secret_key: str
+    # JWT算法
+    algorithm: str
+    # JWT过期时间
+    expire_time: int
+
+class SMTP(BaseSettings):
+    """
+    SMTP配置
+    """
+    # SMTP服务器
+    host: str
+    # SMTP端口
+    port: int
+    # 发送者名称
+    sender_name: str
+    # 发送者邮箱
+    sender: str
+    # 授权码
+    key: str
+    # 验证码有效期
+    expire_time_seconds: int
+
 class BaseConfig(BaseSettings):
     """
     基础配置
@@ -105,3 +133,7 @@ class BaseConfig(BaseSettings):
     redis: RedisConfig
     # 日志配置
     log: LogConfig
+    # JWT配置
+    jwt: JWTConfig
+    # SMTP配置
+    smtp: SMTP

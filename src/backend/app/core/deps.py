@@ -3,11 +3,8 @@ from sqlalchemy.ext.asyncio import (
     AsyncEngine,
 )
 
-def get_engine_from_fastapi(request: Request) -> AsyncEngine:
+async def get_engine(request: Request) -> AsyncEngine:
     """
-    从FastAPI请求中获取数据库引擎
-
-    :param request: FastAPI请求对象
-    :return: 数据库异步引擎对象
+    从 FastAPI app state 中获取已初始化的引擎
     """
     return request.app.state.psql_engine

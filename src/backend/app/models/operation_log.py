@@ -100,3 +100,5 @@ class OperationLog(Base):
         Integer,
         comment='执行耗时（毫秒）'
     )
+    class Config:
+        from_attributes = True

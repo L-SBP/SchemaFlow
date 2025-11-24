@@ -68,3 +68,5 @@ class DatabaseInstance(Base):
         nullable=True,
         comment='最后使用时间'
     )
+    class Config:
+        from_attributes = True
