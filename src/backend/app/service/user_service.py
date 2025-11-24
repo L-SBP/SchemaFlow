@@ -78,7 +78,7 @@ async def service_register_user(
     """
     log.info(f"Registering user {username}")
     # Verify the code
-    if not await email_service.verify_code(email, code):
+    if not await email_service.service_verify_code(email, code):
         raise exceptions.CodeInvalidException()
     
     # Check if user already exists
