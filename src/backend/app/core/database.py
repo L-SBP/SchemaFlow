@@ -1,11 +1,12 @@
+from contextlib import asynccontextmanager
+
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncAttrs, AsyncSession, async_sessionmaker
 from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker
 from sqlalchemy.orm import DeclarativeBase
 from collections.abc import AsyncGenerator
 from fastapi import Depends
 
-from app.config.base import DatabaseConfig
-from app.core.deps import get_engin_from_fastapi
+from config.base import DatabaseConfig
 
 class Base(AsyncAttrs, DeclarativeBase):
     """
@@ -70,19 +71,33 @@ class PsqlHelper:
         return engine
 
     @classmethod
-    async def get_session(cls, async_engine: AsyncEngine = Depends(get_engin_from_fastapi)) -> AsyncGenerator[AsyncSession, None]:
+    @asynccontextmanager
+    async def get_session(cls, async_engine: AsyncEngine) -> AsyncGenerator[AsyncSession, None]:
         """
-        获取数据库会话
+        获取数据库会话 (使用上下文管理器)
 
-        :param async_engine: 数据库异步引擎
-        :return: 数据库会话
+        :param async_engine: 已初始化的异步引擎
         """
+        if not async_engine:
+            raise ValueError("Async engine is not initialized")
 
-        async with cls._get_async_session(async_engine) as session:
-            try:
-                yield session
-            finally:
-                await session.close()
+        session_factory = async_sessionmaker(
+            bind=async_engine,
+            autocommit=False,
+            autoflush=False,
+            expire_on_commit=False,
+            class_=AsyncSession,
+        )
+        session = session_factory()
+
+        try:
+            yield session
+            await session.commit()
+        except Exception:
+            await session.rollback()
+            raise
+        finally:
+            await session.close()
 
     @classmethod
     async def close_conn_psql(cls, async_engine: AsyncEngine) -> None:
