@@ -33,7 +33,7 @@ async def send_register_code(
     existing_user = await check_email_exists(db, payload.email)
     if existing_user:
         raise exceptions.EmailHasBeenRegisteredException()
-    await email_service.send_verification_code(payload.email)
+    await email_service.service_send_verification_code(payload.email)
     return NoContentResponse()
 
 
