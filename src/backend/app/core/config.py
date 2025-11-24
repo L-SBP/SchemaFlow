@@ -1,9 +1,9 @@
 import yaml
 from functools import lru_cache
 
-from app.config.base import BaseConfig
-from app.utils.profile import Profile
-from app.utils.log import log
+from config.base import BaseConfig
+from core.profile import Profile
+from core.log import log
 
 @lru_cache()
 def get_config(config_file="config.yaml", env=None) -> BaseConfig:
@@ -36,3 +36,5 @@ def get_config(config_file="config.yaml", env=None) -> BaseConfig:
 
     # 返回对应的配置类实例
     return BaseConfig(**env_config)
+
+config = get_config()
