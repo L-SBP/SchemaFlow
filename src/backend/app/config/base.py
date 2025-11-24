@@ -92,6 +92,17 @@ class LogConfig(BaseSettings):
     # 日志轮转时间
     rotation: str
 
+class JWTConfig(BaseSettings):
+    """
+    JWT配置
+    """
+    # JWT密钥
+    secret_key: str
+    # JWT算法
+    algorithm: str
+    # JWT过期时间
+    expire_time: int
+
 class BaseConfig(BaseSettings):
     """
     基础配置
@@ -105,3 +116,5 @@ class BaseConfig(BaseSettings):
     redis: RedisConfig
     # 日志配置
     log: LogConfig
+    # JWT配置
+    jwt: JWTConfig
