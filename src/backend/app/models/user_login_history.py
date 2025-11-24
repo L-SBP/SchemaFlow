@@ -1,7 +1,7 @@
 from sqlalchemy import Column, Text, String, Integer, Boolean, Index, CheckConstraint, ForeignKey, DateTime
 from sqlalchemy.dialects.postgresql import INTERVAL, JSONB
 from sqlalchemy.sql import func
-from app.core.database import Base
+from core.database import Base
 
 class UserLoginHistory(Base):
     __tablename__ = "user_login_history"
@@ -70,3 +70,5 @@ class UserLoginHistory(Base):
         nullable=False,
         comment='记录创建时间'
     )
+    class Config:
+        from_attributes = True

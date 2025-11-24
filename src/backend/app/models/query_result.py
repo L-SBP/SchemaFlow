@@ -42,3 +42,5 @@ class QueryResult(Base):
         server_default=func.now(),
         comment='缓存时间'
     )
+    class Config:
+        from_attributes = True

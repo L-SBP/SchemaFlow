@@ -41,3 +41,5 @@ class Session(Base):
         nullable=True,
         comment='最后活动时间'
     )
+    class Config:
+        from_attributes = True

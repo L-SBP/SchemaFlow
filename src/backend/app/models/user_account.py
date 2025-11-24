@@ -1,6 +1,6 @@
 from sqlalchemy import Column, Integer, String, Boolean, DateTime, Text, CheckConstraint, Index
 from sqlalchemy.sql import func
-from app.core.database import Base
+from core.database import Base
 
 class UserAccount(Base):
     __tablename__ = 'user_account'
@@ -76,3 +76,5 @@ class UserAccount(Base):
         server_default=func.now(),
         comment='注册时间'
     )
+    class Config:
+        from_attributes = True

@@ -9,7 +9,7 @@ class Project(Base):
 
     # 表注释和约束
     __table_args__ = (
-        CheckConstraint("project_status IN ('active', 'archived', 'deleted')", name='ck_project_status'),
+        CheckConstraint("project_status IN ('active', 'initializing', 'deleted')", name='ck_project_status'),
         Index('idx_projects_user_id', 'user_id'),
         Index('idx_projects_status', 'project_status'),
         Index('idx_projects_updated_at', 'updated_at'),
@@ -68,3 +68,5 @@ class Project(Base):
         nullable=True,
         comment='最后更新时间'
     )
+    class Config:
+        from_attributes = True

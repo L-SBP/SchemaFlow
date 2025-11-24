@@ -51,3 +51,5 @@ class SystemAnnouncement(Base):
         nullable=True,
         comment='最后更新时间'
     )
+    class Config:
+        from_attributes = True
