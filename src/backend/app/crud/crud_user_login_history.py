@@ -1,3 +1,4 @@
+from typing import Optional
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from sqlalchemy.exc import SQLAlchemyError
@@ -5,11 +6,13 @@ from datetime import datetime, timezone
 
 from models.user_login_history import UserLoginHistory
 from core.exceptions import DatabaseOperationFailedException
+from core.log import log
+
 
 class CRUDLoginHistory:
     @staticmethod
     async def get_latest_unlogout_record(
-        db: AsyncSession, user_id: int
+            db: AsyncSession, user_id: int
     ) -> UserLoginHistory | None:
         """
         纯数据查询：获取用户最新的「登录成功且未登出」的记录
@@ -25,15 +28,19 @@ class CRUDLoginHistory:
                 .limit(1)
             )
             result = await db.execute(query)
-            return result.scalars().first()
+
+            latest_record = result.scalars().first()
+            log.debug(f"get latest unlogout record: {latest_record}")
+
+            return latest_record
         except SQLAlchemyError as e:
             await db.rollback()
-            raise DatabaseOperationFailedException() from e
+            raise DatabaseOperationFailedException("get latest unlogout record") from e
 
     @staticmethod
     async def create_login_record(
             db: AsyncSession,
-            user_id: int,
+            user_id: Optional[int],
             ip_address: str,
             login_status: str,
             user_agent: str | None = None,
@@ -44,6 +51,16 @@ class CRUDLoginHistory:
         """
         纯数据操作：创建登录记录（登录接口专用）
         对齐表的必填字段（user_id、ip_address、login_status）
+        
+        :param db: 数据库会话
+        :param user_id: 用户ID
+        :param ip_address: IP地址
+        :param login_status: 登录状态
+        :param user_agent: 用户代理信息
+        :param failure_reason: 失败原因
+        :param device_info: 设备信息
+        :param login_time: 登录时间
+        :return: 用户登录历史记录对象
         """
         try:
             db_obj = UserLoginHistory(
@@ -62,7 +79,7 @@ class CRUDLoginHistory:
             return db_obj
         except SQLAlchemyError as e:
             await db.rollback()
-            raise DatabaseOperationFailedException() from e
+            raise DatabaseOperationFailedException("create login record") from e
 
     @staticmethod
     async def update_logout_info(
@@ -72,6 +89,10 @@ class CRUDLoginHistory:
     ) -> None:
         """
         纯数据更新：更新登录记录的登出信息（登出时间、会话时长、登录状态）
+        
+        :param db: 数据库会话
+        :param login_history: 要更新的登录记录对象
+        :param logout_time: 登出时间
         """
         try:
             # 只做数据赋值，不做业务判断（业务判断在Service层）
@@ -82,6 +103,6 @@ class CRUDLoginHistory:
             await db.refresh(login_history)
         except SQLAlchemyError as e:
             await db.rollback()
-            raise DatabaseOperationFailedException() from e
+            raise DatabaseOperationFailedException("update logout info") from e
 
 crud_login_history = CRUDLoginHistory()

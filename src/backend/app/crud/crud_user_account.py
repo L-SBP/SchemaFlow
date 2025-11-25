@@ -6,23 +6,19 @@ from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.sql.operators import or_
 
 from models.user_account import UserAccount
+from core.exceptions import DatabaseOperationFailedException
 
 
 class CRUDUserAccount:
     @staticmethod
     async def create(db: AsyncSession, **kwargs) -> UserAccount:
         """
-        Create a new user account
+        创建新的用户账户
         
-        Args:
-            db: Database session
-            **kwargs: User account fields
-            
-        Returns:
-            UserAccount: Created user account object
-            
-        Raises:
-            SQLAlchemyError: If there's a database error
+        :param db: 数据库会话
+        :param kwargs: 用户账户字段
+        :return: 创建的用户账户对象
+        :raises SQLAlchemyError: 如果发生数据库错误
         """
         try:
             db_obj = UserAccount(**kwargs)
@@ -30,90 +26,89 @@ class CRUDUserAccount:
             await db.commit()
             await db.refresh(db_obj)
             return db_obj
-        except SQLAlchemyError:
+        except SQLAlchemyError as e:
             await db.rollback()
-            raise
+            raise DatabaseOperationFailedException("create user") from e
 
     @staticmethod
     async def get(db: AsyncSession, user_id: int) -> Optional[UserAccount]:
         """
-        Get user account by user_id
+        根据用户ID获取用户账户
         
-        Args:
-            db: Database session
-            user_id: User ID
-            
-        Returns:
-            Optional[UserAccount]: User account object if found, None otherwise
+        :param db: 数据库会话
+        :param user_id: 用户ID
+        :return: 如果找到返回用户账户对象，否则返回None
+        :raises DatabaseOperationFailedException: 如果发生数据库错误
         """
-        query = select(UserAccount).where(UserAccount.user_id == user_id)
-        result = await db.execute(query)
-        return result.scalar_one_or_none()
+        try:
+            query = select(UserAccount).where(UserAccount.user_id == user_id)
+            result = await db.execute(query)
+            return result.scalar_one_or_none()
+        except SQLAlchemyError as e:
+            raise DatabaseOperationFailedException("get user") from e
 
     @staticmethod
     async def get_by_username(db: AsyncSession, username: str) -> Optional[UserAccount]:
         """
-        Get user account by username
+        根据用户名获取用户账户
         
-        Args:
-            db: Database session
-            username: Username
-            
-        Returns:
-            Optional[UserAccount]: User account object if found, None otherwise
+        :param db: 数据库会话
+        :param username: 用户名
+        :return: 如果找到返回用户账户对象，否则返回None
+        :raises DatabaseOperationFailedException: 如果发生数据库错误
         """
-        query = select(UserAccount).where(UserAccount.username == username)
-        result = await db.execute(query)
-        return result.scalar_one_or_none()
+        try:
+            query = select(UserAccount).where(UserAccount.username == username)
+            result = await db.execute(query)
+            return result.scalar_one_or_none()
+        except SQLAlchemyError as e:
+            raise DatabaseOperationFailedException("get user by username") from e
 
     @staticmethod
     async def get_by_email(db: AsyncSession, email: str) -> Optional[UserAccount]:
         """
-        Get user account by email
+        根据邮箱获取用户账户
         
-        Args:
-            db: Database session
-            email: Email address
-            
-        Returns:
-            Optional[UserAccount]: User account object if found, None otherwise
+        :param db: 数据库会话
+        :param email: 邮箱地址
+        :return: 如果找到返回用户账户对象，否则返回None
+        :raises DatabaseOperationFailedException: 如果发生数据库错误
         """
-        query = select(UserAccount).where(UserAccount.email == email)
-        result = await db.execute(query)
-        return result.scalar_one_or_none()
+        try:
+            query = select(UserAccount).where(UserAccount.email == email)
+            result = await db.execute(query)
+            return result.scalar_one_or_none()
+        except SQLAlchemyError as e:
+            raise DatabaseOperationFailedException("get user by email") from e
 
     @staticmethod
     async def get_multi(db: AsyncSession, skip: int = 0, limit: int = 100) -> List[UserAccount]:
         """
-        Get multiple user accounts with pagination
+        分页获取多个用户账户
         
-        Args:
-            db: Database session
-            skip: Number of records to skip
-            limit: Maximum number of records to return
-            
-        Returns:
-            List[UserAccount]: List of user account objects
+        :param db: 数据库会话
+        :param skip: 跳过的记录数
+        :param limit: 最大返回记录数
+        :return: 用户账户对象列表
+        :raises DatabaseOperationFailedException: 如果发生数据库错误
         """
-        query = select(UserAccount).offset(skip).limit(limit)
-        result = await db.execute(query)
-        return result.scalars().all()
+        try:
+            query = select(UserAccount).offset(skip).limit(limit)
+            result = await db.execute(query)
+            return result.scalars().all()
+        except SQLAlchemyError as e:
+            raise DatabaseOperationFailedException("get multiple users") from e
 
     @staticmethod
     async def update(db: AsyncSession, db_obj: UserAccount, **kwargs) -> UserAccount:
         """
-        Update user account
+        更新用户账户
         
-        Args:
-            db: Database session
-            db_obj: User account object to update
-            **kwargs: Fields to update
-            
-        Returns:
-            UserAccount: Updated user account object
-            
-        Raises:
-            SQLAlchemyError: If there's a database error
+        :param db: 数据库会话
+        :param db_obj: 要更新的用户账户对象
+        :param kwargs: 要更新的字段
+        :return: 更新后的用户账户对象
+        :raises SQLAlchemyError: 如果发生数据库错误
         """
         try:
             for field, value in kwargs.items():
@@ -121,53 +116,49 @@ class CRUDUserAccount:
             await db.commit()
             await db.refresh(db_obj)
             return db_obj
-        except SQLAlchemyError:
+        except SQLAlchemyError as e:
             await db.rollback()
-            raise
+            raise DatabaseOperationFailedException("update user") from e
 
     @staticmethod
     async def remove(db: AsyncSession, user_id: int) -> bool:
         """
-        Remove user account by user_id
+        根据用户ID删除用户账户
         
-        Args:
-            db: Database session
-            user_id: User ID
-            
-        Returns:
-            bool: True if user was deleted, False if user was not found
-            
-        Raises:
-            SQLAlchemyError: If there's a database error
+        :param db: 数据库会话
+        :param user_id: 用户ID
+        :return: 如果用户被删除返回True，如果未找到用户返回False
+        :raises SQLAlchemyError: 如果发生数据库错误
         """
         try:
             query = delete(UserAccount).where(UserAccount.user_id == user_id)
             result = await db.execute(query)
             await db.commit()
             return result.rowcount > 0
-        except SQLAlchemyError:
+        except SQLAlchemyError as e:
             await db.rollback()
-            raise
+            raise DatabaseOperationFailedException("delete user") from e
 
     @staticmethod
     async def get_by_username_or_email(db: AsyncSession, username_or_email: str) -> Optional[UserAccount]:
         """
-        Get user by username or email
+        根据用户名或邮箱获取用户
 
-        Args:
-            db: Database session
-            username_or_email: Username or email
-
-        Returns:
-            Optional[UserAccount]: User account if found, None otherwise
+        :param db: 数据库会话
+        :param username_or_email: 用户名或邮箱
+        :return: 如果找到返回用户账户对象，否则返回None
+        :raises DatabaseOperationFailedException: 如果发生数据库错误
         """
-        query = select(UserAccount).where(
-            or_(
-                UserAccount.username == username_or_email,
-                UserAccount.email == username_or_email
+        try:
+            query = select(UserAccount).where(
+                or_(
+                    UserAccount.username == username_or_email,
+                    UserAccount.email == username_or_email
+                )
             )
-        )
-        result = await db.execute(query)
-        return result.scalar_one_or_none()
+            result = await db.execute(query)
+            return result.scalar_one_or_none()
+        except SQLAlchemyError as e:
+            raise DatabaseOperationFailedException("get user by username or email") from e
 
 curd_user_account = CRUDUserAccount()

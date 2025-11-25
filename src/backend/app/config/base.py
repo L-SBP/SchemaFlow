@@ -101,7 +101,7 @@ class JWTConfig(BaseSettings):
     # JWT算法
     algorithm: str
     # JWT过期时间
-    expire_time: int
+    token_expire_time_seconds: int
 
 class SMTP(BaseSettings):
     """

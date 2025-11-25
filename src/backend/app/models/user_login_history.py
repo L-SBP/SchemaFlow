@@ -23,7 +23,7 @@ class UserLoginHistory(Base):
     user_id = Column(
         Integer,
         ForeignKey('user_account.user_id', ondelete='CASCADE'),
-        nullable=False,
+        nullable=True,
         comment='用户ID'
     )
     login_time = Column(
