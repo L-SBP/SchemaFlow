@@ -39,7 +39,7 @@ export default [
   // 3. 用户登录
   // 对应 authApi.login -> POST /auth/login
   {
-    url: '/api/auth/login',
+    url: '/api/v1/auth/login',
     method: 'post',
     response: ({ body }) => {
       console.log('Mock: 收到登录请求', body);
