@@ -15,7 +15,9 @@ from transformers import (
     PreTrainedTokenizer,
     PreTrainedTokenizerBase,
 )
-from transformers.deepspeed import is_deepspeed_zero3_enabled
+# 采用单卡A800微调，取消使用deepseed
+# from accelerate.utils import is_deepspeed_zero3_enabled
+# from transformers.deepspeed import is_deepspeed_zero3_enabled
 from transformers.trainer import SAFE_WEIGHTS_NAME, WEIGHTS_NAME
 from transformers.utils import cached_file, check_min_version
 from transformers.utils.versions import require_version
@@ -33,6 +35,18 @@ if TYPE_CHECKING:
 
 
 logger = get_logger(__name__)
+# >>> ADD THIS COMPATIBILITY FUNCTION <<<
+def is_deepspeed_zero3_enabled():
+    try:
+        from accelerate.state import PartialState
+        state = PartialState()
+        return (
+                state.deepspeed_plugin is not None
+                and getattr(state.deepspeed_plugin, "zero_stage", 0) == 3
+        )
+    except Exception:
+        return False
+# <<< END >>>
 
 
 check_min_version("4.29.1")
