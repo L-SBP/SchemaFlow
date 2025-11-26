@@ -71,7 +71,7 @@ def extract_sql_prompt_dataset(example: Dict[str, Any]) -> Dict[str, str]:
 
 
 def infer_max_len(
-    source_len: int, target_len: int, data_args: "DataArguments"
+        source_len: int, target_len: int, data_args: "DataArguments"
 ) -> Tuple[int, int]:
     max_target_len = int(
         data_args.cutoff_len * (target_len / (source_len + target_len))
@@ -82,7 +82,7 @@ def infer_max_len(
 
 
 def local_dataset(
-    dataset_path: str, eval_dataset_size: float = 0.1
+        dataset_path: str, eval_dataset_size: float = 0.1
 ) -> Tuple[Dataset, Dataset]:
     """
     Reads in a dataset from a file and returns it as a split train-test dataset.
@@ -117,7 +117,7 @@ def local_dataset(
 
 
 def load_data(
-    dataset_path: str, eval_dataset_size: float = 0.1
+        dataset_path: str, eval_dataset_size: float = 0.1
 ) -> Union[Dict[str, Dataset], None]:
     """
     Load a dataset based on its name.
@@ -159,7 +159,7 @@ templates: Dict[str, Template] = {}
 
 
 def get_template_and_fix_tokenizer(
-    name: str, tokenizer: "PreTrainedTokenizer"
+        name: str, tokenizer: "PreTrainedTokenizer"
 ) -> Template:
     template = templates.get(name, None)
     assert template is not None, "Template {} does not exist.".format(name)
@@ -188,13 +188,13 @@ def get_template_and_fix_tokenizer(
 
 
 def register_template(
-    name: str,
-    prefix: List[Union[str, Dict[str, str]]],
-    prompt: List[Union[str, Dict[str, str]]],
-    system: str,
-    sep: List[Union[str, Dict[str, str]]],
-    stop_words: Optional[List[str]] = [],
-    use_history: Optional[bool] = True,
+        name: str,
+        prefix: List[Union[str, Dict[str, str]]],
+        prompt: List[Union[str, Dict[str, str]]],
+        system: str,
+        sep: List[Union[str, Dict[str, str]]],
+        stop_words: Optional[List[str]] = [],
+        use_history: Optional[bool] = True,
 ) -> None:
     template_class = Llama2Template if "llama2" in name else Template
     templates[name] = template_class(
@@ -566,9 +566,9 @@ register_template(
 
 
 def split_dataset(
-    dataset: Union["Dataset", "IterableDataset"],
-    data_args: "DataArguments",
-    training_args: "TrainingArguments",
+        dataset: Union["Dataset", "IterableDataset"],
+        data_args: "DataArguments",
+        training_args: "TrainingArguments",
 ) -> Dict[str, "Dataset"]:
     if training_args.do_train:
         if data_args.val_size > 1e-6:  # Split the dataset
@@ -603,11 +603,11 @@ def split_dataset(
 
 
 def preprocess_dataset(
-    dataset: Union["Dataset", "IterableDataset"],
-    tokenizer: "PreTrainedTokenizer",
-    data_args: "DataArguments",
-    training_args: "Seq2SeqTrainingArguments",
-    stage: Literal["pt", "sft", "rm", "ppo"],
+        dataset: Union["Dataset", "IterableDataset"],
+        tokenizer: "PreTrainedTokenizer",
+        data_args: "DataArguments",
+        training_args: "Seq2SeqTrainingArguments",
+        stage: Literal["pt", "sft", "rm", "ppo"],
 ) -> Union["Dataset", "IterableDataset"]:
     column_names = list(next(iter(dataset)).keys())
     template = get_template_and_fix_tokenizer(data_args.template, tokenizer)
@@ -627,7 +627,7 @@ def preprocess_dataset(
     def preprocess_pretrain_dataset(examples: Dict[str, List[Any]]) -> Dict[str, Any]:
         # build grouped texts with format `X1 X2 X3 ...` (without <eos>)
         if isinstance(
-            getattr(tokenizer, "tokenizer", None), tiktoken.Encoding
+                getattr(tokenizer, "tokenizer", None), tiktoken.Encoding
         ):  # for tiktoken tokenizer (Qwen)
             kwargs = dict(allowed_special="all")
         else:
@@ -658,7 +658,7 @@ def preprocess_dataset(
             input_ids, labels = [], []
 
             for source_ids, target_ids in template.encode_multiturn(
-                tokenizer, query, response, history, system
+                    tokenizer, query, response, history, system
             ):
                 if len(source_ids) > data_args.max_source_length:
                     source_ids = source_ids[: data_args.max_source_length]
@@ -678,7 +678,7 @@ def preprocess_dataset(
         return model_inputs
 
     def preprocess_unsupervised_dataset(
-        examples: Dict[str, List[Any]]
+            examples: Dict[str, List[Any]]
     ) -> Dict[str, Any]:
         # build inputs with format `<bos> X` and labels with format `Y <eos>`
         model_inputs = {"input_ids": [], "attention_mask": [], "labels": []}
@@ -700,16 +700,16 @@ def preprocess_dataset(
         return model_inputs
 
     def preprocess_pairwise_dataset(
-        examples: Dict[str, List[Any]]
+            examples: Dict[str, List[Any]]
     ) -> Dict[str, List[List[int]]]:
         # build input pairs with format `<bos> X`, `Y1 <eos>` and `Y2 <eos>` for rm stage
         model_inputs = {"prompt_ids": [], "chosen_ids": [], "rejected_ids": []}
         for query, response, history, system in construct_example(examples):
             if not (
-                isinstance(query, str)
-                and isinstance(response, list)
-                and query != ""
-                and len(response) > 1
+                    isinstance(query, str)
+                    and isinstance(response, list)
+                    and query != ""
+                    and len(response) > 1
             ):
                 continue
 
@@ -834,7 +834,7 @@ def checksum(data_files: List[str], file_sha1: Optional[str] = None) -> None:
 
 
 def get_dataset(
-    model_args: "ModelArguments", data_args: "DataArguments"
+        model_args: "ModelArguments", data_args: "DataArguments"
 ) -> Union["Dataset", "IterableDataset"]:
     max_samples = data_args.max_samples
     all_datasets: List[
@@ -855,10 +855,10 @@ def get_dataset(
             data_files: List[str] = []
 
             if os.path.isdir(
-                os.path.join(data_args.dataset_dir, dataset_attr.dataset_name)
+                    os.path.join(data_args.dataset_dir, dataset_attr.dataset_name)
             ):  # directory
                 for file_name in os.listdir(
-                    os.path.join(data_args.dataset_dir, dataset_attr.dataset_name)
+                        os.path.join(data_args.dataset_dir, dataset_attr.dataset_name)
                 ):
                     data_files.append(
                         os.path.join(
@@ -872,7 +872,7 @@ def get_dataset(
                             file_name.split(".")[-1], None
                         ), "file type does not match."
             elif os.path.isfile(
-                os.path.join(data_args.dataset_dir, dataset_attr.dataset_name)
+                    os.path.join(data_args.dataset_dir, dataset_attr.dataset_name)
             ):  # single file
                 data_files.append(
                     os.path.join(data_args.dataset_dir, dataset_attr.dataset_name)
@@ -892,7 +892,7 @@ def get_dataset(
             split=data_args.split,
             cache_dir=model_args.cache_dir,
             streaming=data_args.streaming,
-            use_auth_token=True if model_args.use_auth_token else None,
+            # use_auth_token=True if model_args.use_auth_token else None,
         )
 
         if max_samples is not None:
@@ -901,8 +901,8 @@ def get_dataset(
 
         for column_name in ["prompt", "query", "response", "history"]:  # align datasets
             if (
-                getattr(dataset_attr, column_name)
-                and getattr(dataset_attr, column_name) != column_name
+                    getattr(dataset_attr, column_name)
+                    and getattr(dataset_attr, column_name) != column_name
             ):
                 dataset = dataset.rename_column(
                     getattr(dataset_attr, column_name), column_name
@@ -946,12 +946,12 @@ def get_dataset(
 
 
 def split_train_eval(
-    dataset: Dataset,
-    do_eval: bool = False,
-    eval_dataset_size: float = 0.1,
-    max_eval_samples: int = None,
-    do_train: bool = True,
-    max_train_samples: int = None,
+        dataset: Dataset,
+        do_eval: bool = False,
+        eval_dataset_size: float = 0.1,
+        max_eval_samples: int = None,
+        do_train: bool = True,
+        max_train_samples: int = None,
 ) -> Dict[str, Dataset]:
     """
     Prepare the training and evaluation datasets for a machine learning model.

@@ -15,7 +15,8 @@ dataset="example_text2sql_train"
 if [ "$num_shot" -eq 1 ]; then
     dataset="example_text2sql_train_one_shot"
 fi
-model_name_or_path=${model_name_or_path-"codellama/CodeLlama-13b-Instruct-hf"}
+# 更改模型参数为本地调用，不采取实时下载
+model_name_or_path=${model_name_or_path-"dbgpt_hub_sql/CodeLlama-13b-Instruct-hf"}
 output_dir="dbgpt_hub_sql/output/adapter/CodeLlama-13b-sql-lora"
 
 # the default param set could be run in a server with one a100(40G) gpu, if your server not support the set,you can set smaller param such as  lora_rank and use qlora with quant 4 eg...
