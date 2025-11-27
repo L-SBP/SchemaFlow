@@ -78,6 +78,8 @@ class RedisConfig(BaseSettings):
     password: str
     # Redis数据库索引
     db: int
+    # 订阅频道
+    subscribe_channel: str
 
 class LogConfig(BaseSettings):
     """

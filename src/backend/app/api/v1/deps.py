@@ -1,12 +1,12 @@
 # api/v1/deps.py
 from typing import AsyncGenerator
-from fastapi import Depends, Request
+from fastapi import Request
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from core.deps import get_engine
 from core.database import PsqlHelper
-from core.redis import get_redis
-from core.log import log
+from redis.redis import get_redis
+
 
 async def get_db(request: Request) -> AsyncGenerator[AsyncSession, None]:
     """
