@@ -6,7 +6,7 @@ from aiosmtplib import SMTP
 
 from core.config import config
 from core.log import log
-from core.redis import get_redis
+from redis.redis import get_redis
 
 def _generate_code(length: int = 6) -> str:
     """生成一个6位数的随机验证码"""

@@ -54,6 +54,7 @@ services:
       --bind 0.0.0.0
       --requirepass secure_redis_2025
       --appendonly yes
+      --notify-keyspace-events Ex
     volumes:
       - redis_data:/data
     networks:

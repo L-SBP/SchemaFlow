@@ -13,8 +13,8 @@ from models.user_account import UserAccount
 from core import exceptions
 from core.auth import get_password_hash, verify_password
 from core.log import log
-from core.exceptions import ValidationException, BusinessException, AppException
-from core.redis import get_redis
+from core.exceptions import ValidationException
+from redis.redis import get_redis
 from core.config import config
 
 from service import email_service

@@ -5,8 +5,10 @@ from fastapi import FastAPI
 from core.config import config
 from core.log import log
 from core.database import PsqlHelper
-from core.redis import init_redis, close_redis, get_redis
+from redis.redis import init_redis, close_redis, get_redis, init_redis_listener, close_redis_listener
+from redis.expiration_listener import redis_expire_listener
 from api.v1.api import api_router
+import asyncio
 
 async def startup_services(app: FastAPI):
     """
@@ -29,6 +31,12 @@ async def startup_services(app: FastAPI):
     redis = get_redis()
     if redis :
         app.state.redis = get_redis()
+    
+    # 初始化Redis监听连接并启动监听器
+    log.info("initialize redis listener")
+    await init_redis_listener()
+    # 在后台启动Redis过期事件监听器
+    asyncio.create_task(redis_expire_listener())
 
 async def close_services(app: FastAPI):
     """
@@ -42,6 +50,8 @@ async def close_services(app: FastAPI):
     await PsqlHelper.close_conn_psql(app.state.psql_engine)
     # 关闭Redis连接
     await close_redis()
+    # 关闭Redis监听连接
+    await close_redis_listener()
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
