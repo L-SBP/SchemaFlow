@@ -3,8 +3,7 @@ from fastapi import APIRouter
 api_router = APIRouter()
 
 from api.v1.endpoints import (
-    auth, users, projects, query,
-    knowledge, announcements, admin_analytics, admin_users
+    auth
 )
 # from api.v1.endpoints import reports
 

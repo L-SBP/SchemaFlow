@@ -33,7 +33,11 @@ async def send_register_code(
             exc = exceptions.EmailHasBeenRegisteredException()
             raise HTTPException(
                 status_code=exc.code,
-                detail=exc.message,
+                detail=[
+                    {
+                        "msg": exc.message
+                    }
+                ]
             )
         await email_service.service_send_verification_code(payload.email)
         log.info("send register code success")
@@ -42,13 +46,21 @@ async def send_register_code(
         log.error(f"Failed to send verification code: {str(e)}", exc_info=True)
         raise HTTPException(
             status_code=e.code,
-            detail=e.message
+            detail=[
+                {
+                    "msg": e.message
+                }
+            ]
         )
     except exceptions.AppException as e:
         log.error(f"Failed to send verification code: {str(e)}", exc_info=True)
         raise HTTPException(
             status_code=e.code,
-            detail=e.message
+            detail=[
+                {
+                    "msg": e.message
+                }
+            ]
         )
 
 
@@ -87,13 +99,21 @@ async def register(
     except exceptions.BusinessException as e:
         raise HTTPException(
             status_code=e.code,
-            detail=e.message
+            detail=[
+                {
+                    "msg": e.message
+                }
+            ]
         )
     except exceptions.AppException as e:
         log.error(f"注册失败：{str(e)}", exc_info=True)  # exc_info=True 强制打印堆栈
         raise HTTPException(
             status_code=e.code,
-            detail=e.message
+            detail=[
+                {
+                    "msg": e.message
+                }
+            ]
         )
 
 
@@ -136,7 +156,11 @@ async def login(
             exc = exceptions.RedisOperationFailedException()
             raise HTTPException(
                 status_code=exc.code,
-                detail=exc.message
+                detail=[
+                    {
+                        "msg": exc.message
+                    }
+                ]
             )
 
         # 返回结果
@@ -168,7 +192,11 @@ async def login(
         # 抛出HTTP异常
         raise HTTPException(
             status_code=e.code,
-            detail=e.message
+            detail=[
+                {
+                    "msg": e.message
+                }
+            ]
         )
     except exceptions.UserStatusForbiddenException as e:
         # 状态异常
@@ -184,7 +212,11 @@ async def login(
         # 抛出HTTP异常
         raise HTTPException(
             status_code=e.code,
-            detail=e.message
+            detail=[
+                {
+                    "msg": e.message
+                }
+            ]
         )
     except exceptions.BusinessException as e:
         # 业务异常
@@ -200,7 +232,11 @@ async def login(
         # 重新抛出HTTP异常
         raise HTTPException(
             status_code=e.code,
-            detail=e.message
+            detail=[
+                {
+                    "msg": e.message
+                }
+            ]
         ) from e
 
     except exceptions.AppException as e:
@@ -218,7 +254,11 @@ async def login(
         log.error(f"系统内部错误：{str(e)}", exc_info=True)
         raise HTTPException(
             status_code=e.code,
-            detail=e.message
+            detail=[
+                {
+                    "msg": e.message
+                }
+            ]
         ) from e
 
 @auth_router.post("/logout", response_model=NoContentResponse)
@@ -238,7 +278,11 @@ async def logout(
             exc = exceptions.RedisOperationFailedException()
             raise HTTPException(
                 status_code=exc.code,
-                detail=exc.message
+                detail=[
+                    {
+                        "msg": exc.message
+                    }
+                ]
             )
 
         return NoContentResponse()
@@ -247,11 +291,19 @@ async def logout(
         log.error(f"Logout failed: {str(e)}", exc_info=True)
         raise HTTPException(
             status_code=e.code,
-            detail=e.message
+            detail=[
+                {
+                    "msg": e.message
+                }
+            ]
         ) from e
     except Exception as e:
         log.error(f"Unexpected error during logout: {str(e)}", exc_info=True)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Internal server error"
+            detail=[
+                {
+                        "msg": "系统内部错误"
+                }
+            ]
         ) from e
