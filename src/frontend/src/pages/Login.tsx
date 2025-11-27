@@ -98,16 +98,25 @@ export const Login: React.FC<LoginProps> = ({ onLogin }) => {
       setIsLoading(true);
       try {
         // 调用真实登录接口
+        // 此时 response 是 { code: 200, message: "...", data: { ... } }
         const response = await authApi.login({ username, password });
 
-        // 1. 存储 Token
-        localStorage.setItem('access_token', response.access_token);
+        // 修改点 1：检查业务状态码 (可选但推荐)
+        if (response.code !== 200) {
+          throw new Error(response.message || '登录失败');
+        }
 
-        // 2. 角色映射 (后端 boolean -> 前端 Enum)
-        const role = response.user.is_admin ? UserRole.ADMIN : UserRole.USER;
+        // 修改点 2：从 response.data 中获取 access_token
+        // 原代码: response.access_token
+        localStorage.setItem('access_token', response.data.access_token);
+
+        // 修改点 3：从 response.data 中获取 user
+        // 原代码: response.user.is_admin
+        const userData = response.data.user;
+        const role = userData.is_admin ? UserRole.ADMIN : UserRole.USER;
 
         // 3. 更新全局状态
-        onLogin(role, response.user.username);
+        onLogin(role, userData.username);
       } catch (err: any) {
         setError(err.message || '登录失败，请检查用户名或密码');
       } finally {

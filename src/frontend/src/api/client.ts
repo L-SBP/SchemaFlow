@@ -58,13 +58,14 @@ client.interceptors.response.use(
     }
 
     // 2. 提取后端返回的错误信息
-    // 假设后端错误格式为: { error: { message: "..." } } 或 { message: "..." }
     const errorData = error.response?.data as any;
-    const errorMessage =
-      errorData?.error?.message ||
-      errorData?.message ||
-      error.message ||
-      '网络请求失败，请稍后重试';
+
+    // ✅ 修复核心：增加可选链 ?. 以及对 errorData 的判断
+    // 防止网络错误(无响应)时 error.response 为 undefined 导致 errorData 为 undefined，进而引发 crash
+    const errorMessage = errorData?.detail?.[0]?.msg
+      || errorData?.detail?.[0]
+      || errorData?.message
+      || '网络请求失败，请检查网络连接'; // 兜底错误信息
 
     // 3. 构造新的 Error 对象抛出，方便 UI 层捕获
     const customError = new Error(errorMessage);

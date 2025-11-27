@@ -5,6 +5,14 @@ import { UserRole } from '../types.ts';
 
 // --- 类型定义 (参考 API 文档 V1.3) ---
 
+
+export interface ApiResponse<T> {
+  code: number;
+  message: string;
+  data: T;
+}
+
+
 // 2.3 登录请求参数
 export interface LoginRequest {
   username: string;
@@ -19,7 +27,7 @@ export interface LoginResponse {
     user_id: number;
     username: string;
     email: string;
-    is_admin: boolean; // 后端返回的是 boolean
+    is_admin: boolean;
     avatar_url: string;
   };
 }
@@ -65,7 +73,7 @@ export const authApi = {
    * @param data 登录凭证
    */
   login: (data: LoginRequest) => {
-    return client.post<any, LoginResponse>('/v1/auth/login', data);
+    return client.post<any, ApiResponse<LoginResponse>>('/v1/auth/login', data);
   },
 
   /**

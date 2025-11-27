@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { Sidebar } from './components/Sidebar.tsx';
 import { Header } from './components/Header.tsx';
@@ -14,6 +13,7 @@ import { Profile } from './pages/Profile.tsx';
 import { AdminStatus } from './pages/AdminStatus.tsx';
 import { Announcements } from './pages/Announcements.tsx';
 import { UserRole, Project, User, Announcement, UserStatus } from './types.ts';
+import { authApi } from './api/auth.ts'; // ✅ 新增：引入 API
 
 // Mock initial projects
 const INITIAL_PROJECTS: Project[] = [
@@ -37,9 +37,9 @@ const MOCK_ANNOUNCEMENTS: Announcement[] = [
 
 const App: React.FC = () => {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
-  const [currentUser, setCurrentUser] = useState<{role: UserRole, name: string} | null>(null);
+  const [currentUser, setCurrentUser] = useState<{ role: UserRole, name: string } | null>(null);
   const [activePage, setActivePage] = useState('dashboard');
-  
+
   // Shared State
   const [projects, setProjects] = useState<Project[]>(INITIAL_PROJECTS);
   const [users, setUsers] = useState<User[]>(INITIAL_USERS);
@@ -53,12 +53,25 @@ const App: React.FC = () => {
     setActivePage(role === UserRole.ADMIN ? 'admin_users' : 'dashboard');
   };
 
-  const handleLogout = () => {
-    setIsAuthenticated(false);
-    setCurrentUser(null);
-    setSelectedProject(null);
-    setViewingUser(null);
-    setActivePage('dashboard');
+  // ✅ 修复：完整的登出逻辑
+  const handleLogout = async () => {
+    try {
+      // 1. 调用后端 API 使 Token 失效
+      await authApi.logout();
+    } catch (error) {
+      // 即使后端报错（如 Token 已过期），前端也应继续执行本地清理
+      console.warn('Logout API failed:', error);
+    } finally {
+      // 2. 清除本地存储的 Token (这在之前的代码中是缺失的)
+      localStorage.removeItem('access_token');
+
+      // 3. 重置 React 状态
+      setIsAuthenticated(false);
+      setCurrentUser(null);
+      setSelectedProject(null);
+      setViewingUser(null);
+      setActivePage('dashboard');
+    }
   };
 
   const handleProjectSelect = (project: Project) => {
@@ -87,16 +100,16 @@ const App: React.FC = () => {
   const renderContent = () => {
     if (currentUser?.role === UserRole.ADMIN) {
       switch (activePage) {
-        case 'admin_users': 
+        case 'admin_users':
           return <AdminPanel users={users} onUpdateUser={handleUpdateUser} onViewUser={handleViewUser} />;
         case 'admin_user_detail':
           return viewingUser ? (
-            <UserProfile 
-              user={viewingUser} 
+            <UserProfile
+              user={viewingUser}
               onBack={() => {
                 setViewingUser(null);
                 setActivePage('admin_users');
-              }} 
+              }}
             />
           ) : <AdminPanel users={users} onUpdateUser={handleUpdateUser} onViewUser={handleViewUser} />;
         case 'admin_announcements': return <AdminAnnouncements announcements={announcements} setAnnouncements={setAnnouncements} />;
@@ -112,7 +125,7 @@ const App: React.FC = () => {
           setActivePage('dashboard');
         }} />;
       }
-      
+
       switch (activePage) {
         case 'dashboard': return <Dashboard projects={projects} setProjects={setProjects} onProjectSelect={handleProjectSelect} />;
         case 'reports': return <Reports projects={projects} />;
@@ -126,9 +139,9 @@ const App: React.FC = () => {
 
   return (
     <div className="flex h-screen bg-[#f0f2f5] bg-[url('https://gw.alipayobjects.com/zos/rmsportal/TVYTbAXWheQpRcWDaDMu.svg')] bg-center bg-no-repeat bg-contain overflow-hidden">
-      <Sidebar 
-        role={currentUser?.role || UserRole.USER} 
-        activePage={activePage} 
+      <Sidebar
+        role={currentUser?.role || UserRole.USER}
+        activePage={activePage}
         onNavigate={(page) => {
           // If navigating away from specific contexts, clear selections
           if (page !== 'workspace') setSelectedProject(null);
@@ -137,9 +150,9 @@ const App: React.FC = () => {
         }}
       />
       <main className="flex-1 flex flex-col min-w-0">
-        <Header 
-          user={currentUser} 
-          onLogout={handleLogout} 
+        <Header
+          user={currentUser}
+          onLogout={handleLogout}
           onNavigate={(page) => {
             setSelectedProject(null);
             setViewingUser(null);
