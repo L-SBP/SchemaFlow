@@ -1,6 +1,6 @@
 from sqlalchemy import Column, Text, String, Integer, Index, CheckConstraint, ForeignKey, DateTime
 from sqlalchemy.sql import func
-from app.core.database import Base
+from core.database import Base
 
 class SystemAnnouncement(Base):
     __tablename__ = 'system_announcement'

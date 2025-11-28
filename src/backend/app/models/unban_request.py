@@ -1,7 +1,7 @@
 from sqlalchemy import Column, Integer, DateTime, Text, ForeignKey, CheckConstraint, Index
 from sqlalchemy.sql import func
 
-from app.core.database import Base
+from core.database import Base
 
 class UnbanRequest(Base):
     __tablename__ = "unban_request"
@@ -54,7 +54,8 @@ class UnbanRequest(Base):
     )
     admin_user_id = Column(
         Integer,
-        ForeignKey('users.user_id', ondelete='SET NULL'),
+        # 👇 修改点：users -> user_account
+        ForeignKey('user_account.user_id', ondelete='SET NULL'),
         comment='处理管理员ID'
     )
     decision_time = Column(

@@ -8,6 +8,10 @@ from fastapi import Depends
 
 from config.base import DatabaseConfig
 
+from sqlalchemy.exc import SQLAlchemyError
+
+
+
 class Base(AsyncAttrs, DeclarativeBase):
     """
     数据库基础模型

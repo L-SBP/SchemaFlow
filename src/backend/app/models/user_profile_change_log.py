@@ -1,7 +1,7 @@
 from sqlalchemy import Column, Integer, CheckConstraint, Text, DateTime, String, ForeignKey, Index
 from sqlalchemy.sql import func
 
-from app.core.database import Base
+from core.database import Base
 
 class UserProfileChangeLog(Base):
     __tablename__ = "user_profile_change_log"
@@ -22,7 +22,8 @@ class UserProfileChangeLog(Base):
     )
     user_id = Column(
         Integer,
-        ForeignKey("users.user_id", ondelete="CASCADE"),
+        # 👇 修改点：users -> user_account
+        ForeignKey("user_account.user_id", ondelete="CASCADE"),
         nullable=False,
         comment='被修改的用户ID'
     )

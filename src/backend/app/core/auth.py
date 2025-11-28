@@ -8,6 +8,9 @@ from server import config
 from core.exceptions import TokenInvalidException
 from core.log import log
 
+# 假设需要的依赖已在顶部导入 (如 Depends, HTTPException, AsyncSession, etc.)
+from fastapi import Depends, HTTPException, status
+
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/v1/auth/login")
 
@@ -63,3 +66,25 @@ def create_access_token(data: dict) -> str:
     to_encode.update({"exp": expire})
     encoded_jwt = jwt.encode(to_encode, config.jwt.secret_key, algorithm=config.jwt.algorithm)
     return encoded_jwt
+
+
+
+
+async def get_current_active_user(
+    token: str = Depends(oauth2_scheme)
+    # db: AsyncSession = Depends(get_db) # 注意：这里不能直接依赖 get_db，因为 get_db 在 deps.py 中，会形成循环依赖
+    # 因此，这个函数只能负责解码 Token，用户查询的逻辑应放在 deps.py 中。
+) -> int:
+    """
+    负责解析 Token，检查是否过期/无效，返回 user_id。
+    """
+    try:
+        user_id = decode_jwt_token(token) # 使用 auth.py 中已有的函数
+        # 实际用户查询和状态验证逻辑将放在 api/v1/deps.py 中完成
+        return user_id
+    except TokenInvalidException:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid authentication credentials",
+            headers={"WWW-Authenticate": "Bearer"},
+        )

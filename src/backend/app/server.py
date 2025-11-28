@@ -5,6 +5,7 @@ from fastapi import FastAPI
 from core.config import config
 from core.log import log
 from core.database import PsqlHelper
+import models
 from redis.redis import init_redis, close_redis, get_redis, init_redis_listener, close_redis_listener
 from redis.expiration_listener import redis_expire_listener
 from api.v1.api import api_router

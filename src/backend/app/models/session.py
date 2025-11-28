@@ -1,6 +1,6 @@
 from sqlalchemy import Column, String, CheckConstraint, Index, Integer, ForeignKey, DateTime
 from sqlalchemy.sql import func
-from app.core.database import Base
+from core.database import Base
 
 class Session(Base):
     __tablename__ = 'session'
