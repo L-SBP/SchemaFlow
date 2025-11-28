@@ -72,10 +72,6 @@ class RedisConfig(BaseSettings):
     host: str
     # Redis端口
     port: int
-    # Redis用户名
-    username: str
-    # Redis密码
-    password: str
     # Redis数据库索引
     db: int
     # 订阅频道

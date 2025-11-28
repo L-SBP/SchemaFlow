@@ -54,8 +54,6 @@ dev:
     port: 6379
     # Redis数据库索引
     db: 0
-    # Redis密码
-    password: "secure_redis_2025"
     # Redis订阅频道
     subscribe_channel: "__keyevent@*:expired"
 

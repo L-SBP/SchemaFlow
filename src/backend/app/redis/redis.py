@@ -11,7 +11,6 @@ async def init_redis():
     # Use the newer connection method for aioredis
     redis = aioredis.from_url(
         f"redis://{config.redis.host}:{config.redis.port}",
-        password=config.redis.password,
         db=config.redis.db,
         encoding="utf-8",
         decode_responses=True
@@ -31,7 +30,6 @@ async def init_redis_listener():
     # Create a separate connection for listening to events
     redis_listener = aioredis.from_url(
         f"redis://{config.redis.host}:{config.redis.port}",
-        password=config.redis.password,
         db=config.redis.db,
         encoding="utf-8",
         decode_responses=True

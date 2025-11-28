@@ -30,7 +30,6 @@ async def redis_expire_listener():
     # Create a separate Redis connection for listening
     redis_conn = aioredis.from_url(
         f"redis://{config.redis.host}:{config.redis.port}",
-        password=config.redis.password,
         db=config.redis.db,
         encoding="utf-8",
         decode_responses=True

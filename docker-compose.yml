@@ -54,7 +54,7 @@ services:
       - "6379:6379"
     # 注意：你的 backend/app/celery_app.py 中硬编码了 redis://redis:6379/0 (无密码)
     # 为了匹配代码，这里暂时去掉 --requirepass，或者你需要修改代码中的 broker URL
-    command: redis-server --bind 0.0.0.0 --appendonly yes
+    command: redis-server --bind 0.0.0.0 --appendonly yes --notify-keyspace-events Ex
     volumes:
       - redis_data:/data
     networks:
