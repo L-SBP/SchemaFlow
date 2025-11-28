@@ -1,23 +1,59 @@
-# api/v1/deps.py
+# backend/app/api/v1/deps.py (完整修正版本)
+
 from typing import AsyncGenerator
-from fastapi import Request
+from fastapi import Request, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from core.deps import get_engine
-from core.database import PsqlHelper
+
+from core.deps import get_engine, get_db
 from redis.redis import get_redis
+from core.auth import get_current_active_user as get_user_id_from_token # 重命名以区分职责
+from crud.crud_user_account import curd_user_account
+from models.user_account import UserAccount
+from schema.user import UserMe # 导入用户DTO
 
 
-async def get_db(request: Request) -> AsyncGenerator[AsyncSession, None]:
+from core.deps import get_db
+
+# ---------------------------------------------------------------------
+# 2. 获取认证用户ID的依赖 (使用 core.auth 中的函数)
+# ---------------------------------------------------------------------
+
+async def get_current_user_id(token: str = Depends(get_user_id_from_token)) -> int:
     """
-    真正的数据库会话依赖
+    依赖函数：验证 JWT Token 并返回 user_id
     """
-    engine = await get_engine(request)  # 获取真实引擎
-    async with PsqlHelper.get_session(engine) as session:
-        yield session
+    # get_user_id_from_token 负责解码和抛出 401 异常
+    return token
+
+
+# ---------------------------------------------------------------------
+# 3. 获取当前活动用户对象依赖 (Router 实际使用的依赖)
+# ---------------------------------------------------------------------
+async def get_current_active_user(
+    db: AsyncSession = Depends(get_db),
+    user_id: int = Depends(get_current_user_id)
+) -> UserMe:
+    """
+    依赖函数：从数据库获取当前用户对象，并进行状态检查。
+    """
+    try:
+        user_orm: UserAccount = await curd_user_account.get(db=db, user_id=user_id)
+    except Exception:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Database query failed.")
+
+    if not user_orm:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+
+
+    if user_orm.status != "normal":
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="User status forbidden")
+
+
+    return UserMe.model_validate(user_orm)
 
 async def get_rd():
     """
-    获取redis
+    获取redis的依赖
     """
     return get_redis()

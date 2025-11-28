@@ -1,7 +1,7 @@
 from sqlalchemy import Column, Text, String, Integer, DateTime, CheckConstraint, Index, ForeignKey
 from sqlalchemy.sql import func
 
-from app.core.database import Base
+from core.database import Base
 
 class ViolationLog(Base):
     __tablename__ = "violation_log"
@@ -32,7 +32,8 @@ class ViolationLog(Base):
     )
     user_id = Column(
         Integer,
-        ForeignKey('users.user_id', ondelete='CASCADE'),
+        # 👇 修改点 1：users -> user_account
+        ForeignKey('user_account.user_id', ondelete='CASCADE'),
         nullable=False,
         comment='违规用户ID'
     )
@@ -68,7 +69,8 @@ class ViolationLog(Base):
     )
     handled_by = Column(
         Integer,
-        ForeignKey('users.user_id', ondelete='SET NULL'),
+        # 👇 修改点 2：users -> user_account
+        ForeignKey('user_account.user_id', ondelete='SET NULL'),
         nullable=True,
         comment='处理人ID'
     )

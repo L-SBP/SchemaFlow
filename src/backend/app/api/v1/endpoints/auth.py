@@ -13,9 +13,11 @@ from core.auth import create_access_token, oauth2_scheme
 
 from core.log import log
 
-auth_router = APIRouter()
+# 👇 修改点1：将 auth_router 改为 router，保持与其他模块一致
+router = APIRouter()
 
-@auth_router.post("/register/send-code", response_model=NoContentResponse)
+# 👇 修改点2：所有的装饰器 @auth_router.xxx 都改为 @router.xxx
+@router.post("/register/send-code", response_model=NoContentResponse)
 async def send_register_code(
     payload: UserSendCode,
     db: AsyncSession = Depends(get_db)
@@ -64,7 +66,7 @@ async def send_register_code(
         )
 
 
-@auth_router.post("/register", response_model=UnifiedSuccessResponse[dict])
+@router.post("/register", response_model=UnifiedSuccessResponse[dict])
 async def register(
     payload: UserRegister,
     db: AsyncSession = Depends(get_db)
@@ -117,7 +119,7 @@ async def register(
         )
 
 
-@auth_router.post("/login", response_model=UnifiedSuccessResponse[LoginData])
+@router.post("/login", response_model=UnifiedSuccessResponse[LoginData])
 async def login(
         request: Request,
         payload: UserLogin,
@@ -261,7 +263,7 @@ async def login(
             ]
         ) from e
 
-@auth_router.post("/logout", response_model=NoContentResponse)
+@router.post("/logout", response_model=NoContentResponse)
 async def logout(
         db: AsyncSession = Depends(get_db),
         token: str = Depends(oauth2_scheme)

@@ -97,3 +97,9 @@ class RedisOperationFailedException(AppException):
     """Redis 操作失败"""
     def __init__(self, operation: str = "operation"):
         super().__init__(code=500, detail=f"Redis {operation} failed")
+
+
+class ItemNotFoundException(BusinessException):
+    """资源未找到"""
+    def __init__(self, message: str = "Item not found"):
+        super().__init__(code=404, message=message)
