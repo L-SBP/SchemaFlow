@@ -15,12 +15,16 @@ class UserMe(BaseModel):
     username: str
     email: EmailStr
     status: Literal['normal', 'suspended', 'banned']
-    user_databases: int
+    # 修正点1: 字段名必须与数据库一致 (used_databases)
+    used_databases: int
     max_databases: int
     avatar_url: Optional[HttpUrl] = None
     is_admin: bool
-    last_login_in: Optional[datetime] = None
+    # 修正点2: 字段名必须与数据库一致 (last_login_at)
+    last_login_at: Optional[datetime] = None
     created_at: datetime
+    # 修正点3: 必须包含此配置，且缩进要在 class 内部！
+    model_config = ConfigDict(from_attributes=True)
 
 # 更新用户名
 class UserUpdateUsername(BaseModel):
