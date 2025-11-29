@@ -1,0 +1,98 @@
+# backend/app/api/v1/endpoints/knowledge.py
+
+from fastapi import APIRouter, Depends, HTTPException, status, Query, UploadFile, File, Path
+from sqlalchemy.ext.asyncio import AsyncSession as Session
+from typing import Any, Optional
+
+# 隐式绝对导入
+from api.v1 import deps
+from service import knowledge_service
+from schema import knowledge as schemas
+from core.exceptions import ItemNotFoundException, ValidationException
+
+# 注意：这个 Router 稍后需要在 api.py 中注册，且不带 prefix，因为路径包含 {project_id}
+router = APIRouter()
+
+# ----------------------------------------------------------------------
+# 3.4.1. 创建术语
+# ----------------------------------------------------------------------
+@router.post("/projects/{project_id}/knowledge", response_model=schemas.KnowledgeResponse, status_code=status.HTTP_201_CREATED)
+async def create_term(
+    data: schemas.KnowledgeCreate,
+    project_id: int = Path(..., description="项目ID"),
+    db: Session = Depends(deps.get_db),
+    current_user: Any = Depends(deps.get_current_active_user),
+) -> Any:
+    """创建新业务术语。"""
+    try:
+        return await knowledge_service.create_knowledge_service(db, project_id, current_user.user_id, data)
+    except ItemNotFoundException:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Project not found.")
+    except ValidationException as e:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(e)) # 409 for conflict
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# ----------------------------------------------------------------------
+# 3.4.2. 获取术语列表
+# ----------------------------------------------------------------------
+@router.get("/projects/{project_id}/knowledge", response_model=schemas.PaginatedKnowledgeList)
+async def get_terms(
+    project_id: int = Path(..., description="项目ID"),
+    search: Optional[str] = Query(None, description="按术语名称搜索"),
+    page: int = Query(1, ge=1),
+    page_size: int = Query(20, le=100),
+    db: Session = Depends(deps.get_db),
+    current_user: Any = Depends(deps.get_current_active_user),
+) -> Any:
+    """获取项目中的所有术语。"""
+    try:
+        return await knowledge_service.get_knowledge_list_service(
+            db, project_id, current_user.user_id, page, page_size, search
+        )
+    except ItemNotFoundException:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Project not found.")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# ----------------------------------------------------------------------
+# 3.4.3. 批量导入术语
+# ----------------------------------------------------------------------
+@router.post("/projects/{project_id}/knowledge/import", response_model=schemas.ImportResponse)
+async def import_terms(
+    project_id: int = Path(..., description="项目ID"),
+    file: UploadFile = File(..., description="CSV 文件"),
+    db: Session = Depends(deps.get_db),
+    current_user: Any = Depends(deps.get_current_active_user),
+) -> Any:
+    """从文件批量导入术语。"""
+    try:
+        return await knowledge_service.import_knowledge_service(
+            db, project_id, current_user.user_id, file
+        )
+    except ValidationException as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+    except ItemNotFoundException:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Project not found.")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Import failed: {e}")
+
+
+# ----------------------------------------------------------------------
+# 3.4.4. 导出术语
+# ----------------------------------------------------------------------
+@router.get("/projects/{project_id}/knowledge/export", response_model=schemas.ExportResponse)
+async def export_terms(
+    project_id: int = Path(..., description="项目ID"),
+    db: Session = Depends(deps.get_db),
+    current_user: Any = Depends(deps.get_current_active_user),
+) -> Any:
+    """导出术语库。"""
+    try:
+        return await knowledge_service.export_knowledge_service(db, project_id, current_user.user_id)
+    except ItemNotFoundException:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Project not found.")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))

@@ -1,6 +1,6 @@
-from fastapi import APIRouter, Depends, HTTPException, status, Request
+from fastapi import APIRouter, Depends, HTTPException, status, Body, Request
 from sqlalchemy.ext.asyncio import AsyncSession
-
+from typing import Any
 from schema.unified_response import NoContentResponse, UnifiedSuccessResponse, LoginData
 from schema.auth import UserSendCode, UserRegister, UserLogin
 
@@ -180,7 +180,7 @@ async def login(
             ),
             message="用户登录成功"
         )
-    except exceptions.PasswordMismatchException as e:
+    except exceptions.PasswordInvalidException as e:
         # 密码错误
         await create_login_record(
             db=db,

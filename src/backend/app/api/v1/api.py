@@ -1,7 +1,7 @@
 from fastapi import APIRouter
 
 # 确保所有 endpoints 文件都被正确导入（相对导入是关键）
-from .endpoints import auth, project, reports, glossary, user
+from .endpoints import auth, project, reports,  user, admin,knowledge
 
 api_router = APIRouter()
 
@@ -20,8 +20,9 @@ api_router.include_router(project.router, prefix="/projects", tags=["II. 项目�
 # 所以这里注册时无需再添加 prefix，直接挂载即可。
 api_router.include_router(reports.router, tags=["III. 报表与查询"])
 
-# 4. 业务术语表模块 (新增)
-api_router.include_router(glossary.router, prefix="/glossary", tags=["IV. 业务术语表"])
-
+#4. 业务术语库 (修正：直接挂载，因为内部定义了完整路径)
+api_router.include_router(knowledge.router, tags=["IV. 业务术语表"])
 # 5. 用户设置模块 (新增)
-api_router.include_router(user.router, prefix="/user", tags=["V. 用户设置"])# api_router.include_router(admin_users.router, prefix="/admin/users", tags=["VIII. 后台管理 (Admin Users)"])
+api_router.include_router(user.router, prefix="/user", tags=["V. 用户设置"])
+
+api_router.include_router(admin.router, tags=["管理员功能"])
