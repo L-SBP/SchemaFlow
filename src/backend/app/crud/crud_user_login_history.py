@@ -1,6 +1,6 @@
-from typing import Optional
+from typing import Optional, List, Tuple
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select
+from sqlalchemy import select, func, desc
 from sqlalchemy.exc import SQLAlchemyError
 from datetime import datetime, timezone
 
@@ -104,5 +104,40 @@ class CRUDLoginHistory:
         except SQLAlchemyError as e:
             await db.rollback()
             raise DatabaseOperationFailedException("update logout info") from e
+
+    # 新增添加分页查询方法
+    @staticmethod
+    async def get_multi_by_user(
+            db: AsyncSession,
+            user_id: int,
+            skip: int = 0,
+            limit: int = 10
+    ) -> Tuple[List[UserLoginHistory], int]:
+        """
+        获取用户的登录历史列表（支持分页），返回 (记录列表, 总数)
+        """
+        try:
+            # 1. 查询总数
+            count_query = select(func.count(UserLoginHistory.login_id)).where(
+                UserLoginHistory.user_id == user_id
+            )
+            total_result = await db.execute(count_query)
+            total = total_result.scalar_one()
+
+            # 2. 查询列表数据 (按登录时间倒序)
+            query = (
+                select(UserLoginHistory)
+                .where(UserLoginHistory.user_id == user_id)
+                .order_by(desc(UserLoginHistory.login_time))
+                .offset(skip)
+                .limit(limit)
+            )
+            result = await db.execute(query)
+            items = result.scalars().all()
+
+            return items, total
+        except SQLAlchemyError as e:
+            # 这里的异常会被 Service 层或 Router 层的通用异常处理捕获
+            raise DatabaseOperationFailedException("get login history list") from e
 
 crud_login_history = CRUDLoginHistory()

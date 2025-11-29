@@ -364,3 +364,32 @@ async def confirm_update_email_service(
         return schemas.UserMe.model_validate(updated_orm)
     except SQLAlchemyError:
         raise exceptions.DatabaseOperationFailedException("confirm and update email")
+
+# 新增添加这个 Service 方法
+async def get_login_history_service(
+    db: AsyncSession,
+    user_id: int,
+    page: int,
+    page_size: int
+) -> schemas.PaginatedLoginHistory:
+    """
+    Service 逻辑：获取登录历史分页数据
+    """
+    # 1. 计算 offset
+    skip = (page - 1) * page_size
+
+    # 2. 调用 CRUD 获取数据
+    items_orm, total = await crud_login_history.get_multi_by_user(
+        db, user_id, skip=skip, limit=page_size
+    )
+
+    # 3. 转换为 DTO
+    # 注意：LoginHistoryItem 需要在 schema/user.py 中正确定义 (你之前的上传中已经有了)
+    items_dto = [schemas.LoginHistoryItem.model_validate(item) for item in items_orm]
+
+    return schemas.PaginatedLoginHistory(
+        total=total,
+        page=page,
+        page_size=page_size,
+        items=items_dto
+    )
