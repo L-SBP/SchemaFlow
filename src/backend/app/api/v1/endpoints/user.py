@@ -1,15 +1,17 @@
 # backend/app/api/v1/endpoints/user.py
 
-from fastapi import APIRouter, Depends, HTTPException, status, Body, File, UploadFile
+from fastapi import APIRouter, Depends, HTTPException, status, Body, File, UploadFile, HTTPException,Query
 from sqlalchemy.ext.asyncio import AsyncSession
 from typing import Any
-
+from .. import deps
 # 隐式绝对导入
 from api.v1.deps import get_db, get_current_active_user
 from schema import user as schemas # 导入 User Schema (UserMe, UserUpdatePassword, etc.)
 from service import user_service # 导入 Service 层
 # 导入所有必要的业务异常
 from core.exceptions import ItemNotFoundException, ValidationException, PasswordInvalidException, CodeInvalidException, UserAlreadyExistsException, UserNotFoundException
+
+
 
 router = APIRouter()
 
@@ -95,25 +97,25 @@ async def update_password_endpoint(
 # ----------------------------------------------------------------------
 @router.post("/me/avatar", response_model=schemas.UserUpdateAvatar)
 async def update_avatar_endpoint(
-    # 修正：使用 File 和 UploadFile 处理 multipart/form-data
-    file: UploadFile = File(..., description="头像文件 (JPG/PNG)", max_size=2000000),
+    # 错误代码 (当前): file: UploadFile = File(...)
+    # 修正代码: 改回接收 JSON Body
+    avatar_data: schemas.UserUpdateAvatar,
     db: AsyncSession = Depends(get_db),
     current_user = Depends(get_current_active_user),
 ) -> Any:
     """
-    上传新头像 (处理文件上传)。
+    更新头像 URL (接收 JSON).
     """
     try:
-        # Service 负责文件存储和更新 avatar_url
+        # Service 期望接收的是 schemas.UserUpdateAvatar 对象
         updated_avatar_dto = await user_service.update_avatar_service(
             db,
             current_user.user_id,
-            file # 传递文件对象给 Service 层
+            avatar_data  # 传递 Pydantic Schema
         )
-        return updated_avatar_dto # 成功返回 { "avatar_url": "..." } DTO
+        return updated_avatar_dto
     except Exception as e:
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Avatar upload failed: {e}")
-
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Avatar update failed: {e}")
 
 # ----------------------------------------------------------------------
 # 5. POST /users/me/email/send-code - 请求更新邮箱 (Doc 3.1.4)
@@ -161,3 +163,29 @@ async def confirm_update_email_endpoint(
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail=str(e))
     except Exception as e:
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Email confirmation failed: {e}")
+
+
+@router.get("/me/login-history", response_model=schemas.PaginatedLoginHistory)
+async def read_login_history(
+        db: AsyncSession = Depends(deps.get_db),
+        current_user=Depends(deps.get_current_active_user),
+        # 接收标准分页参数
+        page: int = Query(1, ge=1, description="页码"),
+        page_size: int = Query(10, ge=1, le=100, description="每页数量"),  # Doc 要求默认 10
+) -> Any:
+    """
+    获取当前用户的登录历史记录 (包含分页)。
+    """
+    try:
+        # Router 严格只调用 Service
+        history_list = await user_service.get_login_history_service(
+            db,
+            user_id=current_user.user_id,
+            page=page,
+            page_size=page_size
+        )
+        return history_list
+
+    except Exception as e:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                            detail=f"Failed to retrieve login history: {e}")

@@ -2,7 +2,6 @@ from pydantic import BaseModel, Field, EmailStr, field_validator, model_validato
 from typing import Optional, Literal, List, Any
 from datetime import datetime
 
-from pydantic import HttpUrl
 
 # 基础用户信息
 class UserBase(BaseModel):
@@ -18,7 +17,7 @@ class UserMe(BaseModel):
     # 修正点1: 字段名必须与数据库一致 (used_databases)
     used_databases: int
     max_databases: int
-    avatar_url: Optional[HttpUrl] = None
+    avatar_url: Optional[str] = None
     is_admin: bool
     # 修正点2: 字段名必须与数据库一致 (last_login_at)
     last_login_at: Optional[datetime] = None
@@ -41,7 +40,7 @@ class UserUpdateEmailConfirm(BaseModel):
 
 # 更新头像
 class UserUpdateAvatar(BaseModel):
-    avatar_url: Optional[HttpUrl] = None
+    avatar_url: Optional[str] = None
 
 # 更新密码
 class UserUpdatePassword(BaseModel):
@@ -62,5 +61,37 @@ class UserUpdatePassword(BaseModel):
                 raise ValueError('passwords do not match')
         return data
 
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+# --- 1. 登录历史单项 DTO (用于 items 列表) ---
+class LoginHistoryItem(BaseModel):
+    login_id: int = Field(..., description="登录记录ID")
+    login_time: datetime
+    logout_time: Optional[datetime] = None
+    ip_address: str
+    # 假设设备信息映射到 user_agent
+    user_agent: Optional[str] = Field(None, description="设备信息/User Agent")
+    login_status: Literal['success', 'failed', 'expired', 'forced_logout']
+
+    # 注意：实际 DB 中有 session_duration 和 failure_reason，可以按需添加
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+# ----------------------------------------------------
+# 2. 分页包装器 DTO (用于接口响应)
+# ----------------------------------------------------
+class PaginatedLoginHistory(BaseModel):
+    """
+    登录历史分页列表响应 DTO (Doc 3.1.7)
+    """
+    total: int = Field(..., description="总记录数")
+    page: int = Field(1, description="当前页码")
+    page_size: int = Field(10, description="每页记录数")  # Doc 要求默认 10
+
+    # 列表项使用 LoginHistoryItem
+    items: List['LoginHistoryItem']
 
     model_config = ConfigDict(from_attributes=True)

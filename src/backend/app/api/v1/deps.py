@@ -57,3 +57,16 @@ async def get_rd():
     获取redis的依赖
     """
     return get_redis()
+
+
+async def get_current_admin_user(user: UserMe = Depends(get_current_active_user)) -> UserMe:
+    """
+    依赖函数：验证当前用户是否为管理员。
+    """
+    # 假设 UserMe DTO (或底层的 ORM) 包含 is_admin 字段
+    if not user.is_admin:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Operation forbidden: Admin privileges required"
+        )
+    return user
