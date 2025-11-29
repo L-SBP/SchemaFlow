@@ -170,20 +170,27 @@ async def service_logout(
     # 从Redis中删除token，使其失效
     if not await service_abolish_token_in_redis(token):
         log.error(f"Failed to abolish token {token} in redis")
-        return False
+        # 注意：即使 Redis 删除失败，通常也应该继续记录登出日志
 
     # 获取用户ID
     log.info(f"Getting user id from token {token}")
-    # 假设 core.auth.decode_jwt_token(token) 存在并返回 user_id
-    user_id = decode_jwt_token(token)
+    try:
+        user_id = decode_jwt_token(token)
+    except Exception as e:
+        log.error(f"Error decoding token during logout: {e}")
+        return False
 
     # 查找用户最新的未登出登录记录
     latest_record = await crud_login_history.get_latest_unlogout_record(db, user_id)
 
-    # 如果找到记录且尚未登出，则更新登出信息
-    log.info(f"Updating logout info for record {latest_record.user_id}")
-    if latest_record and not latest_record.logout_time:
-        await crud_login_history.update_logout_info(db, latest_record)
+    # 增加判空逻辑
+    if latest_record:
+        log.info(f"Updating logout info for record {latest_record.login_id}")  # 这里访问属性是安全的
+        if not latest_record.logout_time:
+            await crud_login_history.update_logout_info(db, latest_record)
+    else:
+        # 如果没找到记录（可能用户从未登录，或者数据被清理），仅记录日志即可，不抛错
+        log.warning(f"No active login record found for user {user_id} during logout.")
 
     log.info(f"User {user_id} logged out successfully")
     return True

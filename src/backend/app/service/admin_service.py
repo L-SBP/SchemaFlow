@@ -42,35 +42,42 @@ async def get_admin_user_list_service(db: AsyncSession, page: int, page_size: in
     return AdminUserListResponse(total=total, page=page, page_size=page_size, items=items_dto)
 
 
+# 在参数列表中添加 admin_user_id: int
 async def update_user_status_service(db: AsyncSession, user_id: int,
-                                     data: AdminUpdateUserStatusRequest) -> AdminUpdateUserStatusResponse:
+                                     data: AdminUpdateUserStatusRequest,
+                                     admin_user_id: int) -> AdminUpdateUserStatusResponse:
     """修改用户状态 (4.1.2)"""
-    # 1. 业务逻辑：调用 CRUD 修改 user_account.status
-    updated_user = await curd_user_account.update(db, user_id=user_id, status=data.status)
+    # 1. 先查询用户是否存在 (获取 ORM 对象)
+    user_obj = await curd_user_account.get(db, user_id)
 
-    if not updated_user:
+    if not user_obj:
         raise ItemNotFoundException(f"User with ID {user_id} not found.")
 
-    # 2. 业务逻辑：记录到 user_ban_log (此处省略具体记录逻辑，视需求实现)
+    # 2. 业务逻辑：调用 CRUD 修改，传入 db_obj=user_obj
+    updated_user = await curd_user_account.update(db, db_obj=user_obj, status=data.status)
 
-    # 修正：使用 AdminUpdateUserStatusResponse
+    # 3. 业务逻辑：记录到 user_ban_log (占位，可后续实现)
+    # await create_ban_log(db, user_id, admin_user_id, reason=data.reason, ...)
+
     return AdminUpdateUserStatusResponse(
         user_id=updated_user.user_id,
         status=updated_user.status,
-        updated_at=datetime.now()  # 或者使用 updated_user.updated_at (如果 ORM 已更新)
+        updated_at=datetime.now()
     )
 
 
 async def update_user_quota_service(db: AsyncSession, user_id: int,
                                     data: AdminUpdateUserQuotaRequest) -> AdminUpdateUserQuotaResponse:
     """调整用户资源额度 (4.1.3)"""
-    # 1. 调用 CRUD 更新 max_databases 字段
-    updated_user = await curd_user_account.update(db, user_id=user_id, max_databases=data.max_databases)
+    # 1. 先获取对象
+    user_obj = await curd_user_account.get(db, user_id)
 
-    if not updated_user:
+    if not user_obj:
         raise ItemNotFoundException(f"User with ID {user_id} not found.")
 
-    # 修正：使用 AdminUpdateUserQuotaResponse
+    # 2. 传入对象进行更新
+    updated_user = await curd_user_account.update(db, db_obj=user_obj, max_databases=data.max_databases)
+
     return AdminUpdateUserQuotaResponse(
         user_id=updated_user.user_id,
         max_databases=updated_user.max_databases,

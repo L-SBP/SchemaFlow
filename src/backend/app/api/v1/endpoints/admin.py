@@ -35,21 +35,23 @@ class PaginationParams:
 # ----------------------------------------------------------------------
 # 4.1. 用户管理
 # ----------------------------------------------------------------------
-
 @router.get("/users", response_model=AdminUserListResponse, summary="4.1.1 获取用户列表")
 async def get_user_list(
     db: Session = Depends(get_db),
     admin_user: UserMe = AdminDependency,
     pagination: PaginationParams = Depends(),
     search: Optional[str] = Query(None, description="按用户名/邮箱搜索"),
-    status: Literal["normal", "banned", "all"] = Query("all", description="按状态筛选"),
+    # 变量名改为 filter_status，增加 alias="status"
+    filter_status: Literal["normal", "banned", "all"] = Query("all", alias="status", description="按状态筛选"),
 ) -> Any:
     """获取用户列表，支持搜索和筛选。"""
     try:
+        # 这里传入 filter_status
         return await service.get_admin_user_list_service(
-            db, pagination.page, pagination.page_size, search, status
+            db, pagination.page, pagination.page_size, search, filter_status
         )
     except Exception as e:
+        # 现在这里的 status 引用的是 fastapi.status 模块，不会报错了
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
 
 
