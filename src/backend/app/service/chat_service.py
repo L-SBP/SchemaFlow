@@ -10,13 +10,14 @@ from crud.crud_project import crud_project
 from crud.crud_knowledge import crud_knowledge
 from models.session import Session as SessionModel
 from schema.chat import ChatResponse, MessageType
+from core.log import log
 
 
 # -----------------------
 # AI 配置
 # -----------------------
-AI_SERVICE_URL = "http://www.ai678.top:8081/v1/chat/completions"
-AI_MODEL = "claude-sonnet-4-5-20250929"
+AI_SERVICE_URL = "http://26.64.77.145:1234/v1/chat/completions"
+AI_MODEL = "codellama/CodeLlama-13b-Instruct-hf"
 AI_API_KEY = "sk-YQjmNgkBJqRTsZCsr7r0zkHoLb6G0exL9u8gEkJTf5oZQXmE"
 
 
@@ -68,7 +69,6 @@ async def get_domain_knowledge(db, project_id):
 # 调用 Claude Agent
 # -----------------------
 async def call_ai_agent(schema, glossary, question):
-
     system_prompt = f"""
 你是 SQL 专家，请根据 Schema 与 业务术语生成 SQL。
 
@@ -89,7 +89,8 @@ async def call_ai_agent(schema, glossary, question):
             {"role": "system", "content": system_prompt},
             {"role": "user", "content": question}
         ],
-        "temperature": 0.1
+        "temperature": 0.1,
+        "stream": False  # 添加 stream 参数
     }
 
     headers = {
@@ -98,20 +99,36 @@ async def call_ai_agent(schema, glossary, question):
     }
 
     try:
+        log.info(f"Payload: {payload}")
         async with httpx.AsyncClient(timeout=60) as client:
             resp = await client.post(AI_SERVICE_URL, json=payload, headers=headers)
 
+
         resp.raise_for_status()
         raw = resp.json()
-        content = raw["choices"][0]["message"]["content"]
 
+        log.info(f"Raw Response: {raw}")
+        
+        # 更健壮的响应解析
+        if "choices" in raw and len(raw["choices"]) > 0:
+            content = raw["choices"][0]["message"]["content"]
+        else:
+            # 尝试其他可能的响应格式
+            content = raw.get("message", {}).get("content", "") or raw.get("content", "")
+        
+        # 清理内容
         clean = content.replace("```json", "").replace("```", "").strip()
-
-        return json.loads(clean)
+        
+        # 尝试解析 JSON
+        try:
+            return json.loads(clean)
+        except json.JSONDecodeError:
+            # 如果不是 JSON，返回原始内容
+            return {"sql": clean}
 
     except Exception as e:
         print("AI Error:", e)
-        return {"sql": "-- AI Error"}
+        return {"sql": f"-- AI Error: {str(e)}"}
 
 
 # -----------------------
@@ -123,11 +140,14 @@ async def process_chat(db: AsyncSession, session_id: int, user_input: str, user_
     user_msg = await crud_message.create_message(
         db, session_id, user_input, role="user"
     )
+    log.info(f"User message stored: {user_msg}")
 
     # 2. 获取上下文
     project_id = await get_project_id_by_session(db, session_id)
     schema = await get_project_schema(db, project_id)
     glossary = await get_domain_knowledge(db, project_id)
+    log.info(f"Schema: {schema}")
+    log.info(f"Glossary: {glossary}")
 
     # 3. 模型生成 SQL
     ai_json = await call_ai_agent(schema, glossary, user_input)
