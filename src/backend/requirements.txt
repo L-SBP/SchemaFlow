@@ -55,3 +55,4 @@ pytz==2023.3
 tenacity==8.2.3
 email-validator
 aiosmtplib==2.0.1
+sqlparse==0.5.0

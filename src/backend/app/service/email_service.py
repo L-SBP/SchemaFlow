@@ -2,7 +2,7 @@
 from datetime import datetime
 
 from core.log import log
-from core.email import send_verify_email, verify_code
+from core.email_utils import send_verify_email, verify_code
 from core import exceptions
 
 async def service_send_verification_code(email: str):
