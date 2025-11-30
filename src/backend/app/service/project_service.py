@@ -40,10 +40,15 @@ async def create_project_service(
 
         # 1. 创建关联的 DatabaseInstance (占位)
         # 必须先创建它，否则 Project 的 instance_id 外键会报错
+        # 使用合法的占位数据 (非空字符串，非0端口)
         new_instance = await crud_database_instance.create(
             db,
             db_type=db_type,
-            db_host="", db_port=0, db_name="pending", db_username="", db_password="",
+            db_host="127.0.0.1",  # TODO:后续改成真实的ip地址，修改：使用本地回环地址占位
+            db_port=3306,  # 修改：使用标准端口占位
+            db_name="pending_init",  # TODO:修改：更有意义的占位名
+            db_username="pending_user",  # TODO:修改：非空用户名
+            db_password="pending_password",  # TODO:修改：非空密码
             status="inactive"
         )
 
