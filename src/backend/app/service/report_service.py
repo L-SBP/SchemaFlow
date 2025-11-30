@@ -10,12 +10,42 @@ from schema import report as schemas
 from core.exceptions import DatabaseOperationFailedException, ItemNotFoundException
 
 # 1. 获取报表列表
-async def get_report_list(db: Session, project_id: str) -> List[schemas.Report]:
+async def get_report_list(db: Session, project_id: int) -> List[schemas.Report]:
     """
     业务逻辑：获取报表列表。
+    需要将 DB 中的 QueryResult 对象转换为 Schema 中的 Report 对象。
     """
+    # 1. 获取数据库对象列表
     db_objs = await crud_report.get_by_project(db, project_id)
-    return [schemas.Report.model_validate(obj) for obj in db_objs]
+
+    reports = []
+    for obj in db_objs:
+        # 2. 手动构造 Report 对象 (字段映射)
+
+        # 构造默认图表配置 (因为目前 DB 里没有存详细配置)
+        default_chart_config = schemas.ChartConfig(
+            xAxisKey="name",
+            yAxisKey="value"
+        )
+
+        # 确保 data 是列表格式
+        report_data = obj.result_data if isinstance(obj.result_data, list) else []
+
+        # 映射字段: ORM -> Schema
+        report = schemas.Report(
+            id=str(obj.result_id),                  # result_id -> id
+            projectId=str(project_id),              # 传入的 project_id
+            name=obj.data_summary[:20] if obj.data_summary else f"Report-{obj.result_id}", # 使用摘要做标题
+            type=obj.chart_type or "table",         # chart_type -> type
+            description=obj.data_summary,           # data_summary -> description
+            data=report_data,                       # result_data -> data
+            chartConfig=default_chart_config,       # 填充必填项
+            sourceQueryText="SELECT * FROM ...",    # 暂无 SQL 文本，填占位符
+            updatedAt=obj.cached_at.isoformat() if obj.cached_at else "" # cached_at -> updatedAt
+        )
+        reports.append(report)
+
+    return reports
 
 # 2. 获取报表详情数据 (从 project_service.py 移过来的)
 async def get_report_data_by_id_service(db: Session, query_id: int) -> Dict[str, Any]:
