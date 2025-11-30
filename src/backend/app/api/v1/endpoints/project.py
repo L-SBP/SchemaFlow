@@ -56,7 +56,7 @@ async def update_project_info(
     current_user: Any = Depends(deps.get_current_active_user),
 ) -> Any:
     try:
-        return await project_service.update_project_info_service(db, project_id, current_user.user_id, data.model_dump(exclude_unset=True))
+        return await project_service.update_project_info_service(db, project_id, current_user.user_id, update_data.model_dump(exclude_unset=True))
     except ItemNotFoundException:
         raise HTTPException(status_code=404, detail="Not found")
 

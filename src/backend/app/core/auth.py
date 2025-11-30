@@ -11,6 +11,8 @@ from pydantic import BaseModel
 from core.config import config
 from core.exceptions import TokenInvalidException
 from core.log import log
+# 导入 Redis 获取函数
+from redis.redis import get_redis
 
 # 密码哈希上下文
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
@@ -81,12 +83,27 @@ def create_access_token(data: dict) -> str:
 
 # 5. 获取当前活跃用户 ID (依赖注入用)
 async def get_current_active_user(
-    token: str = Depends(oauth2_scheme)
+        token: str = Depends(oauth2_scheme)
 ) -> int:
     """
     负责解析 Token，检查是否过期/无效，返回 user_id。
     注意：此函数不查数据库，只解密 Token。查库逻辑请在 deps.py 中基于此 user_id 进行。
     """
+    # 检查 Token 是否在 Redis 白名单中
+    redis = get_redis()
+    if redis:
+        # 这里的 key 格式必须与 user_service.service_save_token_in_redis 保持一致
+        token_key = f"token:{token}"
+        is_valid = await redis.get(token_key)
+
+        if not is_valid:
+            log.warning(f"Token invalid (logged out or expired in redis): {token[:10]}...")
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Token has been revoked (logged out)",
+                headers={"WWW-Authenticate": "Bearer"},
+            )
+
     try:
         user_id = decode_jwt_token(token)
         return user_id

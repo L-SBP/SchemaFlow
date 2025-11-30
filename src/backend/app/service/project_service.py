@@ -3,6 +3,7 @@
 from typing import Optional, Dict, Any
 from sqlalchemy.ext.asyncio import AsyncSession as Session
 from datetime import datetime, timedelta, timezone
+from jose import jwt, JWTError  # 新增
 
 # 隐式绝对导入
 from crud.crud_project import crud_project
@@ -21,11 +22,27 @@ from core.config import config
 # --- 辅助函数 ---
 async def _verify_delete_token(token: str, user_id: int, project_id: int) -> bool:
     try:
-        payload = decode_jwt_token(token)
-        if payload.get("sub") != str(user_id) or payload.get("project_id") != project_id:
+        # 直接使用 jwt.decode 获取完整 payload，而不是用 auth.decode_jwt_token
+        payload = jwt.decode(
+            token,
+            config.jwt.secret_key,
+            algorithms=[config.jwt.algorithm]
+        )
+
+        token_sub = payload.get("sub")
+        token_pid = payload.get("project_id")
+
+        # 1. 验证是否属于当前用户
+        if str(token_sub) != str(user_id):
             return False
+
+        # 2. 验证是否针对当前项目
+        if token_pid is None or int(token_pid) != int(project_id):
+            return False
+
         return True
-    except Exception:
+    except (JWTError, ValueError, TypeError, AttributeError):
+        # 任何解码错误或类型转换错误都视为验证失败
         return False
 
 
@@ -40,10 +57,15 @@ async def create_project_service(
 
         # 1. 创建关联的 DatabaseInstance (占位)
         # 必须先创建它，否则 Project 的 instance_id 外键会报错
+        # 使用合法的占位数据 (非空字符串，非0端口)
         new_instance = await crud_database_instance.create(
             db,
             db_type=db_type,
-            db_host="", db_port=0, db_name="pending", db_username="", db_password="",
+            db_host="127.0.0.1",  # TODO:后续改成真实的ip地址，修改：使用本地回环地址占位
+            db_port=3306,  # 修改：使用标准端口占位
+            db_name="pending_init",  # TODO:修改：更有意义的占位名
+            db_username="pending_user",  # TODO:修改：非空用户名
+            db_password="pending_password",  # TODO:修改：非空密码
             status="inactive"
         )
 
