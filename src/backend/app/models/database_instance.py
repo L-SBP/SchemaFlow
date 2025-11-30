@@ -1,6 +1,7 @@
-from sqlalchemy import Column, Integer, String, Text, DateTime, CheckConstraint, Index
+from sqlalchemy import Column, Integer, String, Text, DateTime, CheckConstraint, Index, URL
 from sqlalchemy.sql import func
 from core.database import Base
+from core.config import config
 
 
 class DatabaseInstance(Base):
@@ -70,3 +71,14 @@ class DatabaseInstance(Base):
     )
     class Config:
         from_attributes = True
+
+    @property
+    def user_database_url(self) -> URL:
+        return URL.create(
+            drivername=config.mysql.driver,
+            username=self.db_username,
+            password=self.db_password,
+            host=self.db_host,
+            port=self.db_port,
+            database=self.db_name
+        )

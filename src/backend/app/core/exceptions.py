@@ -88,6 +88,21 @@ class OperationNotPermittedException(BusinessException):
     def __init__(self, message: str = "Operation not permitted"):
         super().__init__(code=403, message=message)
 
+class ItemNotFoundException(BusinessException):
+    """资源未找到"""
+    def __init__(self, message: str = "Item not found"):
+        super().__init__(code=404, message=message)
+
+class InvalidOperationException(BusinessException):
+    """无效的操作"""
+    def __init__(self, message: str = "Invalid operation"):
+        super().__init__(code=400, message=message)
+
+class SQLSecurityException(BusinessException):
+    """SQL 安全异常"""
+    def __init__(self, message: str = "SQL security exception"):
+        super().__init__(code=500, message=message)
+
 class DatabaseOperationFailedException(AppException):
     """数据库操作失败"""
     def __init__(self, operation: str = "operation", ):
@@ -97,9 +112,3 @@ class RedisOperationFailedException(AppException):
     """Redis 操作失败"""
     def __init__(self, operation: str = "operation"):
         super().__init__(code=500, detail=f"Redis {operation} failed")
-
-
-class ItemNotFoundException(BusinessException):
-    """资源未找到"""
-    def __init__(self, message: str = "Item not found"):
-        super().__init__(code=404, message=message)

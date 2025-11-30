@@ -1,5 +1,7 @@
+from typing import List
+
 from pydantic_settings import BaseSettings
-from pydantic import SecretStr
+from pydantic import SecretStr, BaseModel
 from sqlalchemy import URL
 
 class Appconfig(BaseSettings):
@@ -118,6 +120,55 @@ class SMTP(BaseSettings):
     # 验证码有效期
     expire_time_seconds: int
 
+class MySQLConfig(BaseSettings):
+    """
+    MySQL数据库配置
+    """
+    # 数据库主机
+    host: str
+    # 数据库端口
+    port: int
+    # 用户名
+    username: str
+    # 密码
+    password: SecretStr
+    # 数据库连接驱动
+    driver: str
+    # SSL
+    ssl: bool
+    # plugin
+    plugin: str
+    # sqlalchemy连接池配置
+    max_overflow: int
+    # sqlalchemy连接池大小
+    pool_size: int
+    # sqlalchemy连接池回收时间
+    pool_recycle: int
+    # sqlalchemy连接池空闲时间
+    pool_timeout: int
+
+    @property
+    def sqlalchemy_database_url(self) -> URL:
+        return URL.create(
+            drivername=self.driver,
+            username=self.username,
+            password=self.password.get_secret_value(),
+            host=self.host,
+            port=self.port
+        )
+
+class UserSQLPermissions(BaseModel):
+    allowed_operations: List[str]
+    forbidden_operations: List[str]
+
+class SQLPermissions(BaseSettings):
+    """
+    SQL权限配置
+    """
+    root: UserSQLPermissions
+    normal: UserSQLPermissions
+
+
 class BaseConfig(BaseSettings):
     """
     基础配置
@@ -135,3 +186,7 @@ class BaseConfig(BaseSettings):
     jwt: JWTConfig
     # SMTP配置
     smtp: SMTP
+    # MySQL数据库配置
+    mysql: MySQLConfig
+    # SQL权限配置
+    sql_permissions: SQLPermissions
