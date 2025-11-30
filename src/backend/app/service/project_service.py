@@ -3,6 +3,7 @@
 from typing import Optional, Dict, Any
 from sqlalchemy.ext.asyncio import AsyncSession as Session
 from datetime import datetime, timedelta, timezone
+from jose import jwt, JWTError  # 新增
 
 # 隐式绝对导入
 from crud.crud_project import crud_project
@@ -21,11 +22,27 @@ from core.config import config
 # --- 辅助函数 ---
 async def _verify_delete_token(token: str, user_id: int, project_id: int) -> bool:
     try:
-        payload = decode_jwt_token(token)
-        if payload.get("sub") != str(user_id) or payload.get("project_id") != project_id:
+        # 直接使用 jwt.decode 获取完整 payload，而不是用 auth.decode_jwt_token
+        payload = jwt.decode(
+            token,
+            config.jwt.secret_key,
+            algorithms=[config.jwt.algorithm]
+        )
+
+        token_sub = payload.get("sub")
+        token_pid = payload.get("project_id")
+
+        # 1. 验证是否属于当前用户
+        if str(token_sub) != str(user_id):
             return False
+
+        # 2. 验证是否针对当前项目
+        if token_pid is None or int(token_pid) != int(project_id):
+            return False
+
         return True
-    except Exception:
+    except (JWTError, ValueError, TypeError, AttributeError):
+        # 任何解码错误或类型转换错误都视为验证失败
         return False
 
 
