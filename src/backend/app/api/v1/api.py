@@ -1,7 +1,7 @@
 from fastapi import APIRouter
 
 # 确保所有 endpoints 文件都被正确导入（相对导入是关键）
-from .endpoints import auth, project, reports,  user, admin,knowledge
+from .endpoints import auth, project, reports,  user, admin,knowledge,chat,session,message 
 
 api_router = APIRouter()
 
@@ -24,5 +24,10 @@ api_router.include_router(reports.router, tags=["III. 报表与查询"])
 api_router.include_router(knowledge.router, tags=["IV. 业务术语表"])
 # 5. 用户设置模块 (新增)
 api_router.include_router(user.router, prefix="/user", tags=["V. 用户设置"])
+#6. 管理员模块 (新增)
+api_router.include_router(admin.router, tags=["VI. 管理员功能"])
+#7. 对话与消息管理模块 (新增)
+api_router.include_router(chat.router, tags=["VII. 对话与消息管理"])
 
-api_router.include_router(admin.router, tags=["管理员功能"])
+# 8.这里是“资源”：管理会话容器
+api_router.include_router(session.router, prefix="/sessions", tags=["VIII. 会话管理"])
