@@ -14,7 +14,7 @@ router = APIRouter()
 # 4.1 获取报表列表
 @router.get("/reports", response_model=List[schemas.Report])
 async def read_reports(
-    projectId: str = Query(..., description="项目ID"),
+    projectId: int = Query(..., description="项目ID"),
     db: Session = Depends(get_db),
     current_user = Depends(get_current_active_user),
 ) -> Any:
@@ -25,7 +25,7 @@ async def read_reports(
 # 4.4 获取历史查询记录
 @router.get("/history-queries", response_model=List[schemas.HistoryQuery])
 async def read_history(
-    projectId: str = Query(..., description="项目ID"),
+    projectId: int = Query(..., description="项目ID"),
     db: Session = Depends(get_db),
     current_user = Depends(get_current_active_user),
 ) -> Any:

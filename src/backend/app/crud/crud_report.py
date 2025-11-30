@@ -3,12 +3,15 @@
 from typing import List, Optional, Tuple
 from sqlalchemy.ext.asyncio import AsyncSession as Session
 from sqlalchemy.future import select
-from sqlalchemy import join
+from sqlalchemy import desc
 from sqlalchemy.exc import SQLAlchemyError
 
-# 隐式绝对导入
-from models.query_result import QueryResult  # 缓存结果表
+# 导入所有相关模型以建立连接路径
+from models.query_result import QueryResult
 from models.ai_generated_statement import AIGeneratedStatement
+from models.message import Message
+from models.session import Session as SessionModel # 别名避免与 DB Session 混淆
+
 from core.exceptions import DatabaseOperationFailedException
 
 
@@ -35,7 +38,7 @@ class CRUDReport:
             raise DatabaseOperationFailedException("get report data by result_id") from e
 
     @staticmethod
-    async def get_history_by_project(db: Session, project_id: str) -> List[QueryResult]:
+    async def get_history_by_project(db: Session, project_id: int) -> List[QueryResult]:
         """
         CRUD: 根据项目ID获取历史查询结果列表（用于列表接口）。
         """
@@ -47,6 +50,30 @@ class CRUDReport:
             return result.scalars().all()
         except SQLAlchemyError as e:
             raise DatabaseOperationFailedException("get history queries by project") from e
+
+    @staticmethod
+    async def get_by_project(db: Session, project_id: int) -> List[QueryResult]:
+        """
+        CRUD: 获取项目报表列表 (修正版：增加 Project 筛选)
+        路径: QueryResult -> Statement -> Message -> Session -> Project
+        """
+        try:
+            query = (
+                select(QueryResult)
+                .join(AIGeneratedStatement, QueryResult.statement_id == AIGeneratedStatement.statement_id)
+                .join(Message, AIGeneratedStatement.message_id == Message.message_id)
+                .join(SessionModel, Message.session_id == SessionModel.session_id)
+                .where(SessionModel.project_id == project_id)  # 核心筛选条件
+                .order_by(desc(QueryResult.cached_at))
+            )
+
+            result = await db.execute(query)
+            return result.scalars().all()
+        except SQLAlchemyError as e:
+            raise DatabaseOperationFailedException("get reports by project") from e
+
+    # 兼容旧代码调用
+    get_history_by_project = get_by_project
 
 
 crud_report = CRUDReport()
