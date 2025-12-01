@@ -1,45 +1,82 @@
-# backend/app/crud/crud_announcement.py
-
 from typing import Optional, List, Dict, Any
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.future import select
-from sqlalchemy import update, delete
+from sqlalchemy import select, update, delete, func
 from sqlalchemy.exc import SQLAlchemyError
-from models.system_announcement import SystemAnnouncement as Announcement # 假设 ORM 模型名是 SystemAnnouncement
+
+from models.system_announcement import SystemAnnouncement as Announcement
 from core.exceptions import DatabaseOperationFailedException
 
+
 class CRUDAnnouncement:
+
+    @staticmethod
+    async def get_list(
+        db: AsyncSession,
+        status: str | None,
+        page: int,
+        page_size: int
+    ):
+        """获取公告列表（用户端使用）"""
+        query = select(Announcement)
+
+        if status:
+            query = query.where(Announcement.status == status)
+
+        # total count
+        count_query = select(func.count()).select_from(query.subquery())
+        total = (await db.execute(count_query)).scalar()
+
+        # pagination
+        query = (
+            query.order_by(Announcement.created_at.desc())
+            .offset((page - 1) * page_size)
+            .limit(page_size)
+        )
+
+        rows = (await db.execute(query)).scalars().all()
+        return total, rows
+    
+    async def get(self, db: AsyncSession, announcement_id: int):
+        """获取公告详情"""
+        query = select(Announcement).where(Announcement.announcement_id == announcement_id)
+        result = await db.execute(query)
+        return result.scalar_one_or_none()
+
     @staticmethod
     async def create(db: AsyncSession, **kwargs) -> Announcement:
-        """创建新公告 (4.2.1)"""
         try:
-            db_obj = Announcement(**kwargs)
-            db.add(db_obj)
+            obj = Announcement(**kwargs)
+            db.add(obj)
             await db.commit()
-            await db.refresh(db_obj)
-            return db_obj
+            await db.refresh(obj)
+            return obj
         except SQLAlchemyError as e:
             await db.rollback()
             raise DatabaseOperationFailedException("create announcement") from e
 
     @staticmethod
-    async def update(db: AsyncSession, announcement_id: int, update_data: Dict[str, Any]) -> Optional[Announcement]:
-        """更新公告 (4.2.2)"""
+    async def update(db: AsyncSession, announcement_id: int, update_data: Dict[str, Any]):
         try:
-            query = update(Announcement).where(Announcement.announcement_id == announcement_id).values(**update_data).returning(Announcement)
+            query = (
+                update(Announcement)
+                .where(Announcement.announcement_id == announcement_id)
+                .values(**update_data)
+                .returning(Announcement)
+            )
             result = await db.execute(query)
-            updated_announcement = result.scalar_one_or_none()
+            obj = result.scalar_one_or_none()
             await db.commit()
-            return updated_announcement
+            return obj
         except SQLAlchemyError as e:
             await db.rollback()
             raise DatabaseOperationFailedException("update announcement") from e
 
     @staticmethod
     async def remove(db: AsyncSession, announcement_id: int) -> bool:
-        """删除公告 (4.2.3)"""
         try:
-            query = delete(Announcement).where(Announcement.announcement_id == announcement_id)
+            query = delete(Announcement).where(
+                Announcement.announcement_id == announcement_id
+            )
             result = await db.execute(query)
             await db.commit()
             return result.rowcount > 0
@@ -47,4 +84,6 @@ class CRUDAnnouncement:
             await db.rollback()
             raise DatabaseOperationFailedException("delete announcement") from e
 
-curd_announcement = CRUDAnnouncement()
+
+# 正确实例名称
+crud_announcement = CRUDAnnouncement()

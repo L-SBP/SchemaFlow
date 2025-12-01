@@ -26,7 +26,7 @@ from schema.admin import (
     AdminStatsResponse
 )
 from crud.crud_user_account import curd_user_account
-from crud.crud_announcement import curd_announcement
+from crud.crud_announcement import crud_announcement
 from crud.crud_admin_data import curd_admin_data
 
 
@@ -92,7 +92,7 @@ async def update_user_quota_service(db: AsyncSession, user_id: int,
 async def create_announcement_service(db: AsyncSession, data: AnnouncementCreateRequest,
                                       admin_user_id: int) -> AnnouncementResponse:
     """创建新公告 (4.2.1)"""
-    announcement_orm = await curd_announcement.create(db, created_by=admin_user_id, **data.model_dump())
+    announcement_orm = await crud_announcement.create(db, created_by=admin_user_id, **data.model_dump())
     return AnnouncementResponse.model_validate(announcement_orm)
 
 
@@ -100,7 +100,7 @@ async def update_announcement_service(db: AsyncSession, announcement_id: int,
                                       data: AnnouncementUpdateRequest) -> AnnouncementResponse:
     """更新公告内容和状态 (4.2.2)"""
     update_data = data.model_dump(exclude_unset=True)
-    announcement_orm = await curd_announcement.update(db, announcement_id=announcement_id, update_data=update_data)
+    announcement_orm = await crud_announcement.update(db, announcement_id=announcement_id, update_data=update_data)
     if not announcement_orm:
         raise ItemNotFoundException("Announcement not found.")
     return AnnouncementResponse.model_validate(announcement_orm)
@@ -108,7 +108,7 @@ async def update_announcement_service(db: AsyncSession, announcement_id: int,
 
 async def delete_announcement_service(db: AsyncSession, announcement_id: int) -> None:
     """删除公告 (4.2.3)"""
-    success = await curd_announcement.remove(db, announcement_id)
+    success = await crud_announcement.remove(db, announcement_id)
     if not success:
         raise ItemNotFoundException("Announcement not found.")
 
