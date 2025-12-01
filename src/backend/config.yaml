@@ -89,6 +89,84 @@ dev:
     # 验证码有效期
     expire_time_seconds: 60
 
+  mysql:
+    # 数据库主机
+    host: localhost
+    # 数据库端口
+    port: 3306
+    # 用户名
+    username: root
+    # 密码
+    password: root_secure_2025
+    # SSL
+    ssl: false
+    # plugin
+    plugin: mysql_native_password
+    # 数据库连接驱动
+    driver: mysql+aiomysql
+    # sqlalchemy连接池配置
+    max_overflow: 5
+    # sqlalchemy连接池大小
+    pool_size: 5
+    # sqlalchemy连接池回收时间
+    pool_recycle: 3600
+    # sqlalchemy连接池空闲时间
+    pool_timeout: 30
+
+  # SQL权限
+  sql_permissions:
+    # MySQL Root 用户权限
+    root:
+      # 允许的操作（关键字，支持通配符 * 匹配后缀）
+      allowed_operations:
+        - "CREATE DATABASE *"
+        - "DROP DATABASE *"
+        - "CREATE USER *"
+        - "DROP USER *"
+        - "GRANT *"
+        - "REVOKE *"
+        - "CREATE TABLE *"
+        - "ALTER TABLE *"
+        - "DROP TABLE *"
+        - "TRUNCATE TABLE *"
+        - "SELECT *"
+        - "INSERT *"
+        - "UPDATE *"
+        - "DELETE *"
+        - "CREATE INDEX *"
+        - "DROP INDEX *"
+        - "USE *"
+      # 禁止的操作（Root 仅禁止系统级高危操作）
+      forbidden_operations:
+        - "SET GLOBAL *"
+        - "KILL *"
+        - "SHOW PROCESSLIST"
+    # MySQL 普通业务用户权限（仅 Project 内 DML 操作）
+    normal:
+      # 允许的操作（仅增删改查+切换自身库）
+      allowed_operations:
+        - "SELECT *"
+        - "INSERT *"
+        - "UPDATE *"
+        - "DELETE *"
+      # 禁止的操作（所有管理型/结构修改操作）
+      forbidden_operations:
+        - "USE *"
+        - "CREATE DATABASE *"
+        - "DROP DATABASE *"
+        - "CREATE USER *"
+        - "DROP USER *"
+        - "GRANT *"
+        - "REVOKE *"
+        - "CREATE TABLE *"
+        - "ALTER TABLE *"
+        - "DROP TABLE *"
+        - "TRUNCATE TABLE *"
+        - "CREATE INDEX *"
+        - "DROP INDEX *"
+        - "SET *"
+        - "KILL *"
+        - "SHOW *"
 
 # 生产环境
 prod:
@@ -140,3 +218,64 @@ prod:
     sender: 2803234009@qq.com
     key: "bfujmrhgwroudhei"
     expire_time_seconds: 300
+
+  mysql:
+    host: localhost
+    port: 3306
+    username: root
+    password: root_secure_2025
+    ssl: false
+    plugin: mysql_native_password
+    driver: mysql+aiomysql
+    max_overflow: 10
+    pool_size: 50
+    pool_recycle: 3600
+    pool_timeout: 30
+
+  sql_permissions:
+    root:
+      allowed_operations:
+        - "CREATE DATABASE *"
+        - "DROP DATABASE *"
+        - "CREATE USER *"
+        - "DROP USER *"
+        - "GRANT *"
+        - "REVOKE *"
+        - "CREATE TABLE *"
+        - "ALTER TABLE *"
+        - "DROP TABLE *"
+        - "TRUNCATE TABLE *"
+        - "SELECT *"
+        - "INSERT *"
+        - "UPDATE *"
+        - "DELETE *"
+        - "CREATE INDEX *"
+        - "DROP INDEX *"
+        - "USE *"
+      forbidden_operations:
+        - "SET GLOBAL *"
+        - "KILL *"
+        - "SHOW PROCESSLIST"
+    normal:
+      allowed_operations:
+        - "SELECT *"
+        - "INSERT *"
+        - "UPDATE *"
+        - "DELETE *"
+      forbidden_operations:
+        - "USE *"
+        - "CREATE DATABASE *"
+        - "DROP DATABASE *"
+        - "CREATE USER *"
+        - "DROP USER *"
+        - "GRANT *"
+        - "REVOKE *"
+        - "CREATE TABLE *"
+        - "ALTER TABLE *"
+        - "DROP TABLE *"
+        - "TRUNCATE TABLE *"
+        - "CREATE INDEX *"
+        - "DROP INDEX *"
+        - "SET *"
+        - "KILL *"
+        - "SHOW *"
