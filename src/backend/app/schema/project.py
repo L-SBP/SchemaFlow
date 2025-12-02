@@ -30,7 +30,7 @@ class ProjectCreate(BaseModel):
     """3.2.1 创建项目请求"""
     project_name: str = Field(..., min_length=3, max_length=50, description="项目名称")
     db_type: Literal['mysql', 'postgresql', 'sqlite'] = Field(..., description="数据库类型")
-    description: str = Field(..., max_length=500, description="项目描述")
+    description: str = Field(..., max_length=1000, description="项目描述")
 
 
 class ProjectUpdate(BaseModel):

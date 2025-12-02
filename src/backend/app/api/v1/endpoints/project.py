@@ -1,6 +1,6 @@
 # backend/app/api/v1/endpoints/project.py
 
-from fastapi import APIRouter, Depends, HTTPException, status, Query, Header
+from fastapi import APIRouter, Depends, HTTPException, status, Query, Header,BackgroundTasks
 from sqlalchemy.ext.asyncio import AsyncSession as Session
 from typing import Any, Optional
 
@@ -16,11 +16,12 @@ router = APIRouter()
 @router.post("/", response_model=schemas.ProjectAsyncResponse, status_code=status.HTTP_202_ACCEPTED)
 async def create_project(
     project_in: schemas.ProjectCreate,
+    background_tasks: BackgroundTasks,
     db: Session = Depends(deps.get_db),
     current_user: Any = Depends(deps.get_current_active_user),
 ) -> Any:
     try:
-        return await project_service.create_project_service(db, project_in, current_user.user_id)
+        return await project_service.create_project_service(db, project_in, current_user.user_id, background_tasks)
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
