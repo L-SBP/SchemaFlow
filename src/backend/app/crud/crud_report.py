@@ -5,7 +5,7 @@ from sqlalchemy.ext.asyncio import AsyncSession as Session
 from sqlalchemy.future import select
 from sqlalchemy import desc
 from sqlalchemy.exc import SQLAlchemyError
-
+from sqlalchemy import update
 # 导入所有相关模型以建立连接路径
 from models.query_result import QueryResult
 from models.ai_generated_statement import AIGeneratedStatement
@@ -75,5 +75,25 @@ class CRUDReport:
     # 兼容旧代码调用
     get_history_by_project = get_by_project
 
+    @staticmethod
+    async def update_chart_type(db: Session, result_id: int, chart_type: str):
+        """
+        更新报表的图表类型 -> 实际更新 QueryResult.chart_type 字段
+        """
+        try:
+            query = (
+                update(QueryResult)
+                .where(QueryResult.result_id == result_id)
+                .values(chart_type=chart_type)
+                .returning(QueryResult)
+            )
+
+            result = await db.execute(query)
+            obj = result.scalar_one_or_none()
+            await db.commit()
+            return obj
+        except SQLAlchemyError as e:
+            await db.rollback()
+            raise DatabaseOperationFailedException("update chart type failed") from e
 
 crud_report = CRUDReport()
