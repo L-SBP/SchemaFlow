@@ -25,9 +25,9 @@ from schema.admin import (
     ViolationLogListItem,
     AdminStatsResponse
 )
-from crud.crud_user_account import curd_user_account
+from crud.crud_user_account import crud_user_account
 from crud.crud_announcement import crud_announcement
-from crud.crud_admin_data import curd_admin_data
+from crud.crud_admin_data import crud_admin_data
 
 
 # ----------------------------------------------------------------------
@@ -37,7 +37,7 @@ from crud.crud_admin_data import curd_admin_data
 async def get_admin_user_list_service(db: AsyncSession, page: int, page_size: int, search: Optional[str],
                                       status: str) -> AdminUserListResponse:
     """Service: 获取用户列表 (4.1.1)"""
-    items_data, total = await curd_admin_data.get_user_list_with_stats(db, page, page_size, search, status)
+    items_data, total = await crud_admin_data.get_user_list_with_stats(db, page, page_size, search, status)
     items_dto = [AdminUserListItem(**data) for data in items_data]
     return AdminUserListResponse(total=total, page=page, page_size=page_size, items=items_dto)
 
@@ -48,13 +48,13 @@ async def update_user_status_service(db: AsyncSession, user_id: int,
                                      admin_user_id: int) -> AdminUpdateUserStatusResponse:
     """修改用户状态 (4.1.2)"""
     # 1. 先查询用户是否存在 (获取 ORM 对象)
-    user_obj = await curd_user_account.get(db, user_id)
+    user_obj = await crud_user_account.get(db, user_id)
 
     if not user_obj:
         raise ItemNotFoundException(f"User with ID {user_id} not found.")
 
     # 2. 业务逻辑：调用 CRUD 修改，传入 db_obj=user_obj
-    updated_user = await curd_user_account.update(db, db_obj=user_obj, status=data.status)
+    updated_user = await crud_user_account.update(db, db_obj=user_obj, status=data.status)
 
     # 3. 业务逻辑：记录到 user_ban_log (占位，可后续实现)
     # await create_ban_log(db, user_id, admin_user_id, reason=data.reason, ...)
@@ -70,13 +70,13 @@ async def update_user_quota_service(db: AsyncSession, user_id: int,
                                     data: AdminUpdateUserQuotaRequest) -> AdminUpdateUserQuotaResponse:
     """调整用户资源额度 (4.1.3)"""
     # 1. 先获取对象
-    user_obj = await curd_user_account.get(db, user_id)
+    user_obj = await crud_user_account.get(db, user_id)
 
     if not user_obj:
         raise ItemNotFoundException(f"User with ID {user_id} not found.")
 
     # 2. 传入对象进行更新
-    updated_user = await curd_user_account.update(db, db_obj=user_obj, max_databases=data.max_databases)
+    updated_user = await crud_user_account.update(db, db_obj=user_obj, max_databases=data.max_databases)
 
     return AdminUpdateUserQuotaResponse(
         user_id=updated_user.user_id,
@@ -119,7 +119,7 @@ async def delete_announcement_service(db: AsyncSession, announcement_id: int) ->
 
 async def get_admin_list_service(db: AsyncSession, page: int, page_size: int) -> AdminListResponse:
     """获取管理员列表 (4.3.1)"""
-    admin_orms, total = await curd_admin_data.get_admin_list(db, page, page_size)
+    admin_orms, total = await crud_admin_data.get_admin_list(db, page, page_size)
     items_dto = [AdminListItem.model_validate(orm) for orm in admin_orms]
     return AdminListResponse(total=total, page=page, page_size=page_size, items=items_dto)
 
@@ -127,12 +127,12 @@ async def get_admin_list_service(db: AsyncSession, page: int, page_size: int) ->
 async def get_violation_logs_service(db: AsyncSession, page: int, page_size: int, risk_level: Optional[str],
                                      resolution_status: Optional[str]) -> ViolationLogListResponse:
     """获取违规记录列表 (4.4.2)"""
-    logs_data, total = await curd_admin_data.get_violation_logs(db, page, page_size, risk_level, resolution_status)
+    logs_data, total = await crud_admin_data.get_violation_logs(db, page, page_size, risk_level, resolution_status)
     items_dto = [ViolationLogListItem(**data) for data in logs_data]
     return ViolationLogListResponse(total=total, page=page, page_size=page_size, items=items_dto)
 
 
 async def get_admin_stats_service(db: AsyncSession) -> AdminStatsResponse:
     """获取系统统计看板数据 (4.4.1)"""
-    stats_data = await curd_admin_data.get_system_stats(db)
+    stats_data = await crud_admin_data.get_system_stats(db)
     return AdminStatsResponse(**stats_data)

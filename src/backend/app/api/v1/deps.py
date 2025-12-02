@@ -8,7 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from core.deps import get_engine, get_db
 from redis.redis import get_redis
 from core.auth import get_current_active_user as get_user_id_from_token # 重命名以区分职责
-from crud.crud_user_account import curd_user_account
+from crud.crud_user_account import crud_user_account
 from models.user_account import UserAccount
 from schema.user import UserMe # 导入用户DTO
 
@@ -38,7 +38,7 @@ async def get_current_active_user(
     依赖函数：从数据库获取当前用户对象，并进行状态检查。
     """
     try:
-        user_orm: UserAccount = await curd_user_account.get(db=db, user_id=user_id)
+        user_orm: UserAccount = await crud_user_account.get(db=db, user_id=user_id)
     except Exception:
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Database query failed.")
 
