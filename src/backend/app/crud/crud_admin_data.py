@@ -225,4 +225,4 @@ class CRUDAdminData:
             raise DatabaseOperationFailedException("fetch violation logs") from e
 
 
-curd_admin_data = CRUDAdminData()
+crud_admin_data = CRUDAdminData()

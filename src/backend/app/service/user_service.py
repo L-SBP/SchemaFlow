@@ -8,7 +8,7 @@ from datetime import datetime, timezone  # 导入 timezone 用于日志记录
 # 隐式绝对导入 (核心依赖)
 from crud.crud_user_login_history import crud_login_history
 from models.user_login_history import UserLoginHistory
-from crud.crud_user_account import curd_user_account
+from crud.crud_user_account import crud_user_account
 from models.user_account import UserAccount
 from core import exceptions
 from core.auth import get_password_hash, verify_password, decode_jwt_token  # 补充 decode_jwt_token 供 logout 使用
@@ -27,7 +27,7 @@ from schema import user as schemas  # 导入 User Schemas
 async def check_email_exists(db: AsyncSession, email: str) -> bool:
     """检查邮箱是否已存在"""
     log.info(f"Checking email {email} exists")
-    existing_user = await curd_user_account.get_by_email(db, email)
+    existing_user = await crud_user_account.get_by_email(db, email)
     if existing_user:
         return True
     return False
@@ -35,7 +35,7 @@ async def check_email_exists(db: AsyncSession, email: str) -> bool:
 
 async def check_username_exists(db: AsyncSession, username: str) -> bool:
     """检查给定用户名是否已存在"""
-    existing_user = await curd_user_account.get_by_username(db, username)
+    existing_user = await crud_user_account.get_by_username(db, username)
     if existing_user:
         return True
     return False
@@ -44,7 +44,7 @@ async def check_username_exists(db: AsyncSession, username: str) -> bool:
 async def service_check_user_exists(db: AsyncSession, username_or_email: str) -> Optional[UserAccount]:
     """查询用户，用于登录等场景的基础验证"""
     try:
-        user: Optional[UserAccount] = await curd_user_account.get_by_username_or_email(
+        user: Optional[UserAccount] = await crud_user_account.get_by_username_or_email(
             db=db, username_or_email=username_or_email
         )
         return user
@@ -80,7 +80,7 @@ async def service_register_user(
 
     # 创建用户账户
     try:
-        new_user = await curd_user_account.create(
+        new_user = await crud_user_account.create(
             db,
             username=username,
             email=email,
@@ -202,7 +202,7 @@ async def get_current_user(
 ) -> UserAccount:
     """获取当前用户业务逻辑"""
     try:
-        user: Optional[UserAccount] = await curd_user_account.get_by_username_or_email(
+        user: Optional[UserAccount] = await crud_user_account.get_by_username_or_email(
             db=db, username_or_email=username_or_email
         )
     except SQLAlchemyError:
@@ -225,7 +225,7 @@ async def get_user_me_service(db: AsyncSession, user_id: int) -> schemas.UserMe:
     """Service 逻辑：获取当前登录用户的详细信息。"""
     log.info(f"Fetching profile for user {user_id}")
     try:
-        user_orm = await curd_user_account.get(db, user_id)
+        user_orm = await crud_user_account.get(db, user_id)
 
         if not user_orm:
             raise exceptions.UserNotFoundException()
@@ -244,7 +244,7 @@ async def update_password_service(
     """Service 逻辑：验证旧密码并更新新密码。"""
     log.info(f"Updating password for user {user_id}")
     try:
-        db_user = await curd_user_account.get(db, user_id)
+        db_user = await crud_user_account.get(db, user_id)
 
         if not db_user:
             raise exceptions.UserNotFoundException()
@@ -254,7 +254,7 @@ async def update_password_service(
 
         new_hashed_password = get_password_hash(password_data.new_password)
 
-        updated_orm = await curd_user_account.update(
+        updated_orm = await crud_user_account.update(
             db,
             db_user,
             password_hash=new_hashed_password
@@ -277,12 +277,12 @@ async def update_username_service(
         if await check_username_exists(db, username_data.username):
             raise exceptions.UsernameHasBeenRegisteredException()
 
-        db_user = await curd_user_account.get(db, user_id)
+        db_user = await crud_user_account.get(db, user_id)
 
         if not db_user:
             raise exceptions.UserNotFoundException()
 
-        updated_orm = await curd_user_account.update(
+        updated_orm = await crud_user_account.update(
             db,
             db_user,
             username=username_data.username
@@ -302,11 +302,11 @@ async def update_avatar_service(
     """Service 逻辑：更新用户头像 URL。"""
     log.info(f"Updating avatar for user {user_id}")
     try:
-        db_user = await curd_user_account.get(db, user_id)
+        db_user = await crud_user_account.get(db, user_id)
         if not db_user:
             raise exceptions.UserNotFoundException()
 
-        updated_orm = await curd_user_account.update(
+        updated_orm = await crud_user_account.update(
             db,
             db_user,
             avatar_url=avatar_data.avatar_url
@@ -350,12 +350,12 @@ async def confirm_update_email_service(
         raise exceptions.CodeInvalidException()
 
     try:
-        db_user = await curd_user_account.get(db, user_id)
+        db_user = await crud_user_account.get(db, user_id)
         if not db_user:
             raise exceptions.UserNotFoundException()
 
         # 3. 调用 CRUD 更新邮箱
-        updated_orm = await curd_user_account.update(
+        updated_orm = await crud_user_account.update(
             db,
             db_user,
             email=confirm_data.new_email

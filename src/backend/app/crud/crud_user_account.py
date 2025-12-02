@@ -161,4 +161,4 @@ class CRUDUserAccount:
         except SQLAlchemyError as e:
             raise DatabaseOperationFailedException("get user by username or email") from e
 
-curd_user_account = CRUDUserAccount()
+crud_user_account = CRUDUserAccount()
