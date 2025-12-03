@@ -37,7 +37,8 @@ const MOCK_ANNOUNCEMENTS: Announcement[] = [
 
 const App: React.FC = () => {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
-  const [currentUser, setCurrentUser] = useState<{ role: UserRole, name: string } | null>(null);
+  // 更新 currentUser 状态结构，包含 avatar_url
+  const [currentUser, setCurrentUser] = useState<{ role: UserRole, name: string, avatar_url?: string } | null>(null);
   const [activePage, setActivePage] = useState('dashboard');
 
   // Shared State
@@ -47,9 +48,10 @@ const App: React.FC = () => {
   const [viewingUser, setViewingUser] = useState<User | null>(null);
   const [announcements, setAnnouncements] = useState<Announcement[]>(MOCK_ANNOUNCEMENTS);
 
-  const handleLogin = (role: UserRole, username: string) => {
+  // 更新 handleLogin 以接收 avatar_url
+  const handleLogin = (role: UserRole, username: string, avatar_url?: string) => {
     setIsAuthenticated(true);
-    setCurrentUser({ role, name: username });
+    setCurrentUser({ role, name: username, avatar_url });
     setActivePage(role === UserRole.ADMIN ? 'admin_users' : 'dashboard');
   };
 
@@ -92,6 +94,18 @@ const App: React.FC = () => {
     }
   };
 
+  // 处理全局用户状态更新（例如从 Profile 页面）
+  const handleGlobalUserUpdate = (data: Partial<{ username: string; avatar_url: string }>) => {
+    setCurrentUser(prev => {
+      if (!prev) return null;
+      return {
+        ...prev,
+        name: data.username || prev.name,
+        avatar_url: data.avatar_url !== undefined ? data.avatar_url : prev.avatar_url
+      };
+    });
+  };
+
   if (!isAuthenticated) {
     return <Login onLogin={handleLogin} />;
   }
@@ -114,7 +128,7 @@ const App: React.FC = () => {
           ) : <AdminPanel users={users} onUpdateUser={handleUpdateUser} onViewUser={handleViewUser} />;
         case 'admin_announcements': return <AdminAnnouncements announcements={announcements} setAnnouncements={setAnnouncements} />;
         case 'admin_status': return <AdminStatus />;
-        case 'profile': return <Profile user={currentUser} />;
+        case 'profile': return <Profile user={currentUser} onLogout={handleLogout} onUpdateUser={handleGlobalUserUpdate} />;
         default: return <AdminPanel users={users} onUpdateUser={handleUpdateUser} onViewUser={handleViewUser} />;
       }
     } else {
@@ -131,7 +145,7 @@ const App: React.FC = () => {
         case 'reports': return <Reports projects={projects} />;
         case 'glossary': return <Glossary projects={projects} />;
         case 'announcements': return <Announcements announcements={announcements} />;
-        case 'profile': return <Profile user={currentUser} />;
+        case 'profile': return <Profile user={currentUser} onLogout={handleLogout} onUpdateUser={handleGlobalUserUpdate} />;
         default: return <Dashboard projects={projects} setProjects={setProjects} onProjectSelect={handleProjectSelect} />;
       }
     }

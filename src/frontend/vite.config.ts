@@ -23,7 +23,7 @@ export default defineConfig(({ command, mode }) => {
       proxy: {
         '/api': {
 
-          target: 'http://26.48.84.26:8000',
+          target: 'http://host.docker.internal:8000',
           changeOrigin: true,
           // 如果后端接口本身不带 /api 前缀，需要把路径里的 /api 去掉
           // rewrite: (path) => path.replace(/^\/api/, '') 
