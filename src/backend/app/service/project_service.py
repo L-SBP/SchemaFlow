@@ -21,6 +21,8 @@ from core.exceptions import ItemNotFoundException, DatabaseOperationFailedExcept
 from core.auth import decode_jwt_token, create_access_token
 from core.config import config
 from core.database import PsqlHelper
+import re
+from pypinyin import lazy_pinyin, Style  # <--- 1. 新增导入
 
 # ==========================================
 # 新增：Schema 生成工具函数 (集成之前的逻辑)
@@ -30,34 +32,51 @@ class SchemaGenerator:
 
     @staticmethod
     def _parse_html(html_content: str):
+        """
+        解析 HTML 提取 Schema 和 DDL
+        修复：增加了 SQL 语句去重逻辑，防止 Appendix 章节导致代码重复
+        """
         if not html_content:
             return "", ""
         soup = BeautifulSoup(html_content, 'html.parser')
 
-        # 提取 Schema
+        # 1. 提取 Schema (Logical Design)
         schema_text = []
+        # 使用模糊匹配找到 Logical Design 章节
         start_node = soup.find(lambda tag: tag.name in ['h1', 'h2', 'h3', 'h4'] and 'Logical Design' in tag.get_text())
         if start_node:
             current = start_node.find_next_sibling()
             while current:
-                if current.name in ['h1', 'h2', 'h3', 'h4']: break
+                # 遇到下一个大标题就停止
+                if current.name in ['h1', 'h2', 'h3', 'h4']:
+                    break
                 text = current.get_text(separator='\n', strip=True)
-                if text: schema_text.append(text)
+                if text:
+                    schema_text.append(text)
                 current = current.find_next_sibling()
 
-        # 提取 DDL
+        # 2. 提取 DDL (核心修复：去重)
         ddl_list = []
+        seen_sql = set()  # <--- 用于记录已经添加过的 SQL 内容
+
         sql_blocks = soup.find_all('code', class_='language-sql')
+
         for block in sql_blocks:
             sql_text = block.get_text().strip()
-            if sql_text: ddl_list.append(sql_text)
 
-        # DDL 重排序 (CREATE DATABASE 放前面)
+            # 只有非空且【未出现过】的 SQL 块才添加
+            if sql_text and sql_text not in seen_sql:
+                ddl_list.append(sql_text)
+                seen_sql.add(sql_text)  # <--- 标记为已添加
+
+        # 3. DDL 重排序 (确保 CREATE DATABASE 放最前面)
         create_db_idx = -1
         for i, sql in enumerate(ddl_list):
             if "CREATE DATABASE" in sql.upper():
                 create_db_idx = i
                 break
+
+        # 如果找到了 CREATE DATABASE 且不在第一位，把它挪到第一位
         if create_db_idx > 0:
             ddl_list.insert(0, ddl_list.pop(create_db_idx))
 
@@ -107,42 +126,85 @@ class SchemaGenerator:
 
 
 # ==========================================
+# 新增：生成有意义的数据库名称
+# ==========================================
+def generate_meaningful_db_name(project_name: str, user_id: int) -> str:
+    """
+    将项目名称转换为符合数据库命名规范的字符串 (拼音/英文 + 下划线)
+    例如: "电商管理平台" -> "dianshang_guanli_pingtai_1_x82a"
+    """
+    # 1. 中文转拼音 (如: ['dian', 'shang', 'ping', 'tai'])
+    #    英文单词保持不变
+    pinyin_list = lazy_pinyin(project_name, style=Style.NORMAL)
+
+    # 2. 拼接成字符串
+    full_str = "_".join(pinyin_list)
+
+    # 3. 清洗：只保留字母、数字和下划线，且转为小写
+    clean_str = re.sub(r'[^a-zA-Z0-9_]', '_', full_str).lower()
+
+    # 4. 去除连续的下划线
+    clean_str = re.sub(r'_+', '_', clean_str).strip('_')
+
+    # 5. 截断过长的前缀 (防止数据库名过长，保留前 40 字符)
+    if len(clean_str) > 40:
+        clean_str = clean_str[:40].rstrip('_')
+
+    # 6. 加上 user_id 和短随机码 (确保全局唯一性)
+    #    为什么还要随机码？因为用户可能创建两个都叫 "测试项目" 的项目
+    short_random = ''.join(random.choices(string.ascii_lowercase + string.digits, k=4))
+
+    return f"{clean_str}_{user_id}_{short_random}"
+
+
+# ==========================================
 # 新增：后台任务处理函数
 # ==========================================
-async def bg_generate_schema_task(project_id: int, requirements: str, db_name: str, db: Session):
+async def bg_generate_schema_task(project_id: int, requirements: str, db_name: str):
     """
     后台任务：调用 Gradio 生成 Schema，并更新数据库状态
-    注意：这里需要处理 DB Session 的生命周期，或者重新创建 Session
     """
     print(f"[Task] Starting schema generation for Project {project_id}...")
 
-    # 由于是同步的网络请求，可以直接运行
-    # 如果是在 async 函数中，建议使用 loop.run_in_executor 避免阻塞 Event Loop
+    # 1. 执行生成 (这是一个耗时的同步 IO 操作，使用 executor 运行)
     loop = asyncio.get_event_loop()
     schema_res, ddl_res = await loop.run_in_executor(
         None, SchemaGenerator.run_generation, requirements, db_name
     )
 
-    if schema_res and ddl_res:
-        print(f"[Task] Generation successful for Project {project_id}")
+    # 2. 获取新的数据库会话 (因为 HTTP 请求的 Session 已经关闭)
+    # 注意：这里临时创建一个 Engine，生产环境建议从全局变量导入 async_engine
+    temp_engine = PsqlHelper._get_async_engine(config.db)
 
-        # TODO: 这里应该将 schema_res 和 ddl_res 保存到数据库
-        # 例如保存到 ai_generated_statement 表，或更新 Project 的某个字段
-        # 由于没看到具体的 DDL 存储表结构，这里演示更新 Project 状态为 ACTIVE
+    try:
+        if schema_res and ddl_res:
+            print(f"[Task] Generation successful for Project {project_id}")
 
-        # 注意：FastAPI BackgroundTasks 结束后 Session 可能已关闭，
-        # 在实际生产中，建议在 Task 内部重新申请一个 Session 或者是使用 Celery
-        # 这里假设 db 仍然可用 (FastAPI 的 Depends 在 response 后会关闭 db，所以这里必须小心)
-        # **修正方案**：Task 内部应该独立管理 DB 连接，这里简化演示打印日志
+            async with PsqlHelper.get_session(temp_engine) as session:
+                # 构造符合 JSONB 的数据结构
+                schema_definition_json = {
+                    "schema": schema_res,  # 原始 Schema 文本
+                    "ddl": ddl_res  # 原始 DDL 语句
+                }
 
-        print(f"--- Schema Preview ---\n{schema_res[:200]}...")
-        print(f"--- DDL Preview ---\n{ddl_res[:200]}...")
+                # 更新项目：写入 JSONB 字段，并将状态改为 active
+                await crud_project.update(
+                    session,
+                    project_id,
+                    schema_definition=schema_definition_json,
+                    project_status='active'
+                )
+        else:
+            print(f"[Task] Generation failed for Project {project_id}")
+            # 可选：更新状态为 error 或保持 initializing
 
-        # 如果你有 task 专用的 get_db，应该在这里使用
-        # async with async_session() as session:
-        #     await crud_project.change_status(session, project_id, 'active')
-    else:
-        print(f"[Task] Generation failed for Project {project_id}")
+    except Exception as e:
+        print(f"[Task] Database update error: {e}")
+    finally:
+        # 释放临时连接
+        await temp_engine.dispose()
+
+
 # --- 辅助函数 ---
 async def _verify_delete_token(token: str, user_id: int, project_id: int) -> bool:
     try:
@@ -182,12 +244,13 @@ async def create_project_service(
         project_data = project_in.model_dump()
         db_type = project_data.pop('db_type')
 
-        # 提取需求描述，用于生成
         requirements_text = project_data.get('description', '')
-        # 生成一个临时的 DB Name 用于生成过程
-        temp_db_name = f"proj_{user_id}_{int(datetime.now().timestamp())}"
+        project_name = project_data.get('project_name', 'project')
 
-        # 1. 创建关联的 DatabaseInstance
+        # 生成友好的 DB Name
+        temp_db_name = generate_meaningful_db_name(project_name, user_id)
+
+        # 1. 创建 DatabaseInstance
         new_instance = await crud_database_instance.create(
             db,
             db_type=db_type,
@@ -206,17 +269,13 @@ async def create_project_service(
 
         db_obj = await crud_project.create(db, **project_data)
 
-        # 3. 调度异步任务 (FastAPI BackgroundTasks)
-        # 注意：这里传递 db 会有风险，因为请求结束后 db 会被关闭。
-        # 最佳实践是仅传递 ID，在 task 内部重新获取 session。
-        # 但为了演示连贯性，我们这里触发生成逻辑。
-
+        # 3. 调度异步任务
+        # 核心修复：这里不再传递 db 参数
         background_tasks.add_task(
             bg_generate_schema_task,
             project_id=db_obj.project_id,
             requirements=requirements_text,
-            db_name=temp_db_name,
-            db=db  # 注意：实际生产中请在 task 内新建 session
+            db_name=temp_db_name
         )
 
         return schemas.ProjectAsyncResponse.model_validate(db_obj)

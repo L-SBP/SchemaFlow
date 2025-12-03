@@ -58,3 +58,4 @@ aiosmtplib==2.0.1
 sqlparse==0.5.0
 beautifulsoup4==4.12.2
 requests==2.32.3
+pypinyin==0.55.0
