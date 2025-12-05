@@ -7,9 +7,9 @@ import { LogOut, User as UserIcon, Settings } from 'lucide-react';
  */
 interface HeaderProps {
     /** * 当前登录用户信息
-     * 包含显示名称和角色，如果未登录或数据未加载则为 null
+     * 包含显示名称、角色和头像，如果未登录或数据未加载则为 null
      */
-    user: { name: string; role: UserRole } | null;
+    user: { name: string; role: UserRole; avatar_url?: string | null } | null;
     /** 退出登录回调函数 */
     onLogout: () => void;
     /** * 页面导航回调函数
@@ -29,7 +29,7 @@ interface HeaderProps {
 export const Header: React.FC<HeaderProps> = ({ user, onLogout, onNavigate }) => {
     const [isOpen, setIsOpen] = useState(false);
     const dropdownRef = useRef<HTMLDivElement>(null);
-    
+
     /**
      * 处理点击外部关闭下拉菜单的副作用
      */
@@ -43,7 +43,7 @@ export const Header: React.FC<HeaderProps> = ({ user, onLogout, onNavigate }) =>
         document.addEventListener('mousedown', handleClickOutside);
         return () => document.removeEventListener('mousedown', handleClickOutside);
     }, []);
-    
+
     return (
         <header className="h-16 bg-white border-b border-gray-200 px-8 flex justify-end items-center sticky top-0 z-20 shrink-0">
             {/* 用户信息及下拉菜单容器 */}
@@ -56,11 +56,15 @@ export const Header: React.FC<HeaderProps> = ({ user, onLogout, onNavigate }) =>
                         <div className="text-sm font-medium text-gray-700">{user?.name}</div>
                         <div className="text-xs text-gray-500">{user?.role === UserRole.ADMIN ? '管理员' : '普通用户'}</div>
                     </div>
-                    <div className="w-10 h-10 bg-blue-100 rounded-full flex items-center justify-center text-primary border border-blue-200">
-                        <UserIcon size={20} />
+                    <div className="w-10 h-10 bg-blue-100 rounded-full flex items-center justify-center text-primary border border-blue-200 overflow-hidden">
+                        {user?.avatar_url ? (
+                            <img src={user.avatar_url} alt={user.name} className="w-full h-full object-cover" />
+                        ) : (
+                            <UserIcon size={20} />
+                        )}
                     </div>
                 </button>
-                
+
                 {/* 下拉菜单 */}
                 {isOpen && (
                     <div className="absolute right-0 mt-2 w-48 bg-white rounded-lg shadow-lg border border-gray-100 py-1 animate-in fade-in zoom-in-95 duration-100 origin-top-right">

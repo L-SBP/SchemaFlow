@@ -4,7 +4,7 @@ import { UserRole } from '../types.ts';
 import { authApi } from '../api/auth.ts'; // 引入 API 模块
 
 interface LoginProps {
-  onLogin: (role: UserRole, username: string) => void;
+  onLogin: (role: UserRole, username: string, avatar_url?: string) => void;
 }
 
 export const Login: React.FC<LoginProps> = ({ onLogin }) => {
@@ -115,8 +115,8 @@ export const Login: React.FC<LoginProps> = ({ onLogin }) => {
         const userData = response.data.user;
         const role = userData.is_admin ? UserRole.ADMIN : UserRole.USER;
 
-        // 3. 更新全局状态
-        onLogin(role, userData.username);
+        // 3. 更新全局状态，传入 avatar_url
+        onLogin(role, userData.username, userData.avatar_url);
       } catch (err: any) {
         setError(err.message || '登录失败，请检查用户名或密码');
       } finally {
