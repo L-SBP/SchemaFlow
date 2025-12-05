@@ -1,4 +1,3 @@
-
 export enum UserRole {
   USER = 'USER',
   ADMIN = 'ADMIN'
@@ -19,6 +18,7 @@ export interface User {
   projectQuota: number;
   isOnline?: boolean;
   lastLoginIp?: string;
+  avatar_url?: string;
 }
 
 export interface Project {
@@ -60,12 +60,15 @@ export interface ChatSession {
   updatedAt: number;
 }
 
+// 修改为与后端一致的字段结构
 export interface Announcement {
-  id: string;
+  announcement_id: number; // 后端为 integer
   title: string;
   content: string;
-  status: 'published' | 'draft';
-  date: string;
+  status: 'published' | 'draft' | 'unpublished' | 'expired';
+  created_at: string;
+  updated_at?: string | null;
+  created_by?: number | null;
 }
 
 export type ReportType = 'bar' | 'line' | 'pie' | 'scatter';
@@ -76,14 +79,11 @@ export interface Report {
   name: string;
   type: ReportType;
   description: string;
-  // Stores the raw data from the query
   data: any[];
-  // Configuration for how to map data to the chart
   chartConfig: {
-    xAxisKey: string; // Which column is X
-    yAxisKey: string; // Which column is Y (Value)
+    xAxisKey: string;
+    yAxisKey: string;
   };
-  // Meta info about the source
   sourceQueryId: string;
   sourceQueryText: string;
   updatedAt: string;
@@ -94,7 +94,7 @@ export interface GlossaryTerm {
   projectId: string;
   term: string;
   definition: string;
-  synonyms?: string[]; // 同义词
+  synonyms?: string[];
   relatedTable?: string;
   updatedAt: string;
 }
@@ -109,16 +109,12 @@ export interface RiskEvent {
   status: 'pending' | 'blocked' | 'ignored';
 }
 
-
-// 通用 API 响应结构
 export interface ApiResponse<T = any> {
   code: number;
   message: string;
   data: T;
 }
 
-
-// 创建项目的参数
 export interface CreateProjectParams {
   name: string;
   type: 'MySQL' | 'PostgreSQL';
@@ -127,28 +123,16 @@ export interface CreateProjectParams {
 
 export type CreationStage = 'initializing' | 'generating_schema' | 'generating_ddl' | 'executing_ddl' | 'completed';
 
-
-export interface CreateProjectParams {
-  name: string;
-  type: 'MySQL' | 'PostgreSQL';
+export interface ProjectDTO {
+  project_id: string;
+  project_name: string;
+  project_type: 'MySQL' | 'PostgreSQL';
   description: string;
-}
-
-export interface ApiResponse<T = any> {
-  code: number;
-  message: string;
-  data: T;
-}
-
-
-export interface Project {
-  id: string;
-  name: string;
-  type: 'MySQL' | 'PostgreSQL';
-  description: string;
-  status: 'active' | 'deploying' | 'error';
-  createdAt: string;
-  creationStage?: CreationStage;
-  analysis?: string;
-  ddl?: string;
+  project_status: 'initializing' | 'active' | 'error';
+  created_at: string;
+  creation_stage?: CreationStage;
+  progress_percentage?: number;
+  analysis_result?: string;
+  ddl_result?: string;
+  deployment_logs?: string[];
 }
