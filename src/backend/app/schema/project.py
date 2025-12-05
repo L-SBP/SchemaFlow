@@ -1,7 +1,7 @@
 # backend/app/schema/project.py
 
 from pydantic import BaseModel, Field, ConfigDict
-from typing import Optional, Literal, List, Any
+from typing import Optional, Literal, List, Any,Dict
 from datetime import datetime
 from enum import Enum
 
@@ -37,6 +37,13 @@ class ProjectUpdate(BaseModel):
     """3.2.4 更新项目请求 (PATCH)"""
     project_name: Optional[str] = Field(None, min_length=3, max_length=50)
     description: Optional[str] = Field(None, max_length=500)
+    # =========================================================
+    # 新增：允许前端回传修改后的 Schema/DDL 进行保存
+    # =========================================================
+    schema_definition: Optional[Dict[str, Any]] = Field(
+        None,
+        description="前端修改后的DDL和Schema结构 {'ddl': '...', 'schema': '...'}"
+    )
 
 
 class DeleteConfirmationRequest(BaseModel):
@@ -84,6 +91,13 @@ class ProjectDetailOut(ProjectListOne):
     creation_stage: Optional[CreationStageEnum] = CreationStageEnum.INITIALIZING
     progress_percentage: Optional[int] = 0
     # 可以添加 analysis_result, ddl_result 等字段
+    # =========================================================
+    # 新增：将数据库中的 JSONB 字段返回给前端
+    # =========================================================
+    schema_definition: Optional[Dict[str, Any]] = Field(
+        None,
+        description="AI生成的包含 'schema' 和 'ddl' 的JSON对象"
+    )
 
     model_config = ConfigDict(from_attributes=True)
 
