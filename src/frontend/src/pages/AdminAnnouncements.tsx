@@ -1,50 +1,65 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Announcement } from '../types.ts';
 import { Card, Button, Tag, Input, Modal } from '../components/UI.tsx';
-import { Plus, Edit, Trash, Megaphone } from 'lucide-react';
+import { Plus, Edit, Trash, Megaphone, Loader2 } from 'lucide-react';
+import { announcementApi, CreateAnnouncementParams, UpdateAnnouncementParams } from '../api/announcement.ts';
 
-/**
- * 公告管理组件属性接口
- */
-interface AdminAnnouncementsProps {
-    /** 当前公告列表数据 */
-    announcements: Announcement[];
-    /** 更新公告列表的 Setter */
-    setAnnouncements: React.Dispatch<React.SetStateAction<Announcement[]>>;
-}
-
-/**
- * 管理员公告发布面板
- * * 允许管理员创建、编辑、删除系统公告。
- * * 支持区分 "published" (已发布) 和 "draft" (草稿) 状态。
- */
-export const AdminAnnouncements: React.FC<AdminAnnouncementsProps> = ({ announcements, setAnnouncements }) => {
+export const AdminAnnouncements: React.FC = () => {
     // --- 状态管理 ---
+    const [announcements, setAnnouncements] = useState<Announcement[]>([]);
+    const [isLoading, setIsLoading] = useState(false);
+    const [isSaving, setIsSaving] = useState(false);
     const [isModalOpen, setIsModalOpen] = useState(false);
-    
-    /** * 当前编辑的公告 ID
-     * * 如果为 null，表示正在创建新公告
-     */
-    const [editingId, setEditingId] = useState<string | null>(null);
-    
+
+    // 当前编辑的公告 ID (null 为新增)
+    const [editingId, setEditingId] = useState<number | null>(null);
+
     // 表单状态
     const [title, setTitle] = useState('');
     const [content, setContent] = useState('');
     const [status, setStatus] = useState<'published' | 'draft'>('draft');
-    
-    /**
-     * 打开模态框（新增或编辑）
-     * @param {Announcement} [announcement] - 如果传入则为编辑模式，否则为新增模式
-     */
+
+    // --- 数据获取 ---
+    const fetchAnnouncements = async () => {
+        setIsLoading(true);
+        try {
+            // 管理员通常需要看到所有状态的公告
+            // 由于后端接口目前通过 status 筛选，这里并发请求 draft 和 published 两种状态并合并
+            // 实际生产中建议后端提供一个不带 status 过滤的 "all" 选项或专门的管理员列表接口
+            const [publishedRes, draftRes] = await Promise.all([
+                announcementApi.getList(1, 100, 'published'),
+                announcementApi.getList(1, 100, 'draft')
+            ]);
+
+            // 合并并按创建时间倒序
+            const allItems = [...publishedRes.items, ...draftRes.items].sort((a, b) =>
+                new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+            );
+
+            setAnnouncements(allItems);
+        } catch (error) {
+            console.error("Failed to fetch announcements", error);
+        } finally {
+            setIsLoading(false);
+        }
+    };
+
+    useEffect(() => {
+        fetchAnnouncements();
+    }, []);
+
+    // --- 交互处理 ---
+
     const handleOpenModal = (announcement?: Announcement) => {
         if (announcement) {
-            // 编辑模式：回填数据
-            setEditingId(announcement.id);
+            // 编辑模式
+            setEditingId(announcement.announcement_id);
             setTitle(announcement.title);
             setContent(announcement.content);
-            setStatus(announcement.status);
+            // 确保 status 是符合类型的
+            setStatus(announcement.status === 'published' ? 'published' : 'draft');
         } else {
-            // 新增模式：重置表单
+            // 新增模式
             setEditingId(null);
             setTitle('');
             setContent('');
@@ -52,43 +67,45 @@ export const AdminAnnouncements: React.FC<AdminAnnouncementsProps> = ({ announce
         }
         setIsModalOpen(true);
     };
-    
-    /**
-     * 保存公告（新增或更新）
-     * * 自动生成 ID 和当前日期。
-     */
-    const handleSave = () => {
+
+    const handleSave = async () => {
         if (!title || !content) return;
-        
-        if (editingId) {
-            // 更新现有公告
-            setAnnouncements(prev => prev.map(a =>
-                a.id === editingId ? { ...a, title, content, status, date: new Date().toISOString().split('T')[0] } : a
-            ));
-        } else {
-            // 创建新公告
-            const newAnnouncement: Announcement = {
-                id: Date.now().toString(),
-                title,
-                content,
-                status,
-                date: new Date().toISOString().split('T')[0]
-            };
-            setAnnouncements([newAnnouncement, ...announcements]);
+
+        setIsSaving(true);
+        try {
+            if (editingId) {
+                // 更新现有公告
+                const updateData: UpdateAnnouncementParams = { title, content, status };
+                await announcementApi.update(editingId, updateData);
+            } else {
+                // 创建新公告
+                const createData: CreateAnnouncementParams = { title, content, status };
+                await announcementApi.create(createData);
+            }
+            // 刷新列表并关闭模态框
+            await fetchAnnouncements();
+            setIsModalOpen(false);
+        } catch (error) {
+            console.error("Failed to save announcement", error);
+            alert("保存失败，请重试");
+        } finally {
+            setIsSaving(false);
         }
-        setIsModalOpen(false);
     };
-    
-    /**
-     * 删除公告
-     * @param {string} id - 目标公告 ID
-     */
-    const handleDelete = (id: string) => {
+
+    const handleDelete = async (id: number) => {
         if (confirm('确定要删除这条公告吗？')) {
-            setAnnouncements(prev => prev.filter(a => a.id !== id));
+            try {
+                await announcementApi.delete(id);
+                // 乐观更新 UI
+                setAnnouncements(prev => prev.filter(a => a.announcement_id !== id));
+            } catch (error) {
+                console.error("Delete failed", error);
+                alert("删除失败");
+            }
         }
     };
-    
+
     return (
         <div className="p-8 max-w-7xl mx-auto h-full overflow-y-auto">
             {/* 顶部操作栏 */}
@@ -100,40 +117,48 @@ export const AdminAnnouncements: React.FC<AdminAnnouncementsProps> = ({ announce
                     发布新公告
                 </Button>
             </div>
-            
+
             {/* 公告列表 */}
-            <div className="space-y-4">
-                {announcements.map(item => (
-                    <Card key={item.id} className="hover:shadow-md transition-shadow">
-                        <div className="flex justify-between items-start">
-                            <div className="flex-1 pr-4">
-                                <div className="flex items-center gap-3 mb-2">
-                                    <h3 className="font-bold text-gray-800 text-lg">{item.title}</h3>
-                                    <Tag color={item.status === 'published' ? 'green' : 'orange'}>
-                                        {item.status === 'published' ? '已发布' : '草稿'}
-                                    </Tag>
-                                    <span className="text-sm text-gray-400">{item.date}</span>
+            {isLoading ? (
+                <div className="flex justify-center items-center h-64">
+                    <Loader2 className="animate-spin text-primary" size={32} />
+                </div>
+            ) : (
+                <div className="space-y-4">
+                    {announcements.map(item => (
+                        <Card key={item.announcement_id} className="hover:shadow-md transition-shadow">
+                            <div className="flex justify-between items-start">
+                                <div className="flex-1 pr-4">
+                                    <div className="flex items-center gap-3 mb-2">
+                                        <h3 className="font-bold text-gray-800 text-lg">{item.title}</h3>
+                                        <Tag color={item.status === 'published' ? 'green' : 'orange'}>
+                                            {item.status === 'published' ? '已发布' : '草稿'}
+                                        </Tag>
+                                        <span className="text-sm text-gray-400">
+                                            {new Date(item.created_at).toLocaleDateString()}
+                                        </span>
+                                    </div>
+                                    <p className="text-gray-600 text-sm line-clamp-2">{item.content}</p>
                                 </div>
-                                <p className="text-gray-600 text-sm line-clamp-2">{item.content}</p>
+                                <div className="flex gap-2 shrink-0">
+                                    <Button variant="text" onClick={() => handleOpenModal(item)}>
+                                        <Edit size={16} className="text-gray-500 hover:text-primary" />
+                                    </Button>
+                                    <Button variant="text" onClick={() => handleDelete(item.announcement_id)}>
+                                        <Trash size={16} className="text-gray-500 hover:text-red-500" />
+                                    </Button>
+                                </div>
                             </div>
-                            <div className="flex gap-2 shrink-0">
-                                <Button variant="text" onClick={() => handleOpenModal(item)}>
-                                    <Edit size={16} className="text-gray-500 hover:text-primary" />
-                                </Button>
-                                <Button variant="text" onClick={() => handleDelete(item.id)}>
-                                    <Trash size={16} className="text-gray-500 hover:text-red-500" />
-                                </Button>
-                            </div>
+                        </Card>
+                    ))}
+                    {announcements.length === 0 && (
+                        <div className="text-center py-12 text-gray-500 bg-white rounded-lg border border-dashed border-gray-300">
+                            暂无公告，点击右上角发布
                         </div>
-                    </Card>
-                ))}
-                {announcements.length === 0 && (
-                    <div className="text-center py-12 text-gray-500 bg-white rounded-lg border border-dashed border-gray-300">
-                        暂无公告，点击右上角发布
-                    </div>
-                )}
-            </div>
-            
+                    )}
+                </div>
+            )}
+
             {/* 编辑/新增模态框 */}
             <Modal
                 isOpen={isModalOpen}
@@ -142,7 +167,9 @@ export const AdminAnnouncements: React.FC<AdminAnnouncementsProps> = ({ announce
                 footer={
                     <>
                         <Button onClick={() => setIsModalOpen(false)}>取消</Button>
-                        <Button variant="primary" onClick={handleSave}>保存</Button>
+                        <Button variant="primary" onClick={handleSave} disabled={isSaving}>
+                            {isSaving ? '保存中...' : '保存'}
+                        </Button>
                     </>
                 }
             >
@@ -156,7 +183,7 @@ export const AdminAnnouncements: React.FC<AdminAnnouncementsProps> = ({ announce
                     <div className="flex flex-col gap-1">
                         <label className="text-sm text-gray-600">状态</label>
                         <select
-                            className="px-3 py-2 bg-white border border-gray-300 rounded-md text-sm focus:border-primary focus:ring-1 focus:ring-primary"
+                            className="px-3 py-2 bg-white border border-gray-300 rounded-md text-sm focus:border-primary focus:ring-1 focus:ring-primary outline-none"
                             value={status}
                             onChange={(e) => setStatus(e.target.value as any)}
                         >
@@ -167,7 +194,7 @@ export const AdminAnnouncements: React.FC<AdminAnnouncementsProps> = ({ announce
                     <div className="flex flex-col gap-1">
                         <label className="text-sm text-gray-600">内容</label>
                         <textarea
-                            className="px-3 py-2 bg-white border border-gray-300 rounded-md text-sm focus:border-primary focus:ring-1 focus:ring-primary h-32 resize-none"
+                            className="px-3 py-2 bg-white border border-gray-300 rounded-md text-sm focus:border-primary focus:ring-1 focus:ring-primary h-32 resize-none outline-none"
                             placeholder="请输入公告内容..."
                             value={content}
                             onChange={(e) => setContent(e.target.value)}

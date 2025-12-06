@@ -12,16 +12,16 @@ import { Glossary } from './pages/Glossary.tsx';
 import { Profile } from './pages/Profile.tsx';
 import { AdminStatus } from './pages/AdminStatus.tsx';
 import { Announcements } from './pages/Announcements.tsx';
-import { UserRole, Project, User, Announcement, UserStatus } from './types.ts';
-import { authApi } from './api/auth.ts'; // ✅ 新增：引入 API
+import { UserRole, Project, User, UserStatus } from './types.ts';
+import { authApi } from './api/auth.ts';
 
-// Mock initial projects
+// Mock initial projects (可以根据需要替换为 API 调用)
 const INITIAL_PROJECTS: Project[] = [
   { id: '1', name: '电商订单系统', type: 'MySQL', description: '处理用户订单和库存', status: 'active', createdAt: '2025-10-20' },
   { id: '2', name: 'CRM客户管理', type: 'PostgreSQL', description: '销售线索跟踪', status: 'active', createdAt: '2025-10-25' },
 ];
 
-// Mock initial users
+// Mock initial users (可以根据需要替换为 API 调用)
 const INITIAL_USERS: User[] = [
   { id: '1001', username: 'wang_li', email: 'wang@example.com', role: UserRole.USER, status: UserStatus.BANNED, lastLogin: '2025-10-28', projectQuota: 5 },
   { id: '1002', username: 'li_guo', email: 'li@example.com', role: UserRole.USER, status: UserStatus.NORMAL, lastLogin: '2025-11-04', projectQuota: 10 },
@@ -29,15 +29,8 @@ const INITIAL_USERS: User[] = [
   { id: '1004', username: 'user_test', email: 'test@example.com', role: UserRole.USER, status: UserStatus.NORMAL, lastLogin: '2025-11-06', projectQuota: 2 },
 ];
 
-const MOCK_ANNOUNCEMENTS: Announcement[] = [
-  { id: '1', title: '系统维护通知', content: '系统将于本周六凌晨进行升级维护，预计耗时2小时，期间服务不可用。', status: 'published', date: '2025-11-01' },
-  { id: '2', title: '新功能上线：AI报表分析', content: '我们很高兴地推出新的AI驱动报表分析功能，您现在可以通过自然语言生成可视化图表。', status: 'published', date: '2025-11-05' },
-  { id: '3', title: '草稿公告', content: '这是一条未发布的公告', status: 'draft', date: '2025-11-06' },
-];
-
 const App: React.FC = () => {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
-  // 更新 currentUser 状态结构，包含 avatar_url
   const [currentUser, setCurrentUser] = useState<{ role: UserRole, name: string, avatar_url?: string } | null>(null);
   const [activePage, setActivePage] = useState('dashboard');
 
@@ -46,28 +39,20 @@ const App: React.FC = () => {
   const [users, setUsers] = useState<User[]>(INITIAL_USERS);
   const [selectedProject, setSelectedProject] = useState<Project | null>(null);
   const [viewingUser, setViewingUser] = useState<User | null>(null);
-  const [announcements, setAnnouncements] = useState<Announcement[]>(MOCK_ANNOUNCEMENTS);
 
-  // 更新 handleLogin 以接收 avatar_url
   const handleLogin = (role: UserRole, username: string, avatar_url?: string) => {
     setIsAuthenticated(true);
     setCurrentUser({ role, name: username, avatar_url });
     setActivePage(role === UserRole.ADMIN ? 'admin_users' : 'dashboard');
   };
 
-  // ✅ 修复：完整的登出逻辑
   const handleLogout = async () => {
     try {
-      // 1. 调用后端 API 使 Token 失效
       await authApi.logout();
     } catch (error) {
-      // 即使后端报错（如 Token 已过期），前端也应继续执行本地清理
       console.warn('Logout API failed:', error);
     } finally {
-      // 2. 清除本地存储的 Token (这在之前的代码中是缺失的)
       localStorage.removeItem('access_token');
-
-      // 3. 重置 React 状态
       setIsAuthenticated(false);
       setCurrentUser(null);
       setSelectedProject(null);
@@ -88,13 +73,11 @@ const App: React.FC = () => {
 
   const handleUpdateUser = (updatedUser: User) => {
     setUsers(prev => prev.map(u => u.id === updatedUser.id ? updatedUser : u));
-    // Also update viewingUser if it's the same user
     if (viewingUser && viewingUser.id === updatedUser.id) {
       setViewingUser(updatedUser);
     }
   };
 
-  // 处理全局用户状态更新（例如从 Profile 页面）
   const handleGlobalUserUpdate = (data: Partial<{ username: string; avatar_url: string }>) => {
     setCurrentUser(prev => {
       if (!prev) return null;
@@ -110,7 +93,6 @@ const App: React.FC = () => {
     return <Login onLogin={handleLogin} />;
   }
 
-  // Render logic based on current state
   const renderContent = () => {
     if (currentUser?.role === UserRole.ADMIN) {
       switch (activePage) {
@@ -126,13 +108,13 @@ const App: React.FC = () => {
               }}
             />
           ) : <AdminPanel users={users} onUpdateUser={handleUpdateUser} onViewUser={handleViewUser} />;
-        case 'admin_announcements': return <AdminAnnouncements announcements={announcements} setAnnouncements={setAnnouncements} />;
+        // 已移除 MOCK 数据传递，AdminAnnouncements 内部自行请求数据
+        case 'admin_announcements': return <AdminAnnouncements />;
         case 'admin_status': return <AdminStatus />;
         case 'profile': return <Profile user={currentUser} onLogout={handleLogout} onUpdateUser={handleGlobalUserUpdate} />;
         default: return <AdminPanel users={users} onUpdateUser={handleUpdateUser} onViewUser={handleViewUser} />;
       }
     } else {
-      // User View
       if (activePage === 'workspace' && selectedProject) {
         return <Workspace project={selectedProject} onBack={() => {
           setSelectedProject(null);
@@ -141,12 +123,13 @@ const App: React.FC = () => {
       }
 
       switch (activePage) {
-        case 'dashboard': return <Dashboard projects={projects} setProjects={setProjects} onProjectSelect={handleProjectSelect} />;
+        case 'dashboard': return <Dashboard projects={projects} onProjectSelect={handleProjectSelect} />;
         case 'reports': return <Reports projects={projects} />;
         case 'glossary': return <Glossary projects={projects} />;
-        case 'announcements': return <Announcements announcements={announcements} />;
+        // 已移除 MOCK 数据传递，Announcements 内部自行请求数据
+        case 'announcements': return <Announcements />;
         case 'profile': return <Profile user={currentUser} onLogout={handleLogout} onUpdateUser={handleGlobalUserUpdate} />;
-        default: return <Dashboard projects={projects} setProjects={setProjects} onProjectSelect={handleProjectSelect} />;
+        default: return <Dashboard projects={projects} onProjectSelect={handleProjectSelect} />;
       }
     }
   };
@@ -157,7 +140,6 @@ const App: React.FC = () => {
         role={currentUser?.role || UserRole.USER}
         activePage={activePage}
         onNavigate={(page) => {
-          // If navigating away from specific contexts, clear selections
           if (page !== 'workspace') setSelectedProject(null);
           if (page !== 'admin_user_detail') setViewingUser(null);
           setActivePage(page);
