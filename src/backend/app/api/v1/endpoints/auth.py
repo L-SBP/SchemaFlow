@@ -182,11 +182,8 @@ async def login(
         )
     except exceptions.PasswordInvalidException as e:
         # 密码错误
-        # TODO: 这里目前是改成收到密码错误，用户正确的情况下，手动再查找一遍，后续考虑改这里还是改user_service层
-        # 这里 exist_user 是未定义的,需要手动查一下 user_id
-        # 因为抛出 PasswordInvalidException 说明用户肯定存在，只是密码错了
-        current_user = await service_check_user_exists(db, payload.username)
-        user_id = current_user.user_id if current_user else None
+        msg_parts = e.message.split()
+        user_id = int(msg_parts[1])
         await create_login_record(
             db=db,
             user_id=user_id,
@@ -207,11 +204,8 @@ async def login(
         )
     except exceptions.UserStatusForbiddenException as e:
         # 状态异常
-        # TODO: 这里目用户密码正确，状态异常的情况下，手动再查找一遍用户，后续考虑改这里还是改user_service层
-        # 这里 exist_user 是未定义的,需要手动查一下 user_id
-        # 因为抛出 UserStatusForbiddenException 说明用户密码正确，只是状态错误
-        current_user = await service_check_user_exists(db, payload.username)
-        user_id = current_user.user_id if current_user else None
+        msg_parts = e.message.split()
+        user_id = int(msg_parts[1])
         await create_login_record(
             db=db,
             user_id=user_id,
