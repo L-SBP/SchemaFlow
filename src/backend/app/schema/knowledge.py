@@ -14,6 +14,17 @@ class KnowledgeBase(BaseModel):
 class KnowledgeCreate(KnowledgeBase):
     pass
 
+# 更新术语请求
+class KnowledgeUpdate(KnowledgeBase):
+    term: Optional[str] = Field(None, min_length=1, max_length=100)
+    definition: Optional[str] = None
+    examples: Optional[str] = None
+
+
+# 批量删除请求
+class BulkDeleteRequest(BaseModel):
+    ids: List[int] = Field(..., description="要删除的知识条目ID列表")
+
 # --- 3.4.1 / 3.4.2 响应对象 ---
 class KnowledgeResponse(KnowledgeBase):
     knowledge_id: int
