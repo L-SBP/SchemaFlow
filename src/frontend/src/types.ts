@@ -88,16 +88,6 @@ export interface Report {
   updatedAt: string;
 }
 
-export interface GlossaryTerm {
-  id: string;
-  projectId: string;
-  term: string;
-  definition: string;
-  synonyms?: string[];
-  relatedTable?: string;
-  updatedAt: string;
-}
-
 export interface RiskEvent {
   id: string;
   type: 'sql_injection' | 'abnormal_login' | 'high_frequency';
@@ -144,11 +134,13 @@ export interface ProjectDTO {
   deployment_logs?: string[];
 }
 
+// --- 业务术语管理类型 (Knowledge) ---
+
 export interface KnowledgeTerm {
   knowledge_id: number;
   project_id: number;
-  term: string;       // 术语名称
-  definition: string; // 定义
+  term: string;       // 业务术语名称
+  definition: string; // 术语定义
   examples?: string | null; // 使用示例
   created_at: string;
 }
@@ -159,50 +151,9 @@ export interface KnowledgeCreateRequest {
   examples?: string;
 }
 
-export interface KnowledgeListResponse {
-  total: number;
-  page: number;
-  page_size: number;
-  items: KnowledgeTerm[];
-}
-
-export interface KnowledgeImportResponse {
-  imported_count: number;
-  failed_count: number;
-  failures: {
-    row: number;
-    error: string;
-  }[];
-}
-
-export interface KnowledgeExportResponse {
-  download_url: string;
-  expires_at: string;
-}
-
-
-
-
-
-
-
-
-
-
-
-
-export interface KnowledgeTerm {
-  knowledge_id: number;
-  project_id: number;
-  term: string;       // 术语名称
-  definition: string; // 定义
-  examples?: string | null; // 使用示例
-  created_at: string;
-}
-
-export interface KnowledgeCreateRequest {
-  term: string;
-  definition: string;
+export interface KnowledgeUpdateRequest {
+  term?: string;
+  definition?: string;
   examples?: string;
 }
 

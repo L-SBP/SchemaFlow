@@ -1,33 +1,88 @@
-// src/api/glossary.ts
-import client from './client';
-// 假设你的类型定义在 src/types.ts，如果路径不同请调整
-import { GlossaryTerm } from '../types';
+import client from './client.ts';
+import {
+  KnowledgeTerm,
+  KnowledgeListResponse,
+  KnowledgeImportResponse,
+  KnowledgeExportResponse,
+  ApiResponse
+} from '../types.ts';
 
-// 定义统一的响应结构
-interface ApiResponse<T> {
-  code: number;
-  message: string;
-  data: T;
+// 对应接口文档的请求参数类型
+export interface CreateTermParams {
+  term: string;
+  definition: string;
+  examples?: string;
 }
 
-// 1. 获取术语列表
-export const getTerms = (projectId: string) => {
-  return client.get<any, ApiResponse<GlossaryTerm[]>>('/glossary', {
-    params: { projectId }
-  });
-};
+export interface UpdateTermParams {
+  term?: string;
+  definition?: string;
+  examples?: string;
+}
 
-// 2. 新增术语 (这就是报错提示缺少的 export)
-export const createTerm = (data: Omit<GlossaryTerm, 'id' | 'updatedAt'>) => {
-  return client.post<any, ApiResponse<GlossaryTerm>>('/glossary', data);
-};
+export const glossaryApi = {
+  /**
+   * 2. 获取术语列表
+   * GET /api/v1/projects/{project_id}/knowledge
+   */
+  getList: (projectId: string, page: number = 1, pageSize: number = 20, search?: string) => {
+    return client.get<any, KnowledgeListResponse>(`/v1/projects/${projectId}/knowledge`, {
+      params: {
+        page,
+        page_size: pageSize,
+        search
+      }
+    });
+  },
 
-// 3. 更新术语
-export const updateTerm = (id: string, data: Partial<GlossaryTerm>) => {
-  return client.put<any, ApiResponse<GlossaryTerm>>(`/glossary/${id}`, data);
-};
+  /**
+   * 1. 创建业务术语
+   * POST /api/v1/projects/{project_id}/knowledge
+   */
+  create: (projectId: string, data: CreateTermParams) => {
+    return client.post<any, KnowledgeTerm>(`/v1/projects/${projectId}/knowledge`, data);
+  },
 
-// 4. 删除术语
-export const deleteTerm = (id: string) => {
-  return client.delete<any, ApiResponse<void>>(`/glossary/${id}`);
+  /**
+   * 3. 更新术语信息
+   * PATCH /api/v1/projects/{project_id}/knowledge/{knowledge_id}
+   */
+  update: (projectId: string, knowledgeId: number, data: UpdateTermParams) => {
+    return client.patch<any, KnowledgeTerm>(`/v1/projects/${projectId}/knowledge/${knowledgeId}`, data);
+  },
+
+  /**
+   * 4. 批量删除术语
+   * DELETE /api/v1/projects/{project_id}/knowledge/batch
+   * Body: { ids: number[] }
+   */
+  deleteBatch: (projectId: string, ids: number[]) => {
+    return client.delete<any, KnowledgeImportResponse>(`/v1/projects/${projectId}/knowledge/batch`, {
+      data: { ids } // Axios delete body 必须放在 config.data 中
+    });
+  },
+
+  /**
+   * 5. 导入术语 (文件上传)
+   * POST /api/v1/projects/{project_id}/knowledge/import
+   * Content-Type: multipart/form-data
+   */
+  importTerms: (projectId: string, file: File) => {
+    const formData = new FormData();
+    formData.append('file', file);
+
+    return client.post<any, KnowledgeImportResponse>(`/v1/projects/${projectId}/knowledge/import`, formData, {
+      headers: {
+        'Content-Type': 'multipart/form-data'
+      }
+    });
+  },
+
+  /**
+   * 6. 导出术语
+   * GET /api/v1/projects/{project_id}/knowledge/export
+   */
+  exportTerms: (projectId: string) => {
+    return client.get<any, KnowledgeExportResponse>(`/v1/projects/${projectId}/knowledge/export`);
+  }
 };
