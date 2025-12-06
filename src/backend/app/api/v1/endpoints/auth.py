@@ -33,36 +33,27 @@ async def send_register_code(
         existing_user = await check_email_exists(db, payload.email)
         if existing_user:
             exc = exceptions.EmailHasBeenRegisteredException()
+            # [修改] 直接传入字符串 message
             raise HTTPException(
                 status_code=exc.code,
-                detail=[
-                    {
-                        "msg": exc.message
-                    }
-                ]
+                detail=exc.message
             )
         await email_service.service_send_verification_code(payload.email)
         log.info("send register code success")
         return NoContentResponse()
     except exceptions.BusinessException as e:
         log.error(f"Failed to send verification code: {str(e)}", exc_info=True)
+        # [修改] 直接传入字符串 message
         raise HTTPException(
             status_code=e.code,
-            detail=[
-                {
-                    "msg": e.message
-                }
-            ]
+            detail=e.message
         )
     except exceptions.AppException as e:
         log.error(f"Failed to send verification code: {str(e)}", exc_info=True)
+        # [修改] 直接传入字符串 message
         raise HTTPException(
             status_code=e.code,
-            detail=[
-                {
-                    "msg": e.message
-                }
-            ]
+            detail=e.message
         )
 
 
@@ -87,7 +78,6 @@ async def register(
         )
 
         log.info(f"Registered user {new_user.username}")
-        # Convert to schema model for response
         return UnifiedSuccessResponse.create(
             data={
                 "user_id": new_user.user_id,
@@ -99,23 +89,17 @@ async def register(
             message="用户注册成功"
         )
     except exceptions.BusinessException as e:
+        # [修改] 直接传入字符串 message
         raise HTTPException(
             status_code=e.code,
-            detail=[
-                {
-                    "msg": e.message
-                }
-            ]
+            detail=e.message
         )
     except exceptions.AppException as e:
-        log.error(f"注册失败：{str(e)}", exc_info=True)  # exc_info=True 强制打印堆栈
+        log.error(f"注册失败：{str(e)}", exc_info=True)
+        # [修改] 直接传入字符串 message
         raise HTTPException(
             status_code=e.code,
-            detail=[
-                {
-                    "msg": e.message
-                }
-            ]
+            detail=e.message
         )
 
 
@@ -142,7 +126,6 @@ async def login(
         exist_user = await service_login(db, payload.username, payload.password)
 
         log.info(f"start to record the login log")
-        # 登录成功：存储成功登录记录
         await create_login_record(
             db=db,
             user_id=exist_user.user_id,
@@ -151,21 +134,17 @@ async def login(
             user_agent=user_agent,
             device_info=device_info,
         )
-        # 生成Token
-        access_token=create_access_token(data={"sub": f"{exist_user.user_id}"})
+
+        access_token = create_access_token(data={"sub": f"{exist_user.user_id}"})
         if not await service_save_token_in_redis(access_token):
             log.error("Failed to save token in redis")
             exc = exceptions.RedisOperationFailedException()
+            # [修改] 直接传入字符串 message
             raise HTTPException(
                 status_code=exc.code,
-                detail=[
-                    {
-                        "msg": exc.message
-                    }
-                ]
+                detail=exc.message
             )
 
-        # 返回结果
         return UnifiedSuccessResponse.create(
             data=LoginData(
                 access_token=access_token,
@@ -181,78 +160,60 @@ async def login(
             message="用户登录成功"
         )
     except exceptions.PasswordInvalidException as e:
-        # 密码错误
-        # TODO: 这里目前是改成收到密码错误，用户正确的情况下，手动再查找一遍，后续考虑改这里还是改user_service层
-        # 这里 exist_user 是未定义的,需要手动查一下 user_id
-        # 因为抛出 PasswordInvalidException 说明用户肯定存在，只是密码错了
+        # 补救措施：手动查用户ID用于记日志
         current_user = await service_check_user_exists(db, payload.username)
         user_id = current_user.user_id if current_user else None
+
         await create_login_record(
             db=db,
             user_id=user_id,
             ip_address=client_ip,
             login_status="failed",
-            failure_reason="密码错误",  # 失败原因（贴合表的failure_reason字段）
+            failure_reason="密码错误",
             user_agent=user_agent,
             device_info=device_info
         )
-        # 抛出HTTP异常
+        # [修改] 直接传入字符串 message
         raise HTTPException(
             status_code=e.code,
-            detail=[
-                {
-                    "msg": e.message
-                }
-            ]
+            detail=e.message
         )
     except exceptions.UserStatusForbiddenException as e:
-        # 状态异常
-        # TODO: 这里目用户密码正确，状态异常的情况下，手动再查找一遍用户，后续考虑改这里还是改user_service层
-        # 这里 exist_user 是未定义的,需要手动查一下 user_id
-        # 因为抛出 UserStatusForbiddenException 说明用户密码正确，只是状态错误
+        # 补救措施：手动查用户ID用于记日志
         current_user = await service_check_user_exists(db, payload.username)
         user_id = current_user.user_id if current_user else None
+
         await create_login_record(
             db=db,
             user_id=user_id,
             ip_address=client_ip,
             login_status="failed",
-            failure_reason=e.message,  # 失败原因（贴合表的failure_reason字段）
+            failure_reason=e.message,
             user_agent=user_agent,
             device_info=device_info
         )
-        # 抛出HTTP异常
+        # [修改] 直接传入字符串 message
         raise HTTPException(
             status_code=e.code,
-            detail=[
-                {
-                    "msg": e.message
-                }
-            ]
+            detail=e.message
         )
     except exceptions.BusinessException as e:
-        # 业务异常
         await create_login_record(
             db=db,
-            user_id=None,  # 无合法用户时设为None以避免外键约束冲突
+            user_id=None,
             ip_address=client_ip,
             login_status="failed",
-            failure_reason=e.message,  # 失败原因（贴合表的failure_reason字段）
+            failure_reason=e.message,
             user_agent=user_agent,
             device_info=device_info
         )
-        # 重新抛出HTTP异常
+        # [修改] 直接传入字符串 message
         raise HTTPException(
             status_code=e.code,
-            detail=[
-                {
-                    "msg": e.message
-                }
-            ]
+            detail=e.message
         ) from e
 
     except exceptions.AppException as e:
-        # 系统异常
         await create_login_record(
             db=db,
             user_id=None,
@@ -262,15 +223,11 @@ async def login(
             user_agent=user_agent,
             device_info=device_info
         )
-        # 重新抛出500异常
         log.error(f"系统内部错误：{str(e)}", exc_info=True)
+        # [修改] 直接传入字符串 message
         raise HTTPException(
             status_code=e.code,
-            detail=[
-                {
-                    "msg": e.message
-                }
-            ]
+            detail=e.message
         ) from e
 
 @router.post("/logout", response_model=NoContentResponse)
@@ -288,34 +245,25 @@ async def logout(
         result = await service_logout(db, token)
         if not result:
             exc = exceptions.RedisOperationFailedException()
+            # [修改] 直接传入字符串 message
             raise HTTPException(
                 status_code=exc.code,
-                detail=[
-                    {
-                        "msg": exc.message
-                    }
-                ]
+                detail=exc.message
             )
 
         return NoContentResponse()
 
     except exceptions.AppException as e:
         log.error(f"Logout failed: {str(e)}", exc_info=True)
+        # [修改] 直接传入字符串 message
         raise HTTPException(
             status_code=e.code,
-            detail=[
-                {
-                    "msg": e.message
-                }
-            ]
+            detail=e.message
         ) from e
     except Exception as e:
         log.error(f"Unexpected error during logout: {str(e)}", exc_info=True)
+        # [修改] 直接传入字符串 message
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=[
-                {
-                        "msg": "系统内部错误"
-                }
-            ]
+            detail="系统内部错误"
         ) from e
