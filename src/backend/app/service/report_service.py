@@ -34,6 +34,7 @@ async def get_report_list(db: Session, project_id: int) -> List[schemas.Report]:
             type=obj.chart_type or "table",
             description=obj.data_summary,
             data=report_data,
+            chartConfig=default_chart_config,
             sourceQueryText="SELECT * FROM ...",
             updatedAt=obj.cached_at.isoformat() if obj.cached_at else ""
         )
