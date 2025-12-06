@@ -1,6 +1,7 @@
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
+from fastapi.staticfiles import StaticFiles
 
 from core.config import config
 from core.log import log
@@ -10,6 +11,7 @@ from redis.redis import init_redis, close_redis, get_redis, init_redis_listener,
 from redis.expiration_listener import redis_expire_listener
 from api.v1.api import api_router
 import asyncio
+import os
 
 async def startup_services(app: FastAPI):
     """
@@ -74,5 +76,17 @@ my_app = FastAPI(
     version=config.app.version,
     lifespan=lifespan,
 )
+
+# ============================================================
+# 挂载静态目录 (为了支持文件导出下载)
+# ============================================================
+# 1. 确保目录存在
+static_dir = "static"
+if not os.path.exists(static_dir):
+    os.makedirs(static_dir)
+
+# 2. 挂载到 /static 路径
+# 这意味着：访问 http://host:port/static/xxx 就会去读取项目根目录 static/xxx 文件
+my_app.mount("/static", StaticFiles(directory=static_dir), name="static")
 
 my_app.include_router(api_router, prefix=config.app.api)
