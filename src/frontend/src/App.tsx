@@ -14,9 +14,9 @@ import { AdminStatus } from './pages/AdminStatus.tsx';
 import { Announcements } from './pages/Announcements.tsx';
 import { UserRole, Project, User, UserStatus } from './types.ts';
 import { authApi } from './api/auth.ts';
-import { ProjectDTO } from './api/project.ts'; // 引入 ProjectDTO 用于类型适配
+import { ProjectDTO } from './api/project.ts';
 
-// Mock initial projects (用于 Reports 和 Glossary 的兜底显示)
+// Mock initial projects (仅保留用于 Reports 的兜底显示，Glossary 已改为真实数据)
 const INITIAL_PROJECTS: Project[] = [
   { id: '1', name: '电商订单系统', type: 'MySQL', description: '处理用户订单和库存', status: 'active', createdAt: '2025-10-20' },
   { id: '2', name: 'CRM客户管理', type: 'PostgreSQL', description: '销售线索跟踪', status: 'active', createdAt: '2025-10-25' },
@@ -62,15 +62,13 @@ const App: React.FC = () => {
     }
   };
 
-  // 修复 1 & 2: 接收 ProjectDTO 并转换为 Project，解决类型不兼容问题
+  // 接收 ProjectDTO 并转换为 Project
   const handleProjectSelect = (projectDTO: ProjectDTO) => {
-    // 将 API 返回的 DTO 转换为前端 UI 通用的 Project 类型
     const project: Project = {
       id: projectDTO.project_id,
       name: projectDTO.project_name,
       type: projectDTO.project_type,
       description: projectDTO.description,
-      // 状态映射：后端 'initializing' 对应前端可能的 'deploying' 或其他状态
       status: projectDTO.project_status === 'initializing' ? 'deploying' : projectDTO.project_status,
       createdAt: projectDTO.created_at
     };
@@ -89,17 +87,6 @@ const App: React.FC = () => {
     if (viewingUser && viewingUser.id === updatedUser.id) {
       setViewingUser(updatedUser);
     }
-  };
-
-  const handleGlobalUserUpdate = (data: Partial<{ username: string; avatar_url: string }>) => {
-    setCurrentUser(prev => {
-      if (!prev) return null;
-      return {
-        ...prev,
-        name: data.username || prev.name,
-        avatar_url: data.avatar_url !== undefined ? data.avatar_url : prev.avatar_url
-      };
-    });
   };
 
   if (!isAuthenticated) {
@@ -123,7 +110,6 @@ const App: React.FC = () => {
           ) : <AdminPanel users={users} onUpdateUser={handleUpdateUser} onViewUser={handleViewUser} />;
         case 'admin_announcements': return <AdminAnnouncements />;
         case 'admin_status': return <AdminStatus />;
-        // 修复 3: 移除 Profile 组件上不存在的 onUpdateUser 属性
         case 'profile': return <Profile user={currentUser} onLogout={handleLogout} />;
         default: return <AdminPanel users={users} onUpdateUser={handleUpdateUser} onViewUser={handleViewUser} />;
       }
@@ -136,12 +122,11 @@ const App: React.FC = () => {
       }
 
       switch (activePage) {
-        // 修复 2: 移除 Dashboard 组件上不存在的 projects 属性
         case 'dashboard': return <Dashboard onProjectSelect={handleProjectSelect} />;
         case 'reports': return <Reports projects={projects} />;
-        case 'glossary': return <Glossary projects={projects} />;
+        // 修复: 移除 projects 属性传递，Glossary 组件将自行请求真实数据
+        case 'glossary': return <Glossary />;
         case 'announcements': return <Announcements />;
-        // 修复 3: 移除 Profile 组件上不存在的 onUpdateUser 属性
         case 'profile': return <Profile user={currentUser} onLogout={handleLogout} />;
         default: return <Dashboard onProjectSelect={handleProjectSelect} />;
       }
