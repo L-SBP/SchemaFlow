@@ -14,14 +14,15 @@ import { AdminStatus } from './pages/AdminStatus.tsx';
 import { Announcements } from './pages/Announcements.tsx';
 import { UserRole, Project, User, UserStatus } from './types.ts';
 import { authApi } from './api/auth.ts';
+import { ProjectDTO } from './api/project.ts'; // 引入 ProjectDTO 用于类型适配
 
-// Mock initial projects (可以根据需要替换为 API 调用)
+// Mock initial projects (用于 Reports 和 Glossary 的兜底显示)
 const INITIAL_PROJECTS: Project[] = [
   { id: '1', name: '电商订单系统', type: 'MySQL', description: '处理用户订单和库存', status: 'active', createdAt: '2025-10-20' },
   { id: '2', name: 'CRM客户管理', type: 'PostgreSQL', description: '销售线索跟踪', status: 'active', createdAt: '2025-10-25' },
 ];
 
-// Mock initial users (可以根据需要替换为 API 调用)
+// Mock initial users
 const INITIAL_USERS: User[] = [
   { id: '1001', username: 'wang_li', email: 'wang@example.com', role: UserRole.USER, status: UserStatus.BANNED, lastLogin: '2025-10-28', projectQuota: 5 },
   { id: '1002', username: 'li_guo', email: 'li@example.com', role: UserRole.USER, status: UserStatus.NORMAL, lastLogin: '2025-11-04', projectQuota: 10 },
@@ -61,7 +62,19 @@ const App: React.FC = () => {
     }
   };
 
-  const handleProjectSelect = (project: Project) => {
+  // 修复 1 & 2: 接收 ProjectDTO 并转换为 Project，解决类型不兼容问题
+  const handleProjectSelect = (projectDTO: ProjectDTO) => {
+    // 将 API 返回的 DTO 转换为前端 UI 通用的 Project 类型
+    const project: Project = {
+      id: projectDTO.project_id,
+      name: projectDTO.project_name,
+      type: projectDTO.project_type,
+      description: projectDTO.description,
+      // 状态映射：后端 'initializing' 对应前端可能的 'deploying' 或其他状态
+      status: projectDTO.project_status === 'initializing' ? 'deploying' : projectDTO.project_status,
+      createdAt: projectDTO.created_at
+    };
+
     setSelectedProject(project);
     setActivePage('workspace');
   };
@@ -108,10 +121,10 @@ const App: React.FC = () => {
               }}
             />
           ) : <AdminPanel users={users} onUpdateUser={handleUpdateUser} onViewUser={handleViewUser} />;
-        // 已移除 MOCK 数据传递，AdminAnnouncements 内部自行请求数据
         case 'admin_announcements': return <AdminAnnouncements />;
         case 'admin_status': return <AdminStatus />;
-        case 'profile': return <Profile user={currentUser} onLogout={handleLogout} onUpdateUser={handleGlobalUserUpdate} />;
+        // 修复 3: 移除 Profile 组件上不存在的 onUpdateUser 属性
+        case 'profile': return <Profile user={currentUser} onLogout={handleLogout} />;
         default: return <AdminPanel users={users} onUpdateUser={handleUpdateUser} onViewUser={handleViewUser} />;
       }
     } else {
@@ -123,13 +136,14 @@ const App: React.FC = () => {
       }
 
       switch (activePage) {
-        case 'dashboard': return <Dashboard projects={projects} onProjectSelect={handleProjectSelect} />;
+        // 修复 2: 移除 Dashboard 组件上不存在的 projects 属性
+        case 'dashboard': return <Dashboard onProjectSelect={handleProjectSelect} />;
         case 'reports': return <Reports projects={projects} />;
         case 'glossary': return <Glossary projects={projects} />;
-        // 已移除 MOCK 数据传递，Announcements 内部自行请求数据
         case 'announcements': return <Announcements />;
-        case 'profile': return <Profile user={currentUser} onLogout={handleLogout} onUpdateUser={handleGlobalUserUpdate} />;
-        default: return <Dashboard projects={projects} onProjectSelect={handleProjectSelect} />;
+        // 修复 3: 移除 Profile 组件上不存在的 onUpdateUser 属性
+        case 'profile': return <Profile user={currentUser} onLogout={handleLogout} />;
+        default: return <Dashboard onProjectSelect={handleProjectSelect} />;
       }
     }
   };
