@@ -3,7 +3,7 @@
 from typing import List, Optional
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
-from sqlalchemy import func, or_
+from sqlalchemy import func, delete
 from sqlalchemy.exc import SQLAlchemyError
 
 from models.domain_knowledge import DomainKnowledge
@@ -66,6 +66,53 @@ class CRUDKnowledge:
             return result.scalars().all()
         except SQLAlchemyError as e:
             raise DatabaseOperationFailedException("get all knowledge") from e
+
+    # 更新单条术语
+    @staticmethod
+    async def update(db: AsyncSession, db_obj: DomainKnowledge, update_data: dict) -> DomainKnowledge:
+        try:
+            for field,value in update_data.items():
+                setattr(db_obj, field, value)
+            await db.commit()
+            await db.refresh(db_obj)
+            await db.refresh(db_obj)
+            return db_obj
+        except SQLAlchemyError as e:
+            await db.rollback()
+            raise DatabaseOperationFailedException("update knowledge") from e
+
+    # 删除单条术语
+    @staticmethod
+    async def delete(db: AsyncSession, knowledge_id: int) -> bool:
+        try:
+            query = delete(DomainKnowledge).where(DomainKnowledge.knowledge_id == knowledge_id)
+            result = await db.execute(query)
+            await db.commit()
+            return result.rowcount > 0
+        except SQLAlchemyError as e:
+            await db.rollback()
+            raise DatabaseOperationFailedException("delete knowledge") from e
+
+    # 批量删除术语
+    @staticmethod
+    async def remove_multi(db: AsyncSession, project_id: int, ids: List[int]) -> int:
+        try :
+            query = delete(DomainKnowledge).where(
+                DomainKnowledge.knowledge_id.in_(ids),
+                DomainKnowledge.project_id == project_id
+            )
+            result = await db.execute(query)
+            await db.commit()
+            return result.rowcount
+        except SQLAlchemyError as e:
+            await db.rollback()
+            raise DatabaseOperationFailedException("batch delete knowledge") from e
+
+    # 通过ID查找单条术语
+    @staticmethod
+    async def get(db: AsyncSession, knowledge_id: int) -> Optional[DomainKnowledge]:
+        result = await db.execute(select(DomainKnowledge).where(DomainKnowledge.knowledge_id == knowledge_id))
+        return result.scalar_one()
 
     @staticmethod
     async def batch_create(db: AsyncSession, project_id: int, items: List[dict]) -> int:

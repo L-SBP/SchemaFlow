@@ -58,6 +58,51 @@ async def get_terms(
 
 
 # ----------------------------------------------------------------------
+# [新增] 更新术语
+# ----------------------------------------------------------------------
+@router.patch("/projects/{project_id}/knowledge/{knowledge_id}", response_model=schemas.KnowledgeResponse)
+async def update_term(
+    data: schemas.KnowledgeUpdate,
+    project_id: int = Path(..., description="项目ID"),
+    knowledge_id: int = Path(..., description="术语ID"),
+    db: Session = Depends(deps.get_db),
+    current_user: Any = Depends(deps.get_current_active_user),
+) -> Any:
+    """更新术语信息。"""
+    try:
+        return await knowledge_service.update_knowledge_service(
+            db, project_id, knowledge_id, current_user.user_id, data
+        )
+    except ItemNotFoundException:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Term or Project not found.")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+# ----------------------------------------------------------------------
+# [新增] 批量删除术语
+# ----------------------------------------------------------------------
+@router.delete("/projects/{project_id}/knowledge/batch", response_model=schemas.ImportResponse) # 复用 ImportResponse 或新建一个 DeleteResponse
+async def batch_delete_terms(
+    data: schemas.BulkDeleteRequest,
+    project_id: int = Path(..., description="项目ID"),
+    db: Session = Depends(deps.get_db),
+    current_user: Any = Depends(deps.get_current_active_user),
+) -> Any:
+    """批量删除术语。"""
+    try:
+        count = await knowledge_service.batch_delete_knowledge_service(
+            db, project_id, current_user.user_id, data.ids
+        )
+        # 这里临时构造一个返回，您也可以定义专门的 DeleteResponse
+        return {"imported_count": 0, "failed_count": 0, "failures": [], "message": f"Successfully deleted {count} items."}
+    except ItemNotFoundException:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Project not found.")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+
+# ----------------------------------------------------------------------
 # 3.4.3. 批量导入术语
 # ----------------------------------------------------------------------
 @router.post("/projects/{project_id}/knowledge/import", response_model=schemas.ImportResponse)
