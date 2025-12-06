@@ -60,9 +60,8 @@ export interface ChatSession {
   updatedAt: number;
 }
 
-// 修改为与后端一致的字段结构
 export interface Announcement {
-  announcement_id: number; // 后端为 integer
+  announcement_id: number;
   title: string;
   content: string;
   status: 'published' | 'draft' | 'unpublished' | 'expired';
@@ -121,8 +120,9 @@ export interface CreateProjectParams {
   description: string;
 }
 
-export type CreationStage = 'initializing' | 'generating_schema' | 'generating_ddl' | 'executing_ddl' | 'completed';
+export type CreationStage = 'initializing' | 'analyzing' | 'generating_schema' | 'generating_ddl' | 'deploying' | 'completed';
 
+// 对应文档中的 ProjectResponse 数据模型
 export interface ProjectDTO {
   project_id: string;
   project_name: string;
@@ -130,12 +130,66 @@ export interface ProjectDTO {
   description: string;
   project_status: 'initializing' | 'active' | 'error';
   created_at: string;
+  updated_at?: string;
+
+  // 详情字段 (用于进度展示)
   creation_stage?: CreationStage;
   progress_percentage?: number;
-  analysis_result?: string;
-  ddl_result?: string;
+
+  // 核心生成结果
+  schema_definition?: Record<string, any>; // 对应文档 schema_definition
+  analysis_result?: string; // Schema 分析文本
+  ddl_result?: string;      // SQL DDL
+
   deployment_logs?: string[];
 }
+
+export interface KnowledgeTerm {
+  knowledge_id: number;
+  project_id: number;
+  term: string;       // 术语名称
+  definition: string; // 定义
+  examples?: string | null; // 使用示例
+  created_at: string;
+}
+
+export interface KnowledgeCreateRequest {
+  term: string;
+  definition: string;
+  examples?: string;
+}
+
+export interface KnowledgeListResponse {
+  total: number;
+  page: number;
+  page_size: number;
+  items: KnowledgeTerm[];
+}
+
+export interface KnowledgeImportResponse {
+  imported_count: number;
+  failed_count: number;
+  failures: {
+    row: number;
+    error: string;
+  }[];
+}
+
+export interface KnowledgeExportResponse {
+  download_url: string;
+  expires_at: string;
+}
+
+
+
+
+
+
+
+
+
+
+
 
 export interface KnowledgeTerm {
   knowledge_id: number;

@@ -1,20 +1,9 @@
 import client from './client';
+// 引入类型定义
+import { ProjectDTO } from '../types';
 
-// 定义与后端一致的数据结构 (参考接口文档)
-export interface ProjectDTO {
-  project_id: string;
-  project_name: string;
-  project_type: 'MySQL' | 'PostgreSQL';
-  description: string;
-  project_status: 'initializing' | 'active' | 'error';
-  created_at: string;
-  // 详情字段 (轮询时返回)
-  creation_stage?: 'analyzing' | 'generating_ddl' | 'deploying' | 'completed';
-  progress_percentage?: number;
-  analysis_result?: string;
-  ddl_result?: string;
-  deployment_logs?: string[];
-}
+// 修复：当启用 isolatedModules 时，必须显式使用 export type 来重新导出类型
+export type { ProjectDTO };
 
 export interface CreateProjectParams {
   name: string;
@@ -22,21 +11,68 @@ export interface CreateProjectParams {
   description: string;
 }
 
+// 对应文档: Body 请求参数 (PATCH)
+export interface UpdateProjectParams {
+  project_name?: string;
+  description?: string;
+  schema_definition?: Record<string, any>;
+}
+
+// 对应文档: Confirm Delete 响应
+export interface ConfirmDeleteResponse {
+  confirmation_token: string;
+  expires_at: string;
+}
+
 // 1. 获取项目列表
 export const fetchProjects = async (): Promise<ProjectDTO[]> => {
-  const response = await client.get('/projects');
-  // 假设后端返回格式 { code: 200, data: [...] }，client拦截器已经解包了data
-  return response.data || [];
+  const response = await client.get('/v1/projects/');
+  // 适配: 假设后端返回 { items: [...] } 或直接数组，这里做个兼容
+  return (response as any).items || response.data || response || [];
 };
 
 // 2. 创建新项目
-export const createProject = async (params: CreateProjectParams): Promise<{ project_id: string }> => {
-  const response = await client.post('/projects', params);
-  return response.data;
+export const createProject = async (params: CreateProjectParams): Promise<{ project_id: string; message: string }> => {
+  // 对应文档: POST /api/v1/projects/
+  const response = await client.post('/v1/projects/', {
+    project_name: params.name,
+    db_type: params.type.toLowerCase(), // 确保转为小写 mysql/postgresql
+    description: params.description
+  });
+  return response as any;
 };
 
 // 3. 获取项目详情 (包含生成进度、Schema、DDL)
 export const getProjectDetail = async (projectId: string): Promise<ProjectDTO> => {
-  const response = await client.get(`/projects/${projectId}`);
-  return response.data;
+  // 对应文档: GET /api/v1/projects/{project_id}
+  const response = await client.get(`/v1/projects/${projectId}`);
+  return (response as any).data || response;
+};
+
+// 4. 更新项目信息 (用于需求微调、触发重生成)
+export const updateProject = async (projectId: string, params: UpdateProjectParams): Promise<ProjectDTO> => {
+  // 对应文档: PATCH /api/v1/projects/{project_id}
+  const response = await client.patch(`/v1/projects/${projectId}`, params);
+  return (response as any).data || response;
+};
+
+// 5. 确认删除 (获取 Token)
+export const confirmDeleteProject = async (projectId: string, confirmationText: string): Promise<ConfirmDeleteResponse> => {
+  // 对应文档: POST /api/v1/projects/{project_id}/confirm-delete
+  const response = await client.post(`/v1/projects/${projectId}/confirm-delete`, {
+    confirmation_text: confirmationText
+  });
+  // 适配可能的数据包裹结构
+  return (response as any).data || response;
+};
+
+// 6. 删除项目 (需要 Token)
+export const deleteProject = async (projectId: string, token: string): Promise<void> => {
+  // 对应文档: DELETE /api/v1/projects/{project_id}
+  // 需要 Header: X-Confirmation-Token
+  await client.delete(`/v1/projects/${projectId}`, {
+    headers: {
+      'X-Confirmation-Token': token
+    }
+  });
 };
