@@ -60,13 +60,17 @@ class PasswordMismatchException(BusinessException):
 
 class UserStatusForbiddenException(BusinessException):
     """用户状态异常（禁止访问）"""
-    def __init__(self, status: str):
+    user_id: int
+    def __init__(self, status: str, user_id: int):
         super().__init__(code=403, message=f"User account status is '{status}'")
+        self.user_id = user_id
 
 class PasswordInvalidException(BusinessException):
     """密码错误"""
-    def __init__(self):
+    user_id: int
+    def __init__(self, user_id: int):
         super().__init__(code=401, message="Incorrect username or password")
+        self.user_id = user_id
 
 class ValidationException(BusinessException):
     """数据验证失败"""

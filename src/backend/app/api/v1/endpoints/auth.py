@@ -182,8 +182,8 @@ async def login(
         )
     except exceptions.PasswordInvalidException as e:
         # 密码错误
-        msg_parts = e.message.split()
-        user_id = int(msg_parts[1])
+        user_id = e.user_id
+        log.info(f"Login failed: user_id={user_id}")
         await create_login_record(
             db=db,
             user_id=user_id,
@@ -204,8 +204,8 @@ async def login(
         )
     except exceptions.UserStatusForbiddenException as e:
         # 状态异常
-        msg_parts = e.message.split()
-        user_id = int(msg_parts[1])
+        user_id = e.user_id
+        log.info(f"Login failed: user_id={user_id}")
         await create_login_record(
             db=db,
             user_id=user_id,

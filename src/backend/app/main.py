@@ -6,7 +6,7 @@ from fastapi.middleware.cors import CORSMiddleware
 import models
 # 修正导入：使用最上层 app 包下的 api_router
 #from app.api.v1.api import api_router
-from api.v1.api import api_router
+# from api.v1.api import api_router
 # ... (FastAPI 实例创建和路由挂载逻辑，与之前给出的代码相同) ...
 # 为了简化，只显示关键部分
 

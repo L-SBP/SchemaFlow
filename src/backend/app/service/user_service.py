@@ -106,12 +106,12 @@ async def service_login(
     # 密码是否正确
     if not verify_password(password, user.password_hash):
         log.error(f"User {user.user_id} password is invalid")
-        raise exceptions.PasswordInvalidException()
+        raise exceptions.PasswordInvalidException(user_id = user.user_id)
 
     # 用户状态是否正常
     if user.status != "normal":
         log.error(f"User {user.user_id} status is {user.status}")
-        raise exceptions.UserStatusForbiddenException(status=user.status)
+        raise exceptions.UserStatusForbiddenException(status=user.status, user_id=user.user_id)
 
     log.info(f"User {user.user_id} login successfully")
     return user
