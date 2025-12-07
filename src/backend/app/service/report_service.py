@@ -88,7 +88,7 @@ async def get_history_queries_service(db: Session, project_id: int) -> List[sche
         .join(Message, AIGeneratedStatement.message_id == Message.message_id)
         .join(SessionModel, Message.session_id == SessionModel.session_id)
         .where(SessionModel.project_id == project_id)
-        .where(Message.message_type == 'user') # 确保我们取的是用户发的消息（提问）
+        .where(Message.message_type == 'assistant') # 确保我们取的是用户发的消息（提问）
         .order_by(QueryResult.cached_at.desc())
     )
 
