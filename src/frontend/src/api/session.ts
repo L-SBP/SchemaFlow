@@ -1,6 +1,6 @@
 import client from './client.ts';
 
-// 对应文档: SessionResponse
+// 对应文档: SessionResponse (会话信息)
 export interface SessionItem {
   session_id: number;
   session_name: string;
@@ -9,21 +9,20 @@ export interface SessionItem {
   last_activity: string | null;
 }
 
-// 对应文档: ChatResponse
+// 对应文档: ChatResponse (消息体)
 export interface ChatMessageResponse {
   message_id: number;
   content: string;
+  // 文档定义: message_type: "user" | "assistant"
   message_type: 'user' | 'assistant';
-  sql_text: string | null;
-  sql_type: string;
+  // 生成的 SQL 语句 (如果有)
+  sql_text?: string | null;
+  // SQL 类型 (如 SELECT, INSERT, UPDATE, DELETE, UNKNOWN)
+  sql_type?: string;
+  // 是否需要前端显示确认按钮 (通常用于高危操作)
   requires_confirmation: boolean;
-  data: any[] | null;
-}
-
-// 对应文档: Request Body for creating session
-export interface CreateSessionParams {
-  project_id: number;
-  session_name?: string;
+  // 执行 SQL 后返回的数据结果集
+  data?: any[] | null;
 }
 
 export const sessionApi = {
@@ -34,7 +33,7 @@ export const sessionApi = {
   getList: (projectId: number | string, page: number = 0, limit: number = 100) => {
     return client.get<any, SessionItem[]>('/v1/sessions/', {
       params: {
-        project_id: Number(projectId), // 确保转为 integer
+        project_id: Number(projectId),
         skip: page * limit,
         limit
       }
@@ -53,7 +52,7 @@ export const sessionApi = {
   },
 
   /**
-   * 1.3 获取会话详情
+   * 1.3 获取会话详情 (可选，部分场景可能用到)
    * GET /api/v1/sessions/{session_id}
    */
   getDetail: (sessionId: number) => {
