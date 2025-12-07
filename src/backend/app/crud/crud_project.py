@@ -9,6 +9,7 @@ from datetime import datetime, timezone
 
 # 隐式绝对导入
 from models.project import Project
+from models.database_instance import DatabaseInstance  # <--- 1. 新增导入
 from core.exceptions import DatabaseOperationFailedException
 
 
@@ -36,9 +37,22 @@ class CRUDProject:
     async def get(db: AsyncSession, project_id: int) -> Optional[Project]:
         """获取单个项目"""
         try:
-            query = select(Project).where(Project.project_id == project_id)
+            # 修改查询：同时查 Project 和 DatabaseInstance.db_type
+            query = select(Project, DatabaseInstance.db_type) \
+                .join(DatabaseInstance, Project.instance_id == DatabaseInstance.instance_id) \
+                .where(Project.project_id == project_id)
+
             result = await db.execute(query)
-            return result.scalar_one_or_none()
+            row = result.first()  # 获取第一行结果，形式为 (Project实例, db_type字符串)
+
+            if row:
+                project_obj, db_type_val = row
+                # 动态将 db_type 属性挂载到 project_obj 上
+                # 这样 Pydantic (from_attributes=True) 就能读取到 project_obj.db_type
+                setattr(project_obj, "db_type", db_type_val)
+                return project_obj
+
+            return None
         except SQLAlchemyError as e:
             raise DatabaseOperationFailedException("get project") from e
 
@@ -46,18 +60,31 @@ class CRUDProject:
     async def get_by_user(
             db: AsyncSession, user_id: int, skip: int = 0, limit: int = 100, search: Optional[str] = None
     ) -> List[Project]:
-        """获取用户项目列表 (支持分页、搜索、排除已删除)"""
+        """获取用户项目列表 (修改：Join查询并手动挂载 db_type)"""
         try:
-            query = select(Project).where(
+            # 修改查询：Join DatabaseInstance
+            query = select(Project, DatabaseInstance.db_type).join(
+                DatabaseInstance, Project.instance_id == DatabaseInstance.instance_id
+            ).where(
                 Project.user_id == user_id,
-                Project.project_status != 'deleted'  # 软删除过滤
+                Project.project_status != 'deleted'
             )
+
             if search:
                 query = query.where(Project.project_name.ilike(f'%{search}%'))
 
             query = query.offset(skip).limit(limit).order_by(Project.updated_at.desc())
+
             result = await db.execute(query)
-            return result.scalars().all()
+            rows = result.all()  # 结果是 list of (Project, str)
+
+            projects = []
+            for p, dt in rows:
+                # 动态赋值
+                setattr(p, "db_type", dt)
+                projects.append(p)
+
+            return projects
         except SQLAlchemyError as e:
             raise DatabaseOperationFailedException("get projects list") from e
 
