@@ -39,22 +39,24 @@ export interface QueryResult {
   data: any[];
 }
 
+// 更新 Message 接口以兼容 API 返回的数据结构
 export interface Message {
   id: string;
-  role: 'user' | 'model';
+  role: 'user' | 'model'; // 对应 API 的 'user' | 'assistant'
   text: string;
   type: 'text' | 'table' | 'chart' | 'error' | 'code-block';
   tableData?: QueryResult;
   chartData?: ChartData[];
-  sql?: string;
+  sql?: string;           // 对应 API sql_text
   code?: string;
   language?: string;
   timestamp: number;
   status?: 'pending' | 'executed' | 'cancelled';
+  requiresConfirmation?: boolean; // 新增：对应 API requires_confirmation
 }
 
 export interface ChatSession {
-  id: string;
+  id: string;        // 前端使用 string ID，对应后端 session_id (number)
   name: string;
   messages: Message[];
   updatedAt: number;
@@ -177,4 +179,3 @@ export interface KnowledgeExportResponse {
   download_url: string;
   expires_at: string;
 }
-
