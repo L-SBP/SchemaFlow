@@ -71,7 +71,7 @@ class ProjectListOne(BaseModel):
     description: Optional[str] = None
     project_status: ProjectStatusEnum
     updated_at: datetime
-
+    db_type: str
     model_config = ConfigDict(from_attributes=True)
 
 
