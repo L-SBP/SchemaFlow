@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Sidebar } from './components/Sidebar.tsx';
 import { Header } from './components/Header.tsx';
+import { ToastContainer } from './components/UI.tsx'; // 引入全局 Toast 容器
 import { Login } from './pages/Login.tsx';
 import { Dashboard } from './pages/Dashboard.tsx';
 import { Workspace } from './pages/Workspace.tsx';
@@ -90,7 +91,13 @@ const App: React.FC = () => {
   };
 
   if (!isAuthenticated) {
-    return <Login onLogin={handleLogin} />;
+    return (
+      <>
+        {/* 在登录页也挂载 ToastContainer，以显示登录失败/网络错误等信息 */}
+        <ToastContainer />
+        <Login onLogin={handleLogin} />
+      </>
+    );
   }
 
   const renderContent = () => {
@@ -135,6 +142,9 @@ const App: React.FC = () => {
 
   return (
     <div className="flex h-screen bg-[#f0f2f5] bg-[url('https://gw.alipayobjects.com/zos/rmsportal/TVYTbAXWheQpRcWDaDMu.svg')] bg-center bg-no-repeat bg-contain overflow-hidden">
+      {/* 全局 Toast 容器：必须挂载在应用顶层，确保覆盖在所有内容（包括 Modal）之上 */}
+      <ToastContainer />
+
       <Sidebar
         role={currentUser?.role || UserRole.USER}
         activePage={activePage}

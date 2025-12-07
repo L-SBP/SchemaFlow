@@ -1,5 +1,5 @@
-import React, {JSX, ReactNode} from 'react';
-import { Check } from 'lucide-react';
+import React, { JSX, ReactNode, useState, useEffect } from 'react';
+import { Check, X, CheckCircle, AlertCircle, Info, AlertTriangle } from 'lucide-react';
 
 // --- Button Component ---
 
@@ -39,7 +39,7 @@ interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
 export const Button: React.FC<ButtonProps> = ({ children, variant = 'default', className = '', icon, ...props }) => {
     // 基础样式：布局、内边距、字体、圆角、阴影及过渡效果
     const baseStyles = "inline-flex items-center justify-center px-4 py-1.5 text-sm font-medium transition-all duration-200 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-offset-1 disabled:opacity-50 disabled:cursor-not-allowed";
-    
+
     // 不同变体的样式映射
     const variants = {
         primary: "bg-primary text-white hover:bg-primary-hover border border-transparent focus:ring-blue-500",
@@ -48,7 +48,7 @@ export const Button: React.FC<ButtonProps> = ({ children, variant = 'default', c
         text: "bg-transparent text-gray-700 shadow-none hover:bg-gray-100 border-none",
         danger: "bg-white text-error border border-error hover:bg-red-50 focus:ring-red-200"
     };
-    
+
     return (
         <button className={`${baseStyles} ${variants[variant]} ${className}`} {...props}>
             {icon && <span className="mr-2">{icon}</span>}
@@ -155,8 +155,8 @@ export const Tag: React.FC<TagProps> = ({ color = 'blue', children }) => {
     };
     return (
         <span className={`inline-block px-2.5 py-0.5 text-xs font-medium border rounded-full ${colors[color]}`}>
-      {children}
-    </span>
+            {children}
+        </span>
     );
 };
 
@@ -210,7 +210,7 @@ export const Steps: React.FC<{ steps: StepItem[]; current: number }> = ({ steps,
             {steps.map((step, index) => {
                 const isCompleted = index < current;
                 const isCurrent = index === current;
-                
+
                 return (
                     <div key={index} className="flex flex-col items-center relative flex-1 group">
                         {/* 连接线：除了第一个节点外，每个节点左侧都有连接线 */}
@@ -219,21 +219,19 @@ export const Steps: React.FC<{ steps: StepItem[]; current: number }> = ({ steps,
                                 <div className={`h-full transition-colors duration-500 ${index <= current ? 'bg-primary' : 'bg-gray-200'}`}></div>
                             </div>
                         )}
-                        
+
                         {/* 步骤图标：完成态显示对号，进行/未进行态显示数字 */}
-                        <div className={`w-10 h-10 rounded-full flex items-center justify-center text-sm font-bold transition-all duration-500 z-10 border-2 shadow-sm ${
-                            isCompleted ? 'bg-primary border-primary text-white' :
+                        <div className={`w-10 h-10 rounded-full flex items-center justify-center text-sm font-bold transition-all duration-500 z-10 border-2 shadow-sm ${isCompleted ? 'bg-primary border-primary text-white' :
                                 isCurrent ? 'bg-white border-primary text-primary ring-4 ring-blue-50 scale-110' :
                                     'bg-white border-gray-200 text-gray-400'
-                        }`}>
+                            }`}>
                             {isCompleted ? <Check size={18} strokeWidth={3} /> : index + 1}
                         </div>
                         {/* 步骤标题 */}
-                        <div className={`mt-3 text-sm font-medium transition-colors duration-300 ${
-                            isCurrent ? 'text-primary' :
+                        <div className={`mt-3 text-sm font-medium transition-colors duration-300 ${isCurrent ? 'text-primary' :
                                 isCompleted ? 'text-gray-800' :
                                     'text-gray-400'
-                        }`}>
+                            }`}>
                             {step.title}
                         </div>
                     </div>
@@ -282,9 +280,7 @@ export const Modal: React.FC<ModalProps> = ({ isOpen, onClose, title, children, 
                     <h3 className="text-lg font-bold text-gray-800 tracking-tight">{title}</h3>
                     <button onClick={onClose} className="text-gray-400 hover:text-gray-600 transition-colors bg-gray-50 hover:bg-gray-100 p-1 rounded-full">
                         <span className="sr-only">Close</span>
-                        <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                        </svg>
+                        <X size={20} />
                     </button>
                 </div>
                 {/* Content - 可滚动区域 */}
@@ -298,6 +294,105 @@ export const Modal: React.FC<ModalProps> = ({ isOpen, onClose, title, children, 
                     </div>
                 )}
             </div>
+        </div>
+    );
+};
+
+// --- Toast/Message Component System ---
+
+export type ToastType = 'success' | 'error' | 'info' | 'warning';
+
+export interface ToastData {
+    id: string;
+    type: ToastType;
+    content: string;
+    duration?: number;
+}
+
+// 简单的 Event Bus，用于在 React 组件树之外（如 API Client）触发 UI 更新
+class MessageBus {
+    private listeners: ((toast: ToastData) => void)[] = [];
+
+    subscribe(listener: (toast: ToastData) => void) {
+        this.listeners.push(listener);
+        return () => {
+            this.listeners = this.listeners.filter(l => l !== listener);
+        };
+    }
+
+    emit(type: ToastType, content: string, duration = 3000) {
+        const toast: ToastData = {
+            id: Math.random().toString(36).substr(2, 9),
+            type,
+            content,
+            duration
+        };
+        this.listeners.forEach(l => l(toast));
+    }
+}
+
+const messageBus = new MessageBus();
+
+/**
+ * 全局消息工具对象
+ * 可在任何地方调用，例如: message.success("操作成功")
+ */
+export const message = {
+    success: (content: string, duration?: number) => messageBus.emit('success', content, duration),
+    error: (content: string, duration?: number) => messageBus.emit('error', content, duration),
+    info: (content: string, duration?: number) => messageBus.emit('info', content, duration),
+    warning: (content: string, duration?: number) => messageBus.emit('warning', content, duration),
+};
+
+/**
+ * 全局消息容器组件
+ * 需挂载在 App 根节点
+ */
+export const ToastContainer: React.FC = () => {
+    const [toasts, setToasts] = useState<ToastData[]>([]);
+
+    useEffect(() => {
+        return messageBus.subscribe((toast) => {
+            setToasts(prev => [...prev, toast]);
+            if (toast.duration && toast.duration > 0) {
+                setTimeout(() => {
+                    removeToast(toast.id);
+                }, toast.duration);
+            }
+        });
+    }, []);
+
+    const removeToast = (id: string) => {
+        setToasts(prev => prev.filter(t => t.id !== id));
+    };
+
+    return (
+        <div className="fixed top-6 right-6 z-[100] flex flex-col gap-3 pointer-events-none">
+            {toasts.map(toast => (
+                <div
+                    key={toast.id}
+                    className={`pointer-events-auto min-w-[320px] max-w-md p-4 rounded-lg shadow-lg border-l-4 transform transition-all duration-300 animate-in slide-in-from-right-full fade-in bg-white flex items-start gap-3
+            ${toast.type === 'success' ? 'border-green-500 bg-green-50/50' :
+                            toast.type === 'error' ? 'border-red-500 bg-red-50/50' :
+                                toast.type === 'warning' ? 'border-orange-500 bg-orange-50/50' : 'border-blue-500 bg-blue-50/50'}`}
+                >
+                    {/* Icon */}
+                    <div className="shrink-0 mt-0.5">
+                        {toast.type === 'success' && <CheckCircle size={18} className="text-green-500" />}
+                        {toast.type === 'error' && <AlertCircle size={18} className="text-red-500" />}
+                        {toast.type === 'warning' && <AlertTriangle size={18} className="text-orange-500" />}
+                        {toast.type === 'info' && <Info size={18} className="text-blue-500" />}
+                    </div>
+                    {/* Content */}
+                    <div className="flex-1 text-sm text-gray-800 font-medium break-words leading-relaxed">
+                        {toast.content}
+                    </div>
+                    {/* Close */}
+                    <button onClick={() => removeToast(toast.id)} className="text-gray-400 hover:text-gray-600 transition-colors">
+                        <X size={16} />
+                    </button>
+                </div>
+            ))}
         </div>
     );
 };

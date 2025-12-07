@@ -479,7 +479,7 @@ export const Glossary: React.FC = () => {
             required
           />
           <div className="flex flex-col gap-1.5">
-            <label className="text-sm font-medium text-gray-700">定义描述 <span className="text-red-500">*</span></label>
+            <label className="text-sm font-medium text-gray-700">定义描述 <span className="text-red-500"></span></label>
             <textarea
               className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary outline-none transition-colors min-h-[100px] text-sm"
               value={formData.definition}
@@ -546,7 +546,7 @@ export const Glossary: React.FC = () => {
             {/* 全部成功提示 */}
             {importResult.failed_count === 0 && (
               <div className="text-center py-8 text-gray-500 bg-green-50 rounded-lg border border-green-100 border-dashed">
-                <p className="text-green-700 font-medium">🎉 太棒了！文件中的所有数据均已成功导入。</p>
+                <p className="text-green-700 font-medium">文件中的所有数据均已成功导入。</p>
               </div>
             )}
           </div>
