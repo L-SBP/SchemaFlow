@@ -141,7 +141,8 @@ const App: React.FC = () => {
   };
 
   return (
-    <div className="flex h-screen bg-[#f0f2f5] bg-[url('https://gw.alipayobjects.com/zos/rmsportal/TVYTbAXWheQpRcWDaDMu.svg')] bg-center bg-no-repeat bg-contain overflow-hidden">
+    // 修复：添加 min-w-[1280px] 到根容器，确保整个应用在小屏下不会变形，而是触发浏览器横向滚动条
+    <div className="flex h-screen bg-[#f0f2f5] bg-[url('https://gw.alipayobjects.com/zos/rmsportal/TVYTbAXWheQpRcWDaDMu.svg')] bg-center bg-no-repeat bg-contain overflow-hidden min-w-[1440px]">
       {/* 全局 Toast 容器：必须挂载在应用顶层，确保覆盖在所有内容（包括 Modal）之上 */}
       <ToastContainer />
 

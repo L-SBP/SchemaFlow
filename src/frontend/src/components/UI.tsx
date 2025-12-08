@@ -222,15 +222,15 @@ export const Steps: React.FC<{ steps: StepItem[]; current: number }> = ({ steps,
 
                         {/* 步骤图标：完成态显示对号，进行/未进行态显示数字 */}
                         <div className={`w-10 h-10 rounded-full flex items-center justify-center text-sm font-bold transition-all duration-500 z-10 border-2 shadow-sm ${isCompleted ? 'bg-primary border-primary text-white' :
-                                isCurrent ? 'bg-white border-primary text-primary ring-4 ring-blue-50 scale-110' :
-                                    'bg-white border-gray-200 text-gray-400'
+                            isCurrent ? 'bg-white border-primary text-primary ring-4 ring-blue-50 scale-110' :
+                                'bg-white border-gray-200 text-gray-400'
                             }`}>
                             {isCompleted ? <Check size={18} strokeWidth={3} /> : index + 1}
                         </div>
                         {/* 步骤标题 */}
                         <div className={`mt-3 text-sm font-medium transition-colors duration-300 ${isCurrent ? 'text-primary' :
-                                isCompleted ? 'text-gray-800' :
-                                    'text-gray-400'
+                            isCompleted ? 'text-gray-800' :
+                                'text-gray-400'
                             }`}>
                             {step.title}
                         </div>

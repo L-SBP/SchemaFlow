@@ -39,33 +39,32 @@ export const Sidebar: React.FC<SidebarProps> = ({ role, activePage, onNavigate }
         { id: 'glossary', label: '业务术语', icon: <Database size={18} /> },
         { id: 'announcements', label: '系统公告', icon: <Bell size={18} /> },
     ];
-    
+
     return (
         <div className="w-64 bg-white border-r border-gray-200 h-screen flex flex-col sticky top-0">
             {/* 应用 Logo 区域 */}
             <div className="p-6 flex items-center gap-3 border-b border-gray-100">
                 <div className="w-8 h-8 bg-primary rounded-md flex items-center justify-center text-white font-bold">AI</div>
-                <h1 className="font-bold text-gray-800 text-lg tracking-tight">DB Master</h1>
+                <h1 className="font-bold text-gray-800 text-lg tracking-tight">AutoDB</h1>
             </div>
-            
+
             {/* 菜单列表区域 */}
             <div className="flex-1 py-4 px-3 space-y-1">
                 {menuItems.map((item) => (
                     <button
                         key={item.id}
                         onClick={() => onNavigate(item.id)}
-                        className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-md text-sm font-medium transition-colors ${
-                            activePage === item.id
+                        className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-md text-sm font-medium transition-colors ${activePage === item.id
                                 ? 'bg-blue-50 text-primary'
                                 : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
-                        }`}
+                            }`}
                     >
                         {item.icon}
                         {item.label}
                     </button>
                 ))}
             </div>
-            
+
             {/* 注：退出登录功能已移动至 Header 组件 */}
         </div>
     );

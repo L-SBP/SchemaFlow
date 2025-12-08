@@ -45,7 +45,7 @@ const MOCK_RISKS: RiskEvent[] = [
 export const AdminStatus: React.FC = () => {
     // 风险事件状态，支持本地交互（阻断/忽略）
     const [risks, setRisks] = useState<RiskEvent[]>(MOCK_RISKS);
-    
+
     /**
      * 处理风险事件
      * @param {string} id - 风险事件 ID
@@ -54,13 +54,13 @@ export const AdminStatus: React.FC = () => {
     const handleRiskAction = (id: string, action: 'blocked' | 'ignored') => {
         setRisks(risks.map(r => r.id === id ? { ...r, status: action } : r));
     };
-    
+
     return (
         <div className="p-8 max-w-7xl mx-auto h-full overflow-y-auto space-y-8">
             <h2 className="text-2xl font-bold text-gray-800 flex items-center gap-2">
                 <Activity className="text-primary" /> 系统运行状态
             </h2>
-            
+
             {/* 1. 核心指标卡片 (Metrics Cards) */}
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
                 <Card className="bg-gradient-to-br from-blue-50 to-white border-blue-100">
@@ -97,7 +97,7 @@ export const AdminStatus: React.FC = () => {
                     <p className="text-xs text-orange-600 mt-1">高危事件: {risks.filter(r => r.status === 'pending' && r.level === 'high').length}</p>
                 </Card>
             </div>
-            
+
             {/* 2. 可视化图表 (Charts) */}
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                 {/* 资源负载监控: 面积图 */}
@@ -107,12 +107,12 @@ export const AdminStatus: React.FC = () => {
                             <AreaChart data={RESOURCE_DATA}>
                                 <defs>
                                     <linearGradient id="colorCpu" x1="0" y1="0" x2="0" y2="1">
-                                        <stop offset="5%" stopColor="#1677ff" stopOpacity={0.8}/>
-                                        <stop offset="95%" stopColor="#1677ff" stopOpacity={0}/>
+                                        <stop offset="5%" stopColor="#1677ff" stopOpacity={0.8} />
+                                        <stop offset="95%" stopColor="#1677ff" stopOpacity={0} />
                                     </linearGradient>
                                     <linearGradient id="colorMem" x1="0" y1="0" x2="0" y2="1">
-                                        <stop offset="5%" stopColor="#52c41a" stopOpacity={0.8}/>
-                                        <stop offset="95%" stopColor="#52c41a" stopOpacity={0}/>
+                                        <stop offset="5%" stopColor="#52c41a" stopOpacity={0.8} />
+                                        <stop offset="95%" stopColor="#52c41a" stopOpacity={0} />
                                     </linearGradient>
                                 </defs>
                                 <XAxis dataKey="time" fontSize={12} tickLine={false} />
@@ -125,7 +125,7 @@ export const AdminStatus: React.FC = () => {
                         </ResponsiveContainer>
                     </div>
                 </Card>
-                
+
                 {/* 用户活跃度: 组合图 (柱状图+折线图) */}
                 <Card title="用户活跃度趋势">
                     <div className="h-64 w-full">
@@ -137,14 +137,14 @@ export const AdminStatus: React.FC = () => {
                                 <YAxis yAxisId="right" orientation="right" fontSize={12} />
                                 <Tooltip />
                                 <Legend />
-                                <Bar yAxisId="left" dataKey="dau" fill="#1677ff" name="日活用户 (DAU)" barSize={30} radius={[4,4,0,0]} />
+                                <Bar yAxisId="left" dataKey="dau" fill="#1677ff" name="日活用户 (DAU)" barSize={30} radius={[4, 4, 0, 0]} />
                                 <Line yAxisId="right" type="monotone" dataKey="qps" stroke="#faad14" strokeWidth={3} name="查询量 (QPS)" />
                             </ComposedChart>
                         </ResponsiveContainer>
                     </div>
                 </Card>
             </div>
-            
+
             {/* 3. 风险控制与管理员列表 */}
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
                 {/* 安全风险管控表格 - 修复布局变形问题 */}
@@ -155,52 +155,52 @@ export const AdminStatus: React.FC = () => {
                             {/* 修复：添加 min-w-[800px] 强制表格最小宽度，防止内容挤压 */}
                             <table className="w-full text-left text-sm min-w-[800px]">
                                 <thead className="bg-gray-50 border-b border-gray-200">
-                                <tr>
-                                    {/* 修复：表头添加 whitespace-nowrap 禁止换行 */}
-                                    <th className="px-4 py-3 whitespace-nowrap">风险类型</th>
-                                    <th className="px-4 py-3 whitespace-nowrap">源IP</th>
-                                    <th className="px-4 py-3 whitespace-nowrap">描述</th>
-                                    <th className="px-4 py-3 whitespace-nowrap">状态</th>
-                                    <th className="px-4 py-3 text-right whitespace-nowrap">操作</th>
-                                </tr>
+                                    <tr>
+                                        {/* 修复：表头添加 whitespace-nowrap 禁止换行 */}
+                                        <th className="px-4 py-3 whitespace-nowrap">风险类型</th>
+                                        <th className="px-4 py-3 whitespace-nowrap">源IP</th>
+                                        <th className="px-4 py-3 whitespace-nowrap">描述</th>
+                                        <th className="px-4 py-3 whitespace-nowrap">状态</th>
+                                        <th className="px-4 py-3 text-right whitespace-nowrap">操作</th>
+                                    </tr>
                                 </thead>
                                 <tbody className="divide-y divide-gray-100">
-                                {risks.map(risk => (
-                                    <tr key={risk.id} className="hover:bg-gray-50/50">
-                                        <td className="px-4 py-3 whitespace-nowrap">
-                                            <div className="flex items-center gap-2">
-                                                {risk.level === 'high' && <AlertTriangle size={14} className="text-red-500" />}
-                                                {risk.level === 'medium' && <AlertTriangle size={14} className="text-orange-500" />}
-                                                {risk.level === 'low' && <AlertTriangle size={14} className="text-blue-500" />}
-                                                <span className="font-medium text-gray-700">
-                             {risk.type === 'sql_injection' ? 'SQL注入' : risk.type === 'abnormal_login' ? '异常登录' : '高频调用'}
-                           </span>
-                                            </div>
-                                        </td>
-                                        <td className="px-4 py-3 font-mono text-xs text-gray-500 whitespace-nowrap">{risk.sourceIp}</td>
-                                        {/* 描述列：保留 truncate 以限制过长文本，无需 whitespace-nowrap，因为 truncate 已包含不换行属性 */}
-                                        <td className="px-4 py-3 text-gray-600 max-w-[200px] truncate" title={risk.description}>{risk.description}</td>
-                                        <td className="px-4 py-3 whitespace-nowrap">
-                                            <Tag color={risk.status === 'pending' ? 'orange' : risk.status === 'blocked' ? 'red' : 'green'}>
-                                                {risk.status === 'pending' ? '待处理' : risk.status === 'blocked' ? '已阻断' : '已忽略'}
-                                            </Tag>
-                                        </td>
-                                        <td className="px-4 py-3 text-right whitespace-nowrap">
-                                            {risk.status === 'pending' && (
-                                                <div className="flex justify-end gap-2">
-                                                    <Button variant="danger" className="h-7 px-2 text-xs" onClick={() => handleRiskAction(risk.id, 'blocked')}>阻断</Button>
-                                                    <Button variant="default" className="h-7 px-2 text-xs" onClick={() => handleRiskAction(risk.id, 'ignored')}>忽略</Button>
+                                    {risks.map(risk => (
+                                        <tr key={risk.id} className="hover:bg-gray-50/50">
+                                            <td className="px-4 py-3 whitespace-nowrap">
+                                                <div className="flex items-center gap-2">
+                                                    {risk.level === 'high' && <AlertTriangle size={14} className="text-red-500" />}
+                                                    {risk.level === 'medium' && <AlertTriangle size={14} className="text-orange-500" />}
+                                                    {risk.level === 'low' && <AlertTriangle size={14} className="text-blue-500" />}
+                                                    <span className="font-medium text-gray-700">
+                                                        {risk.type === 'sql_injection' ? 'SQL注入' : risk.type === 'abnormal_login' ? '异常登录' : '高频调用'}
+                                                    </span>
                                                 </div>
-                                            )}
-                                        </td>
-                                    </tr>
-                                ))}
+                                            </td>
+                                            <td className="px-4 py-3 font-mono text-xs text-gray-500 whitespace-nowrap">{risk.sourceIp}</td>
+                                            {/* 描述列：保留 truncate 以限制过长文本，无需 whitespace-nowrap，因为 truncate 已包含不换行属性 */}
+                                            <td className="px-4 py-3 text-gray-600 max-w-[200px] truncate" title={risk.description}>{risk.description}</td>
+                                            <td className="px-4 py-3 whitespace-nowrap">
+                                                <Tag color={risk.status === 'pending' ? 'orange' : risk.status === 'blocked' ? 'red' : 'green'}>
+                                                    {risk.status === 'pending' ? '待处理' : risk.status === 'blocked' ? '已阻断' : '已忽略'}
+                                                </Tag>
+                                            </td>
+                                            <td className="px-4 py-3 text-right whitespace-nowrap">
+                                                {risk.status === 'pending' && (
+                                                    <div className="flex justify-end gap-2">
+                                                        <Button variant="danger" className="h-7 px-2 text-xs" onClick={() => handleRiskAction(risk.id, 'blocked')}>阻断</Button>
+                                                        <Button variant="default" className="h-7 px-2 text-xs" onClick={() => handleRiskAction(risk.id, 'ignored')}>忽略</Button>
+                                                    </div>
+                                                )}
+                                            </td>
+                                        </tr>
+                                    ))}
                                 </tbody>
                             </table>
                         </div>
                     </Card>
                 </div>
-                
+
                 {/* 管理员在线状态列表 */}
                 <div className="lg:col-span-1">
                     <Card title="管理员在线状态" className="h-full">

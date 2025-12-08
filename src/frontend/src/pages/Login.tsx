@@ -141,7 +141,7 @@ export const Login: React.FC<LoginProps> = ({ onLogin }) => {
       <div className="w-full max-w-sm bg-white p-8 rounded-xl shadow-lg animate-in fade-in zoom-in duration-300">
         <div className="text-center mb-8">
           <div className="w-12 h-12 bg-primary rounded-lg mx-auto flex items-center justify-center text-white font-bold text-xl mb-3">AI</div>
-          <h1 className="text-2xl font-bold text-gray-800">DB Master</h1>
+          <h1 className="text-2xl font-bold text-gray-800">AutoDB</h1>
           <p className="text-gray-500 mt-2 text-sm">基于大模型多智能体的数据库自动部署平台</p>
         </div>
 
@@ -232,7 +232,7 @@ export const Login: React.FC<LoginProps> = ({ onLogin }) => {
         </form>
 
         <div className="mt-8 text-center text-xs text-gray-400">
-          Copyright © 2025 DB Master Tech
+          Copyright © 2025 AutoDB
         </div>
       </div>
     </div>
