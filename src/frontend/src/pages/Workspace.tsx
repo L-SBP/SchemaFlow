@@ -1,8 +1,8 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Project, Message, QueryResult, ChatSession } from '../types.ts';
-import { Button, message as GlobalMessage } from '../components/UI.tsx';
+import { Project, Message, QueryResult, ChatSession } from '../types';
+import { Button, message as GlobalMessage } from '../components/UI';
 import { Send, Plus, MessageSquare, Edit2, Trash2, Check, X, ChevronLeft, Loader2, Sparkles, AlertTriangle, Play, Ban, Table as TableIcon } from 'lucide-react';
-import { sessionApi, ChatMessageResponse } from '../api/session.ts';
+import { sessionApi, ChatMessageResponse } from '../api/session';
 
 interface WorkspaceProps {
   project: Project;
@@ -72,9 +72,9 @@ const mapBackendMessageToFrontend = (msg: ChatMessageResponse): Message => {
     }
     // 2. 尝试匹配纯文本模式 (针对 "已生成查询语句：" 这种无 Markdown 的场景)
     else {
-      // 匹配以常见的 SQL 关键字开头 (SELECT/INSERT/UPDATE 等)
-      // (?:...)? 是非捕获组，匹配可选的前缀提示语
-      const plainMatch = displayText.match(/(?:已生成查询语句[：:]\s*)?\n?(SELECT\s+[\s\S]+|INSERT\s+[\s\S]+|UPDATE\s+[\s\S]+|DELETE\s+[\s\S]+|DROP\s+[\s\S]+|CREATE\s+[\s\S]+|ALTER\s+[\s\S]+)/i);
+      // FIX: 优化正则，使用非贪婪匹配 [\s\S]+? 并尝试在分号 ; 或双换行 \n\n 处停止，
+      // 防止正则吞掉 SQL 语句后面的普通文本说明。
+      const plainMatch = displayText.match(/(?:已生成查询语句[：:]\s*)?\n?((?:SELECT|INSERT|UPDATE|DELETE|DROP|CREATE|ALTER)\s+[\s\S]+?(?:;|\n\n|$))/i);
       if (plainMatch && plainMatch[1]) {
         // 简单的二次校验：长度大于 10 且包含空格，避免误判
         const potentialSql = plainMatch[1].trim();
@@ -87,18 +87,19 @@ const mapBackendMessageToFrontend = (msg: ChatMessageResponse): Message => {
 
   // 如果提取到了 SQL，进行文本清洗，避免重复显示
   if (sqlText && sqlText.trim()) {
-    // 1. 优先移除 Markdown 块
+    // 1. 优先移除 Markdown 块 (Markdown 结构明确，移除是安全的)
     const codeBlockRegex = /```(sql)?\s*[\s\S]*?\s*```/gi;
     if (codeBlockRegex.test(displayText)) {
       displayText = displayText.replace(codeBlockRegex, '');
     }
-    // 2. 如果还有残留 (或者原本就是纯文本 SQL)，尝试通过字符串替换移除
-    else if (displayText.includes(sqlText)) {
+    // 2. 针对纯文本 SQL 的清理逻辑：仅从文本中移除 SQL 部分，保留其他说明文字
+    else {
       displayText = displayText.replace(sqlText, '');
     }
 
     // 3. 移除特定的提示语 (如果 SQL 被提取了，这些提示语也就没用了)
-    displayText = displayText.replace(/已生成查询语句[：:]\s*/g, '');
+    // FIX: 注释掉此行，以保留 "已生成查询语句：" 这样的提示文字，实现文字与SQL的分离显示
+    // displayText = displayText.replace(/已生成查询语句[：:]\s*/g, '');
 
     // 额外的清理：移除可能残留的空 Markdown 标记
     displayText = displayText.replace(/```\s*```/g, '');

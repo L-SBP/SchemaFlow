@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
-import { Button, Input } from '../components/UI.tsx';
-import { UserRole } from '../types.ts';
-import { authApi } from '../api/auth.ts'; // 引入 API 模块
+import { Button, Input } from '../components/UI';
+import { UserRole } from '../types';
+import { authApi } from '../api/auth'; // 引入 API 模块
 
 interface LoginProps {
   onLogin: (role: UserRole, username: string, avatar_url?: string) => void;
@@ -12,12 +12,12 @@ export const Login: React.FC<LoginProps> = ({ onLogin }) => {
   const [password, setPassword] = useState('');
   const [email, setEmail] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
-  const [verificationCode, setVerificationCode] = useState(''); // 新增：验证码状态
+  const [verificationCode, setVerificationCode] = useState('');
 
   const [isRegister, setIsRegister] = useState(false);
   const [error, setError] = useState('');
-  const [isLoading, setIsLoading] = useState(false); // 新增：加载状态
-  const [countdown, setCountdown] = useState(0); // 新增：验证码倒计时
+  const [isLoading, setIsLoading] = useState(false);
+  const [countdown, setCountdown] = useState(0);
 
   // 发送验证码逻辑
   const handleSendCode = async () => {
@@ -77,8 +77,7 @@ export const Login: React.FC<LoginProps> = ({ onLogin }) => {
         });
 
         alert(`注册成功！欢迎，${username}。请直接登录。`);
-        setIsRegister(false); // 切换回登录模式
-        // 清空敏感字段
+        setIsRegister(false);
         setPassword('');
         setConfirmPassword('');
         setVerificationCode('');
@@ -97,25 +96,17 @@ export const Login: React.FC<LoginProps> = ({ onLogin }) => {
 
       setIsLoading(true);
       try {
-        // 调用真实登录接口
-        // 此时 response 是 { code: 200, message: "...", data: { ... } }
         const response = await authApi.login({ username, password });
 
-        // 修改点 1：检查业务状态码 (可选但推荐)
         if (response.code !== 200) {
           throw new Error(response.message || '登录失败');
         }
 
-        // 修改点 2：从 response.data 中获取 access_token
-        // 原代码: response.access_token
         localStorage.setItem('access_token', response.data.access_token);
 
-        // 修改点 3：从 response.data 中获取 user
-        // 原代码: response.user.is_admin
         const userData = response.data.user;
         const role = userData.is_admin ? UserRole.ADMIN : UserRole.USER;
 
-        // 3. 更新全局状态，传入 avatar_url
         onLogin(role, userData.username, userData.avatar_url);
       } catch (err: any) {
         setError(err.message || '登录失败，请检查用户名或密码');
@@ -128,7 +119,6 @@ export const Login: React.FC<LoginProps> = ({ onLogin }) => {
   const toggleMode = () => {
     setIsRegister(!isRegister);
     setError('');
-    // 切换模式时重置表单
     if (!isRegister) {
       setEmail('');
       setConfirmPassword('');
@@ -140,14 +130,19 @@ export const Login: React.FC<LoginProps> = ({ onLogin }) => {
     <div className="min-h-screen flex items-center justify-center bg-[#f0f2f5] bg-[url('https://gw.alipayobjects.com/zos/rmsportal/TVYTbAXWheQpRcWDaDMu.svg')] bg-center bg-no-repeat bg-contain">
       <div className="w-full max-w-sm bg-white p-8 rounded-xl shadow-lg animate-in fade-in zoom-in duration-300">
         <div className="text-center mb-8">
-          <div className="w-12 h-12 bg-primary rounded-lg mx-auto flex items-center justify-center text-white font-bold text-xl mb-3">AI</div>
+          {/* 修改: 增大Logo尺寸 (w-16 -> w-24) */}
+          <img
+            src="public/database-logo.svg"
+            alt="AutoDB Logo"
+            className="w-24 h-24 mx-auto mb-4 object-contain hover:scale-105 transition-transform duration-300"
+          />
           <h1 className="text-2xl font-bold text-gray-800">AutoDB</h1>
           <p className="text-gray-500 mt-2 text-sm">基于大模型多智能体的数据库自动部署平台</p>
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-4">
           <Input
-            label="用户名" // 登录时通常支持两者，提示语微调
+            label="用户名"
             value={username}
             onChange={e => setUsername(e.target.value)}
             placeholder={isRegister ? "设置用户名" : "输入用户名或邮箱"}
@@ -165,7 +160,6 @@ export const Login: React.FC<LoginProps> = ({ onLogin }) => {
                 disabled={isLoading}
               />
 
-              {/* 验证码输入区域 */}
               <div className="flex items-end gap-2">
                 <div className="flex-1">
                   <Input

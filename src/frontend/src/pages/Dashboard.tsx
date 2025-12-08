@@ -502,7 +502,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ onProjectSelect }) => {
                     <div className="p-1.5 bg-white rounded-md shadow-sm text-purple-600">
                       <BrainCircuit size={16} />
                     </div>
-                    <span className="text-sm font-semibold text-gray-700">Schema 逻辑分析</span>
+                    <span className="text-sm font-semibold text-gray-700">Generated Schema</span>
                   </div>
                   {canRefine && !isRefining && (
                     <Button variant="text" className="h-6 px-2 text-xs text-primary" onClick={() => setIsRefining(true)} icon={<Edit3 size={12} />}>
@@ -536,7 +536,8 @@ export const Dashboard: React.FC<DashboardProps> = ({ onProjectSelect }) => {
                       placeholder={
                         <div className="h-full flex flex-col items-center justify-center text-gray-400 gap-2">
                           <Loader2 size={32} className="animate-spin opacity-20" />
-                          <p>Waiting for analysis stream...</p>
+                          {/* 修改：添加 text-sm 和 font-sans 以确保样式统一 */}
+                          <p className="text-sm font-sans">Waiting for Schema stream...</p>
                         </div>
                       }
                     />
@@ -549,7 +550,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ onProjectSelect }) => {
                   <div className="p-1.5 bg-white rounded-md shadow-sm text-blue-600">
                     <Code2 size={16} />
                   </div>
-                  <span className="text-sm font-semibold text-gray-700">Generated DDL (SQL)</span>
+                  <span className="text-sm font-semibold text-gray-700">Generated DDL</span>
                 </div>
                 <div ref={ddlScrollRef} className="flex-1 p-5 overflow-y-auto font-mono text-xs leading-6 bg-white text-gray-700">
                   {ddlText ? (
@@ -557,9 +558,10 @@ export const Dashboard: React.FC<DashboardProps> = ({ onProjectSelect }) => {
                       <StreamingViewer text={ddlText} />
                     </code></pre>
                   ) : (
-                    <div className="h-full flex flex-col items-center justify-center text-gray-600 gap-2">
-                      <Code2 size={32} className="opacity-20" />
-                      <p>// Waiting for Schema lock...</p>
+                    <div className="h-full flex flex-col items-center justify-center text-gray-400 gap-2">
+                      <Loader2 size={32} className="animate-spin opacity-20" />
+                      {/* 修改：添加 text-sm 和 font-sans，覆盖父级的 font-mono 和 text-xs */}
+                      <p className="text-sm font-sans">Waiting for DDL stream...</p>
                     </div>
                   )}
                 </div>

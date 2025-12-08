@@ -271,7 +271,7 @@ export const Glossary: React.FC = () => {
       <div className="flex-shrink-0 flex flex-col gap-6 mb-4">
         <div className="flex justify-between items-center">
           <h2 className="text-2xl font-bold text-gray-800 flex items-center gap-2">
-            <Book className="text-primary" /> 业务术语表 (Glossary)
+            业务术语表
           </h2>
           {/* 项目选择器 (绑定真实数据) */}
           <div className="flex items-center gap-2 bg-white px-3 py-2 rounded-md border border-gray-300 shadow-sm">
