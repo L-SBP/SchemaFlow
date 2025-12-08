@@ -2,12 +2,12 @@ import client from './client';
 // 引入类型定义
 import { ProjectDTO } from '../types';
 
-// 修复：当启用 isolatedModules 时，必须显式使用 export type 来重新导出类型
 export type { ProjectDTO };
 
+// 修正：增加 SQLite 到类型定义中
 export interface CreateProjectParams {
   name: string;
-  type: 'MySQL' | 'PostgreSQL';
+  type: 'MySQL' | 'PostgreSQL' | 'SQLite';
   description: string;
 }
 
@@ -27,7 +27,7 @@ export interface ConfirmDeleteResponse {
 // 1. 获取项目列表
 export const fetchProjects = async (): Promise<ProjectDTO[]> => {
   const response = await client.get('/v1/projects/');
-  // 适配: 假设后端返回 { items: [...] } 或直接数组，这里做个兼容
+  // 适配: 后端返回 { items: [...] }
   return (response as any).items || response.data || response || [];
 };
 
@@ -36,7 +36,7 @@ export const createProject = async (params: CreateProjectParams): Promise<{ proj
   // 对应文档: POST /api/v1/projects/
   const response = await client.post('/v1/projects/', {
     project_name: params.name,
-    db_type: params.type.toLowerCase(), // 确保转为小写 mysql/postgresql
+    db_type: params.type.toLowerCase(), // 确保转为小写: mysql/postgresql/sqlite
     description: params.description
   });
   return response as any;

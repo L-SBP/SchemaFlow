@@ -5,9 +5,11 @@ export enum UserRole {
 
 export enum UserStatus {
   NORMAL = 'NORMAL',
-  BANNED = 'BANNED'
+  BANNED = 'BANNED',
+  SUSPENDED = 'SUSPENDED'
 }
 
+// 通用 User 接口（用于前端应用内部状态）
 export interface User {
   id: string;
   username: string;
@@ -24,9 +26,9 @@ export interface User {
 export interface Project {
   id: string;
   name: string;
-  type: 'MySQL' | 'PostgreSQL';
+  type: 'MySQL' | 'PostgreSQL' | 'SQLite';
   description: string;
-  status: 'active' | 'deploying' | 'error';
+  status: 'active' | 'deploying' | 'error' | 'deleted';
   createdAt: string;
 }
 
@@ -39,24 +41,23 @@ export interface QueryResult {
   data: any[];
 }
 
-// 更新 Message 接口以兼容 API 返回的数据结构
 export interface Message {
   id: string;
-  role: 'user' | 'model'; // 对应 API 的 'user' | 'assistant'
+  role: 'user' | 'model';
   text: string;
   type: 'text' | 'table' | 'chart' | 'error' | 'code-block';
   tableData?: QueryResult;
   chartData?: ChartData[];
-  sql?: string;           // 对应 API sql_text
+  sql?: string;
   code?: string;
   language?: string;
   timestamp: number;
   status?: 'pending' | 'executed' | 'cancelled';
-  requiresConfirmation?: boolean; // 新增：对应 API requires_confirmation
+  requiresConfirmation?: boolean;
 }
 
 export interface ChatSession {
-  id: string;        // 前端使用 string ID，对应后端 session_id (number)
+  id: string;
   name: string;
   messages: Message[];
   updatedAt: number;
@@ -90,6 +91,7 @@ export interface Report {
   updatedAt: string;
 }
 
+// 旧的 RiskEvent 接口，保留以防有遗留引用，但主要使用 ViolationLogListItem
 export interface RiskEvent {
   id: string;
   type: 'sql_injection' | 'abnormal_login' | 'high_frequency';
@@ -108,42 +110,34 @@ export interface ApiResponse<T = any> {
 
 export interface CreateProjectParams {
   name: string;
-  type: 'MySQL' | 'PostgreSQL';
+  type: 'MySQL' | 'PostgreSQL' | 'SQLite';
   description: string;
 }
 
 export type CreationStage = 'initializing' | 'analyzing' | 'generating_schema' | 'generating_ddl' | 'deploying' | 'completed';
 
-// 对应文档中的 ProjectResponse 数据模型
 export interface ProjectDTO {
   project_id: string;
   project_name: string;
-  project_type: 'MySQL' | 'PostgreSQL';
+  db_type: 'mysql' | 'postgresql' | 'sqlite';
   description: string;
-  project_status: 'initializing' | 'active' | 'error';
+  project_status: 'initializing' | 'active' | 'error' | 'deleted';
   created_at: string;
   updated_at?: string;
-
-  // 详情字段 (用于进度展示)
   creation_stage?: CreationStage;
   progress_percentage?: number;
-
-  // 核心生成结果
-  schema_definition?: Record<string, any>; // 对应文档 schema_definition
-  analysis_result?: string; // Schema 分析文本
-  ddl_result?: string;      // SQL DDL
-
+  schema_definition?: Record<string, any>;
+  analysis_result?: string;
+  ddl_result?: string;
   deployment_logs?: string[];
 }
-
-// --- 业务术语管理类型 (Knowledge) ---
 
 export interface KnowledgeTerm {
   knowledge_id: number;
   project_id: number;
-  term: string;       // 业务术语名称
-  definition: string; // 术语定义
-  examples?: string | null; // 使用示例
+  term: string;
+  definition: string;
+  examples?: string | null;
   created_at: string;
 }
 
@@ -178,4 +172,62 @@ export interface KnowledgeImportResponse {
 export interface KnowledgeExportResponse {
   download_url: string;
   expires_at: string;
+}
+
+// --- Admin API Response Types ---
+
+export interface AdminStats {
+  active_users_today: number;
+  total_projects: number;
+  query_count_today: number;
+  high_risk_operations_today: number;
+  system_health: 'good' | 'warning' | 'critical';
+}
+
+export interface AdminUserListItem {
+  user_id: number;
+  username: string;
+  email: string;
+  status: 'normal' | 'suspended' | 'banned';
+  project_count: number;
+  max_databases: number;
+  last_login_at: string | null;
+}
+
+export interface AdminUserListResponse {
+  total: number;
+  page: number;
+  page_size: number;
+  items: AdminUserListItem[];
+}
+
+export interface AdminListItem {
+  user_id: number;
+  username: string;
+  email: string;
+  last_login_at: string;
+  is_online: boolean;
+}
+
+export interface AdminListResponse {
+  total: number;
+  page: number;
+  page_size: number;
+  items: AdminListItem[];
+}
+
+export interface ViolationLogListItem {
+  violation_id: number;
+  user_id: number;
+  username: string;
+  risk_level: 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL';
+  resolution_status: 'pending' | 'in_progress' | 'resolved' | 'ignored';
+  created_at: string;
+}
+
+export interface ViolationLogListResponse {
+  total: number;
+  page: number;
+  page_size: number;
+  items: ViolationLogListItem[];
 }

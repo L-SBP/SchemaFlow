@@ -1,7 +1,7 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Sidebar } from './components/Sidebar.tsx';
 import { Header } from './components/Header.tsx';
-import { ToastContainer } from './components/UI.tsx'; // 引入全局 Toast 容器
+import { ToastContainer } from './components/UI.tsx';
 import { Login } from './pages/Login.tsx';
 import { Dashboard } from './pages/Dashboard.tsx';
 import { Workspace } from './pages/Workspace.tsx';
@@ -13,34 +13,82 @@ import { Glossary } from './pages/Glossary.tsx';
 import { Profile } from './pages/Profile.tsx';
 import { AdminStatus } from './pages/AdminStatus.tsx';
 import { Announcements } from './pages/Announcements.tsx';
-import { UserRole, Project, User, UserStatus } from './types.ts';
+import { UserRole, Project, User } from './types.ts';
 import { authApi } from './api/auth.ts';
+import { getUserProfile } from './api/user.ts'; // 新增：引入获取用户信息接口
 import { ProjectDTO } from './api/project.ts';
+import { Loader2 } from 'lucide-react'; // 新增：引入 Loading 图标
 
-// Mock initial projects (仅保留用于 Reports 的兜底显示，Glossary 已改为真实数据)
+// Mock initial projects (仅保留用于 Reports 的兜底显示)
 const INITIAL_PROJECTS: Project[] = [
   { id: '1', name: '电商订单系统', type: 'MySQL', description: '处理用户订单和库存', status: 'active', createdAt: '2025-10-20' },
   { id: '2', name: 'CRM客户管理', type: 'PostgreSQL', description: '销售线索跟踪', status: 'active', createdAt: '2025-10-25' },
 ];
 
-// Mock initial users
-const INITIAL_USERS: User[] = [
-  { id: '1001', username: 'wang_li', email: 'wang@example.com', role: UserRole.USER, status: UserStatus.BANNED, lastLogin: '2025-10-28', projectQuota: 5 },
-  { id: '1002', username: 'li_guo', email: 'li@example.com', role: UserRole.USER, status: UserStatus.NORMAL, lastLogin: '2025-11-04', projectQuota: 10 },
-  { id: '1003', username: 'admin_sys', email: 'admin@sys.com', role: UserRole.ADMIN, status: UserStatus.NORMAL, lastLogin: '2025-11-05', projectQuota: 99 },
-  { id: '1004', username: 'user_test', email: 'test@example.com', role: UserRole.USER, status: UserStatus.NORMAL, lastLogin: '2025-11-06', projectQuota: 2 },
-];
-
 const App: React.FC = () => {
+  // 新增：isLoading 状态，用于在检查 Token 时显示加载动画，防止登录页闪烁
+  const [isLoading, setIsLoading] = useState(true);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [currentUser, setCurrentUser] = useState<{ role: UserRole, name: string, avatar_url?: string } | null>(null);
   const [activePage, setActivePage] = useState('dashboard');
 
   // Shared State
   const [projects, setProjects] = useState<Project[]>(INITIAL_PROJECTS);
-  const [users, setUsers] = useState<User[]>(INITIAL_USERS);
   const [selectedProject, setSelectedProject] = useState<Project | null>(null);
   const [viewingUser, setViewingUser] = useState<User | null>(null);
+
+  // --- 新增：初始化时检查登录状态 ---
+  useEffect(() => {
+    const initAuth = async () => {
+      const token = localStorage.getItem('access_token');
+
+      // 如果没有 Token，直接结束加载，显示登录页
+      if (!token) {
+        setIsLoading(false);
+        return;
+      }
+
+      try {
+        // 有 Token，尝试获取用户信息来验证 Token 是否过期
+        // 注意：这里复用了 Profile.tsx 中的数据处理逻辑
+        const res = await getUserProfile() as any;
+
+        let userData = null;
+        // 兼容后端可能返回直接对象或 { code: 200, data: ... } 的结构
+        if (res && res.user_id) {
+          userData = res;
+        } else if (res && res.data && res.data.user_id) {
+          userData = res.data;
+        }
+
+        if (userData) {
+          // Token 有效，恢复登录状态
+          const role = userData.is_admin ? UserRole.ADMIN : UserRole.USER;
+          setCurrentUser({
+            role,
+            name: userData.username,
+            avatar_url: userData.avatar_url
+          });
+          setIsAuthenticated(true);
+
+          // 根据角色恢复默认页面
+          setActivePage(role === UserRole.ADMIN ? 'admin_users' : 'dashboard');
+        } else {
+          throw new Error('Invalid user data');
+        }
+      } catch (error) {
+        console.warn('Auto login failed (Token expired or invalid):', error);
+        // Token 无效，清除它
+        localStorage.removeItem('access_token');
+        setIsAuthenticated(false);
+        setCurrentUser(null);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    initAuth();
+  }, []);
 
   const handleLogin = (role: UserRole, username: string, avatar_url?: string) => {
     setIsAuthenticated(true);
@@ -63,7 +111,6 @@ const App: React.FC = () => {
     }
   };
 
-  // 接收 ProjectDTO 并转换为 Project
   const handleProjectSelect = (projectDTO: ProjectDTO) => {
     const project: Project = {
       id: projectDTO.project_id,
@@ -83,28 +130,36 @@ const App: React.FC = () => {
     setActivePage('admin_user_detail');
   };
 
-  const handleUpdateUser = (updatedUser: User) => {
-    setUsers(prev => prev.map(u => u.id === updatedUser.id ? updatedUser : u));
-    if (viewingUser && viewingUser.id === updatedUser.id) {
-      setViewingUser(updatedUser);
-    }
-  };
+  // --- 渲染逻辑 ---
 
+  // 1. 如果正在检查 Token，显示全局 Loading
+  if (isLoading) {
+    return (
+      <div className="flex h-screen w-screen items-center justify-center bg-[#f0f2f5]">
+        <div className="flex flex-col items-center gap-3">
+          <Loader2 className="animate-spin text-primary" size={48} />
+          <p className="text-gray-500 text-sm">正在恢复会话...</p>
+        </div>
+      </div>
+    );
+  }
+
+  // 2. 如果未认证，显示登录页
   if (!isAuthenticated) {
     return (
       <>
-        {/* 在登录页也挂载 ToastContainer，以显示登录失败/网络错误等信息 */}
         <ToastContainer />
         <Login onLogin={handleLogin} />
       </>
     );
   }
 
+  // 3. 已认证，渲染主布局
   const renderContent = () => {
     if (currentUser?.role === UserRole.ADMIN) {
       switch (activePage) {
         case 'admin_users':
-          return <AdminPanel users={users} onUpdateUser={handleUpdateUser} onViewUser={handleViewUser} />;
+          return <AdminPanel onViewUser={handleViewUser} />;
         case 'admin_user_detail':
           return viewingUser ? (
             <UserProfile
@@ -114,11 +169,11 @@ const App: React.FC = () => {
                 setActivePage('admin_users');
               }}
             />
-          ) : <AdminPanel users={users} onUpdateUser={handleUpdateUser} onViewUser={handleViewUser} />;
+          ) : <AdminPanel onViewUser={handleViewUser} />;
         case 'admin_announcements': return <AdminAnnouncements />;
         case 'admin_status': return <AdminStatus />;
         case 'profile': return <Profile user={currentUser} onLogout={handleLogout} />;
-        default: return <AdminPanel users={users} onUpdateUser={handleUpdateUser} onViewUser={handleViewUser} />;
+        default: return <AdminPanel onViewUser={handleViewUser} />;
       }
     } else {
       if (activePage === 'workspace' && selectedProject) {
@@ -131,7 +186,6 @@ const App: React.FC = () => {
       switch (activePage) {
         case 'dashboard': return <Dashboard onProjectSelect={handleProjectSelect} />;
         case 'reports': return <Reports projects={projects} />;
-        // 修复: 移除 projects 属性传递，Glossary 组件将自行请求真实数据
         case 'glossary': return <Glossary />;
         case 'announcements': return <Announcements />;
         case 'profile': return <Profile user={currentUser} onLogout={handleLogout} />;
@@ -141,9 +195,7 @@ const App: React.FC = () => {
   };
 
   return (
-    // 修复：添加 min-w-[1280px] 到根容器，确保整个应用在小屏下不会变形，而是触发浏览器横向滚动条
     <div className="flex h-screen bg-[#f0f2f5] bg-[url('https://gw.alipayobjects.com/zos/rmsportal/TVYTbAXWheQpRcWDaDMu.svg')] bg-center bg-no-repeat bg-contain overflow-hidden min-w-[1440px]">
-      {/* 全局 Toast 容器：必须挂载在应用顶层，确保覆盖在所有内容（包括 Modal）之上 */}
       <ToastContainer />
 
       <Sidebar

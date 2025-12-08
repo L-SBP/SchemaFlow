@@ -19,6 +19,18 @@ const formatDate = (dateString?: string) => {
   return date.toLocaleDateString();
 };
 
+// 辅助函数：格式化数据库类型展示
+const formatDbType = (type?: string) => {
+  if (!type) return 'Unknown';
+  const lower = type.toLowerCase();
+  switch (lower) {
+    case 'mysql': return 'MySQL';
+    case 'postgresql': return 'PostgreSQL';
+    case 'sqlite': return 'SQLite';
+    default: return type.charAt(0).toUpperCase() + type.slice(1);
+  }
+};
+
 // 流式文本展示组件 (模拟打字机效果)
 const StreamingViewer: React.FC<{ text?: string; placeholder?: React.ReactNode }> = ({ text, placeholder }) => {
   const [displayedText, setDisplayedText] = useState('');
@@ -75,8 +87,9 @@ export const Dashboard: React.FC<DashboardProps> = ({ onProjectSelect }) => {
   const [visualProgress, setVisualProgress] = useState(0);
 
   // 创建表单状态
+  // 更新：增加 SQLite 类型支持
   const [newProjectName, setNewProjectName] = useState('');
-  const [newProjectType, setNewProjectType] = useState<'MySQL' | 'PostgreSQL'>('MySQL');
+  const [newProjectType, setNewProjectType] = useState<'MySQL' | 'PostgreSQL' | 'SQLite'>('MySQL');
   const [newProjectDesc, setNewProjectDesc] = useState('');
 
   // --- 项目管理状态 (编辑/删除) ---
@@ -189,7 +202,8 @@ export const Dashboard: React.FC<DashboardProps> = ({ onProjectSelect }) => {
     setDeploymentData({
       project_id: 'temp_pending_id',
       project_name: newProjectName,
-      project_type: newProjectType,
+      // @ts-ignore
+      db_type: newProjectType.toLowerCase(),
       description: newProjectDesc,
       project_status: 'initializing',
       created_at: new Date().toISOString(),
@@ -374,8 +388,9 @@ export const Dashboard: React.FC<DashboardProps> = ({ onProjectSelect }) => {
 
                 <div className="mt-auto">
                   <div className="flex items-end justify-between text-xs text-gray-400 pt-4 border-t border-gray-50">
+                    {/* 修正：使用 db_type 并格式化展示 */}
                     <div className="flex items-center gap-1.5 bg-gray-50 px-2 py-1 rounded mb-0.5">
-                      <Server size={12} /> {project.project_type}
+                      <Server size={12} /> {formatDbType(project.db_type)}
                     </div>
                     <div className="flex flex-col items-end gap-1.5">
                       {createdDate && (
@@ -447,19 +462,20 @@ export const Dashboard: React.FC<DashboardProps> = ({ onProjectSelect }) => {
                 <Sparkles size={24} />
               </div>
               <div className="text-sm text-blue-900">
-                <p className="font-bold mb-1 text-base">AI 智能架构师</p>
-                <p className="opacity-90 leading-relaxed">基于大模型。只需用自然语言描述业务场景，系统将自动完成 3NF 范式建模、SQL 生成及环境部署。</p>
+                <p className="font-bold mb-1 text-base">AI 智能部署</p>
+                <p className="opacity-90 leading-relaxed">基于大模型。只需用自然语言描述业务场景，系统将自动完成数据库部署。</p>
               </div>
             </div>
             <div className="space-y-6">
               <Input label="项目名称" placeholder="例如：企业级 CRM 客户管理系统" value={newProjectName} onChange={(e) => setNewProjectName(e.target.value)} />
               <div className="flex flex-col gap-2">
                 <label className="text-sm font-medium text-gray-700">数据库类型</label>
-                <div className="grid grid-cols-2 gap-4">
-                  {(['MySQL', 'PostgreSQL'] as const).map(type => (
+                <div className="grid grid-cols-3 gap-4">
+                  {/* 更新：增加 SQLite 选项 */}
+                  {(['MySQL', 'PostgreSQL', 'SQLite'] as const).map(type => (
                     <div key={type} onClick={() => setNewProjectType(type)} className={`cursor-pointer px-4 py-3 rounded-lg border flex items-center gap-3 transition-all ${newProjectType === type ? 'border-primary bg-blue-50 text-primary ring-1 ring-primary' : 'border-gray-200 hover:border-gray-300 hover:bg-gray-50'}`}>
                       <Database size={18} className={newProjectType === type ? 'text-primary' : 'text-gray-400'} />
-                      <span className="text-sm font-medium">{type === 'MySQL' ? 'MySQL 8.0' : 'PostgreSQL 14'}</span>
+                      <span className="text-sm font-medium">{type === 'MySQL' ? 'MySQL' : type === 'PostgreSQL' ? 'PostgreSQL' : 'SQLite'}</span>
                     </div>
                   ))}
                 </div>

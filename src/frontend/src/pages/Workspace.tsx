@@ -59,13 +59,28 @@ const mapBackendMessageToFrontend = (msg: ChatMessageResponse): Message => {
     };
   }
 
+  // 清洗文本内容，避免 SQL 重复显示
+  let displayText = msg.content || '';
+  const sqlText = msg.sql_text;
+
+  if (sqlText && sqlText.trim()) {
+    // 如果文本内容包含 SQL，则将其移除
+    if (displayText.includes(sqlText)) {
+      displayText = displayText.replace(sqlText, '');
+    }
+    // 额外的清理：移除可能残留的 Markdown 代码块标记 (如 ```sql ```)
+    // 这一步是为了防止后端返回格式为 "Here is SQL:\n```sql\nSELECT...\n```" 的情况
+    displayText = displayText.replace(/```sql\s*```/gi, '').replace(/```\s*```/g, '');
+    displayText = displayText.trim();
+  }
+
   // 2. 映射字段
   return {
     id: msg.message_id.toString(),
     role: msg.message_type === 'assistant' ? 'model' : 'user',
-    text: msg.content || '', // 确保文本不为 null
+    text: displayText, // 使用清洗后的文本
     type: type,
-    sql: msg.sql_text || undefined, // SQL 语句
+    sql: sqlText || undefined, // SQL 语句
     tableData: tableData,
     timestamp: Date.now(), // 历史接口暂无时间戳，使用当前时间
     requiresConfirmation: msg.requires_confirmation // 是否需要确认
@@ -325,8 +340,8 @@ export const Workspace: React.FC<WorkspaceProps> = ({ project, onBack }) => {
               key={session.id}
               onClick={() => setActiveSessionId(session.id)}
               className={`group flex items-center gap-3 px-3 py-3 rounded-lg text-sm cursor-pointer transition-colors border border-transparent ${activeSessionId === session.id
-                  ? 'bg-white border-gray-200 shadow-sm text-primary'
-                  : 'text-gray-600 hover:bg-gray-200/50'
+                ? 'bg-white border-gray-200 shadow-sm text-primary'
+                : 'text-gray-600 hover:bg-gray-200/50'
                 }`}
             >
               <MessageSquare size={16} className="shrink-0" />
@@ -419,17 +434,19 @@ export const Workspace: React.FC<WorkspaceProps> = ({ project, onBack }) => {
 
                         {/* 气泡内容 */}
                         <div className={`rounded-2xl px-5 py-4 shadow-sm ${msg.role === 'user'
-                            ? 'bg-primary text-white rounded-tr-none'
-                            : 'bg-white border border-gray-200 text-gray-800 rounded-tl-none'
+                          ? 'bg-primary text-white rounded-tr-none'
+                          : 'bg-white border border-gray-200 text-gray-800 rounded-tl-none'
                           }`}>
-                          {/* 文本内容 */}
-                          <div className="text-sm min-h-[1.25em]">
-                            {shouldAnimate ? (
-                              <Typewriter text={msg.text} onComplete={() => setIsTyping(false)} />
-                            ) : (
-                              <div className="whitespace-pre-wrap leading-relaxed">{msg.text}</div>
-                            )}
-                          </div>
+                          {/* 文本内容: 仅当文本非空时显示 */}
+                          {msg.text && (
+                            <div className="text-sm min-h-[1.25em]">
+                              {shouldAnimate ? (
+                                <Typewriter text={msg.text} onComplete={() => setIsTyping(false)} />
+                              ) : (
+                                <div className="whitespace-pre-wrap leading-relaxed">{msg.text}</div>
+                              )}
+                            </div>
+                          )}
 
                           {/* SQL 代码块 (如果有) */}
                           {msg.sql && (

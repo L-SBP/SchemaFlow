@@ -1,232 +1,183 @@
-import React, { useState } from 'react';
-import { Card, Button, Tag, ProgressBar } from '../components/UI.tsx';
-import { Activity, Server, Shield, Users, AlertTriangle, Zap, CheckCircle2, Clock } from 'lucide-react';
-import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ComposedChart, Bar, Line, Legend } from 'recharts';
-import { User, UserRole, RiskEvent } from '../types.ts';
-
-// --- Mock Data: 静态演示数据 ---
-
-// 模拟管理员在线状态
-const MOCK_ADMINS: User[] = [
-    { id: '1003', username: 'admin_sys', email: 'admin@sys.com', role: UserRole.ADMIN, status: 'NORMAL' as any, lastLogin: '2025-11-05 14:00', projectQuota: 99, isOnline: true, lastLoginIp: '192.168.1.5' },
-    { id: '1004', username: 'admin_sec', email: 'sec@sys.com', role: UserRole.ADMIN, status: 'NORMAL' as any, lastLogin: '2025-11-05 10:00', projectQuota: 99, isOnline: false, lastLoginIp: '10.0.0.2' },
-];
-
-// 模拟系统资源负载（CPU/内存）数据序列
-const RESOURCE_DATA = [
-    { time: '10:00', cpu: 45, memory: 60, requests: 1200 },
-    { time: '11:00', cpu: 55, memory: 65, requests: 1500 },
-    { time: '12:00', cpu: 80, memory: 75, requests: 2800 },
-    { time: '13:00', cpu: 70, memory: 70, requests: 2200 },
-    { time: '14:00', cpu: 60, memory: 65, requests: 1800 },
-    { time: '15:00', cpu: 50, memory: 62, requests: 1600 },
-];
-
-// 模拟用户活跃度（DAU/QPS）数据序列
-const ACTIVITY_DATA = [
-    { date: '11-01', dau: 450, qps: 2300 },
-    { date: '11-02', dau: 470, qps: 2500 },
-    { date: '11-03', dau: 420, qps: 2100 },
-    { date: '11-04', dau: 510, qps: 3200 },
-    { date: '11-05', dau: 550, qps: 3500 },
-];
-
-// 模拟安全风险事件队列
-const MOCK_RISKS: RiskEvent[] = [
-    { id: 'r1', type: 'sql_injection', level: 'high', sourceIp: '203.0.113.42', description: '检测到 SQL 注入尝试: SELECT * FROM users --', timestamp: '2025-11-05 14:22:10', status: 'pending' },
-    { id: 'r2', type: 'abnormal_login', level: 'medium', sourceIp: '198.51.100.12', description: '同一 IP 连续失败登录 5 次', timestamp: '2025-11-05 13:15:00', status: 'blocked' },
-    { id: 'r3', type: 'high_frequency', level: 'low', sourceIp: '192.168.1.105', description: 'API 调用频率超过阈值 (100/min)', timestamp: '2025-11-05 12:30:00', status: 'ignored' },
-];
+import React, { useState, useEffect } from 'react';
+import { Card, Tag } from '../components/UI.tsx';
+import { Activity, Server, Users, AlertTriangle, Zap, ShieldAlert } from 'lucide-react';
+import { AdminStats, AdminListItem, ViolationLogListItem } from '../types.ts';
+import { adminApi } from '../api/admin.ts';
 
 /**
  * 管理员系统监控面板
- * * 展示系统核心指标、实时图表以及安全风险控制台。
+ * * 严格对接真实 API: Dashboard Stats, Admin List, Violations
+ * * 移除所有无后端接口支持的图表和模拟数据
  */
 export const AdminStatus: React.FC = () => {
-    // 风险事件状态，支持本地交互（阻断/忽略）
-    const [risks, setRisks] = useState<RiskEvent[]>(MOCK_RISKS);
+    // --- 状态管理 ---
+    const [stats, setStats] = useState<AdminStats | null>(null);
+    const [admins, setAdmins] = useState<AdminListItem[]>([]);
+    const [violations, setViolations] = useState<ViolationLogListItem[]>([]);
+    const [isLoading, setIsLoading] = useState(true);
 
-    /**
-     * 处理风险事件
-     * @param {string} id - 风险事件 ID
-     * @param {'blocked' | 'ignored'} action - 采取的操作类型
-     */
-    const handleRiskAction = (id: string, action: 'blocked' | 'ignored') => {
-        setRisks(risks.map(r => r.id === id ? { ...r, status: action } : r));
-    };
+    // --- 数据获取 ---
+    useEffect(() => {
+        const fetchAllData = async () => {
+            setIsLoading(true);
+            try {
+                // 并发请求所有数据
+                const [statsRes, adminsRes, violationsRes] = await Promise.all([
+                    adminApi.getDashboardStats(),
+                    adminApi.getAdmins(1, 100), // 获取更多在线管理员
+                    adminApi.getViolations(1, 20) // 获取最新20条违规
+                ]);
+
+                setStats(statsRes);
+                setAdmins(adminsRes.items);
+                setViolations(violationsRes.items);
+            } catch (error) {
+                console.error("Failed to load admin status data", error);
+            } finally {
+                setIsLoading(false);
+            }
+        };
+
+        fetchAllData();
+    }, []);
 
     return (
         <div className="p-8 max-w-7xl mx-auto h-full overflow-y-auto space-y-8">
-            <h2 className="text-2xl font-bold text-gray-800 flex items-center gap-2">
-                <Activity className="text-primary" /> 系统运行状态
-            </h2>
+            <div className="flex justify-between items-center">
+                <h2 className="text-2xl font-bold text-gray-800 flex items-center gap-2">
+                    <Activity className="text-primary" /> 系统运行状态
+                </h2>
+                <div className="text-sm text-gray-500">
+                    数据最后更新: {new Date().toLocaleTimeString()}
+                </div>
+            </div>
 
-            {/* 1. 核心指标卡片 (Metrics Cards) */}
+            {/* 1. 核心指标卡片 (Real API Data: GET /dashboard/stats) */}
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-                <Card className="bg-gradient-to-br from-blue-50 to-white border-blue-100">
+                <Card className={`bg-gradient-to-br from-blue-50 to-white border-blue-100 ${isLoading ? 'animate-pulse' : ''}`}>
                     <div className="flex items-center gap-3 mb-2 text-blue-600">
                         <Server size={20} />
-                        <span className="font-bold">系统可用性</span>
+                        <span className="font-bold">系统健康度</span>
                     </div>
-                    <div className="text-2xl font-bold text-gray-800">99.98%</div>
-                    <p className="text-xs text-green-600 mt-1 flex items-center gap-1"><CheckCircle2 size={10} /> 运行正常</p>
+                    <div className="text-2xl font-bold text-gray-800 capitalize">
+                        {stats?.system_health || '-'}
+                    </div>
+                    <p className={`text-xs mt-1 flex items-center gap-1 font-medium ${stats?.system_health === 'good' ? 'text-green-600' : 'text-red-500'}`}>
+                        状态: {stats?.system_health === 'good' ? '良好' : '异常'}
+                    </p>
                 </Card>
-                {/* ... 其他指标卡片 ... */}
+
                 <Card className="bg-gradient-to-br from-purple-50 to-white border-purple-100">
                     <div className="flex items-center gap-3 mb-2 text-purple-600">
-                        <Zap size={20} />
-                        <span className="font-bold">P95 响应时间</span>
+                        <Users size={20} />
+                        <span className="font-bold">今日活跃用户</span>
                     </div>
-                    <div className="text-2xl font-bold text-gray-800">45ms</div>
-                    <p className="text-xs text-gray-500 mt-1">目标: &lt;50ms</p>
+                    <div className="text-2xl font-bold text-gray-800">{stats?.active_users_today ?? 0}</div>
+                    <p className="text-xs text-purple-400 mt-1">Active Users Today</p>
                 </Card>
+
                 <Card className="bg-gradient-to-br from-green-50 to-white border-green-100">
                     <div className="flex items-center gap-3 mb-2 text-green-600">
-                        <CheckCircle2 size={20} />
-                        <span className="font-bold">部署成功率</span>
+                        <Zap size={20} />
+                        <span className="font-bold">今日查询量</span>
                     </div>
-                    <div className="text-2xl font-bold text-gray-800">98.5%</div>
-                    <p className="text-xs text-green-600 mt-1">昨日: 98.2%</p>
+                    <div className="text-2xl font-bold text-gray-800">{stats?.query_count_today ?? 0}</div>
+                    <p className="text-xs text-green-600 mt-1">Queries Processed</p>
                 </Card>
+
                 <Card className="bg-gradient-to-br from-orange-50 to-white border-orange-100">
                     <div className="flex items-center gap-3 mb-2 text-orange-600">
                         <AlertTriangle size={20} />
-                        <span className="font-bold">待处理风险</span>
+                        <span className="font-bold">高危拦截</span>
                     </div>
-                    <div className="text-2xl font-bold text-gray-800">{risks.filter(r => r.status === 'pending').length}</div>
-                    <p className="text-xs text-orange-600 mt-1">高危事件: {risks.filter(r => r.status === 'pending' && r.level === 'high').length}</p>
+                    <div className="text-2xl font-bold text-gray-800">{stats?.high_risk_operations_today ?? 0}</div>
+                    <p className="text-xs text-orange-600 mt-1">Blocked Operations</p>
                 </Card>
             </div>
 
-            {/* 2. 可视化图表 (Charts) */}
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                {/* 资源负载监控: 面积图 */}
-                <Card title="资源负载监控 (实时)">
-                    <div className="h-64 w-full">
-                        <ResponsiveContainer width="100%" height="100%">
-                            <AreaChart data={RESOURCE_DATA}>
-                                <defs>
-                                    <linearGradient id="colorCpu" x1="0" y1="0" x2="0" y2="1">
-                                        <stop offset="5%" stopColor="#1677ff" stopOpacity={0.8} />
-                                        <stop offset="95%" stopColor="#1677ff" stopOpacity={0} />
-                                    </linearGradient>
-                                    <linearGradient id="colorMem" x1="0" y1="0" x2="0" y2="1">
-                                        <stop offset="5%" stopColor="#52c41a" stopOpacity={0.8} />
-                                        <stop offset="95%" stopColor="#52c41a" stopOpacity={0} />
-                                    </linearGradient>
-                                </defs>
-                                <XAxis dataKey="time" fontSize={12} tickLine={false} />
-                                <YAxis fontSize={12} tickLine={false} />
-                                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f0f0f0" />
-                                <Tooltip />
-                                <Area type="monotone" dataKey="cpu" stroke="#1677ff" fillOpacity={1} fill="url(#colorCpu)" name="CPU %" />
-                                <Area type="monotone" dataKey="memory" stroke="#52c41a" fillOpacity={1} fill="url(#colorMem)" name="Memory %" />
-                            </AreaChart>
-                        </ResponsiveContainer>
-                    </div>
-                </Card>
-
-                {/* 用户活跃度: 组合图 (柱状图+折线图) */}
-                <Card title="用户活跃度趋势">
-                    <div className="h-64 w-full">
-                        <ResponsiveContainer width="100%" height="100%">
-                            <ComposedChart data={ACTIVITY_DATA}>
-                                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f0f0f0" />
-                                <XAxis dataKey="date" fontSize={12} />
-                                <YAxis yAxisId="left" fontSize={12} />
-                                <YAxis yAxisId="right" orientation="right" fontSize={12} />
-                                <Tooltip />
-                                <Legend />
-                                <Bar yAxisId="left" dataKey="dau" fill="#1677ff" name="日活用户 (DAU)" barSize={30} radius={[4, 4, 0, 0]} />
-                                <Line yAxisId="right" type="monotone" dataKey="qps" stroke="#faad14" strokeWidth={3} name="查询量 (QPS)" />
-                            </ComposedChart>
-                        </ResponsiveContainer>
-                    </div>
-                </Card>
-            </div>
-
-            {/* 3. 风险控制与管理员列表 */}
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                {/* 安全风险管控表格 - 修复布局变形问题 */}
-                <div className="lg:col-span-2">
-                    <Card title="安全风险管控" className="h-full">
-                        {/* 容器已具备横向滚动能力，但在表格未设置最小宽度时不会触发 */}
-                        <div className="overflow-x-auto">
-                            {/* 修复：添加 min-w-[800px] 强制表格最小宽度，防止内容挤压 */}
-                            <table className="w-full text-left text-sm min-w-[800px]">
-                                <thead className="bg-gray-50 border-b border-gray-200">
+            {/* 2. 数据列表区域 */}
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 h-[calc(100vh-300px)] min-h-[500px]">
+                {/* 违规审计日志 (Real API Data: GET /violations) */}
+                <div className="lg:col-span-2 h-full flex flex-col">
+                    <Card title="安全违规审计日志" className="flex-1 flex flex-col overflow-hidden" extra={<span className="text-xs text-gray-400">最新20条</span>}>
+                        <div className="overflow-auto flex-1">
+                            <table className="w-full text-left text-sm min-w-[500px]">
+                                <thead className="bg-gray-50 border-b border-gray-200 sticky top-0 z-10">
                                     <tr>
-                                        {/* 修复：表头添加 whitespace-nowrap 禁止换行 */}
-                                        <th className="px-4 py-3 whitespace-nowrap">风险类型</th>
-                                        <th className="px-4 py-3 whitespace-nowrap">源IP</th>
-                                        <th className="px-4 py-3 whitespace-nowrap">描述</th>
-                                        <th className="px-4 py-3 whitespace-nowrap">状态</th>
-                                        <th className="px-4 py-3 text-right whitespace-nowrap">操作</th>
+                                        <th className="px-4 py-3 whitespace-nowrap bg-gray-50">风险等级</th>
+                                        <th className="px-4 py-3 whitespace-nowrap bg-gray-50">用户</th>
+                                        <th className="px-4 py-3 whitespace-nowrap bg-gray-50">处理状态</th>
+                                        <th className="px-4 py-3 whitespace-nowrap bg-gray-50 text-right">时间</th>
                                     </tr>
                                 </thead>
                                 <tbody className="divide-y divide-gray-100">
-                                    {risks.map(risk => (
-                                        <tr key={risk.id} className="hover:bg-gray-50/50">
+                                    {violations.map(log => (
+                                        <tr key={log.violation_id} className="hover:bg-gray-50/50">
                                             <td className="px-4 py-3 whitespace-nowrap">
                                                 <div className="flex items-center gap-2">
-                                                    {risk.level === 'high' && <AlertTriangle size={14} className="text-red-500" />}
-                                                    {risk.level === 'medium' && <AlertTriangle size={14} className="text-orange-500" />}
-                                                    {risk.level === 'low' && <AlertTriangle size={14} className="text-blue-500" />}
-                                                    <span className="font-medium text-gray-700">
-                                                        {risk.type === 'sql_injection' ? 'SQL注入' : risk.type === 'abnormal_login' ? '异常登录' : '高频调用'}
+                                                    {log.risk_level === 'CRITICAL' || log.risk_level === 'HIGH' ? (
+                                                        <ShieldAlert size={14} className="text-red-500" />
+                                                    ) : (
+                                                        <AlertTriangle size={14} className="text-orange-400" />
+                                                    )}
+                                                    <span className={`font-medium ${log.risk_level === 'CRITICAL' ? 'text-red-600' : 'text-gray-700'}`}>
+                                                        {log.risk_level}
                                                     </span>
                                                 </div>
                                             </td>
-                                            <td className="px-4 py-3 font-mono text-xs text-gray-500 whitespace-nowrap">{risk.sourceIp}</td>
-                                            {/* 描述列：保留 truncate 以限制过长文本，无需 whitespace-nowrap，因为 truncate 已包含不换行属性 */}
-                                            <td className="px-4 py-3 text-gray-600 max-w-[200px] truncate" title={risk.description}>{risk.description}</td>
-                                            <td className="px-4 py-3 whitespace-nowrap">
-                                                <Tag color={risk.status === 'pending' ? 'orange' : risk.status === 'blocked' ? 'red' : 'green'}>
-                                                    {risk.status === 'pending' ? '待处理' : risk.status === 'blocked' ? '已阻断' : '已忽略'}
+                                            <td className="px-4 py-3 text-gray-600">
+                                                {log.username} <span className="text-xs text-gray-400">(ID:{log.user_id})</span>
+                                            </td>
+                                            <td className="px-4 py-3">
+                                                <Tag color={log.resolution_status === 'resolved' ? 'green' : log.resolution_status === 'pending' ? 'orange' : 'gray'}>
+                                                    {log.resolution_status}
                                                 </Tag>
                                             </td>
-                                            <td className="px-4 py-3 text-right whitespace-nowrap">
-                                                {risk.status === 'pending' && (
-                                                    <div className="flex justify-end gap-2">
-                                                        <Button variant="danger" className="h-7 px-2 text-xs" onClick={() => handleRiskAction(risk.id, 'blocked')}>阻断</Button>
-                                                        <Button variant="default" className="h-7 px-2 text-xs" onClick={() => handleRiskAction(risk.id, 'ignored')}>忽略</Button>
-                                                    </div>
-                                                )}
+                                            <td className="px-4 py-3 text-gray-500 text-xs whitespace-nowrap text-right">
+                                                {new Date(log.created_at).toLocaleString()}
                                             </td>
                                         </tr>
                                     ))}
+                                    {violations.length === 0 && (
+                                        <tr><td colSpan={4} className="text-center py-12 text-gray-400">暂无违规记录</td></tr>
+                                    )}
                                 </tbody>
                             </table>
                         </div>
                     </Card>
                 </div>
 
-                {/* 管理员在线状态列表 */}
-                <div className="lg:col-span-1">
-                    <Card title="管理员在线状态" className="h-full">
-                        <div className="space-y-4">
-                            {MOCK_ADMINS.map(admin => (
-                                <div key={admin.id} className="flex items-center justify-between border-b border-gray-50 pb-3 last:border-0">
+                {/* 管理员列表 (Real API Data: GET /admins) */}
+                <div className="lg:col-span-1 h-full flex flex-col">
+                    <Card title="管理员列表" className="flex-1 flex flex-col overflow-hidden">
+                        <div className="space-y-4 overflow-y-auto pr-1 flex-1">
+                            {admins.map(admin => (
+                                <div key={admin.user_id} className="flex items-center justify-between border-b border-gray-50 pb-3 last:border-0">
                                     <div className="flex items-center gap-3">
                                         <div className="relative">
-                                            <div className="w-10 h-10 rounded-full bg-gray-100 flex items-center justify-center text-gray-600 font-bold">
+                                            <div className="w-10 h-10 rounded-full bg-blue-50 flex items-center justify-center text-blue-600 font-bold text-sm">
                                                 {admin.username.charAt(0).toUpperCase()}
                                             </div>
-                                            <div className={`absolute bottom-0 right-0 w-3 h-3 rounded-full border-2 border-white ${admin.isOnline ? 'bg-green-500' : 'bg-gray-300'}`}></div>
+                                            <div className={`absolute bottom-0 right-0 w-3 h-3 rounded-full border-2 border-white ${admin.is_online ? 'bg-green-500' : 'bg-gray-300'}`}></div>
                                         </div>
                                         <div>
-                                            <div className="font-medium text-gray-800">{admin.username}</div>
-                                            <div className="text-xs text-gray-500 flex items-center gap-1">
-                                                <Clock size={10} /> {admin.isOnline ? '在线' : `上次: ${admin.lastLogin.split(' ')[1]}`}
-                                            </div>
+                                            <div className="font-medium text-gray-800 text-sm">{admin.username}</div>
+                                            <div className="text-xs text-gray-400">{admin.email}</div>
                                         </div>
                                     </div>
                                     <div className="text-right">
-                                        <div className="text-xs text-gray-400 font-mono">{admin.lastLoginIp}</div>
-                                        <Tag color={admin.isOnline ? 'green' : 'gray'}>{admin.isOnline ? 'Online' : 'Offline'}</Tag>
+                                        <Tag color={admin.is_online ? 'green' : 'gray'}>
+                                            {admin.is_online ? '在线' : '离线'}
+                                        </Tag>
+                                        <div className="text-[10px] text-gray-300 mt-1">
+                                            ID: {admin.user_id}
+                                        </div>
                                     </div>
                                 </div>
                             ))}
+                            {admins.length === 0 && (
+                                <div className="text-center py-8 text-gray-400">暂无管理员信息</div>
+                            )}
                         </div>
                     </Card>
                 </div>
