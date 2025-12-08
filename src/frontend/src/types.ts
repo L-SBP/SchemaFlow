@@ -119,7 +119,7 @@ export type CreationStage = 'initializing' | 'analyzing' | 'generating_schema' |
 export interface ProjectDTO {
   project_id: string;
   project_name: string;
-  db_type: 'mysql' | 'postgresql' | 'sqlite';
+  db_type: 'MySQL' | 'PostgreSQL' | 'SQLite';
   description: string;
   project_status: 'initializing' | 'active' | 'error' | 'deleted';
   created_at: string;

@@ -115,7 +115,7 @@ const App: React.FC = () => {
     const project: Project = {
       id: projectDTO.project_id,
       name: projectDTO.project_name,
-      type: projectDTO.project_type,
+      type: projectDTO.db_type,
       description: projectDTO.description,
       status: projectDTO.project_status === 'initializing' ? 'deploying' : projectDTO.project_status,
       createdAt: projectDTO.created_at

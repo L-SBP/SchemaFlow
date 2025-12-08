@@ -59,18 +59,49 @@ const mapBackendMessageToFrontend = (msg: ChatMessageResponse): Message => {
     };
   }
 
-  // 清洗文本内容，避免 SQL 重复显示
+  // 初始获取内容
   let displayText = msg.content || '';
-  const sqlText = msg.sql_text;
+  let sqlText = msg.sql_text;
 
+  // --- 关键修复：如果后端未返回 sql_text (如历史记录)，尝试从文本提取 ---
+  if (!sqlText) {
+    // 1. 尝试匹配 Markdown 代码块 (```sql ... ```)
+    const markdownMatch = displayText.match(/```(sql)?\s*([\s\S]*?)\s*```/i);
+    if (markdownMatch && markdownMatch[2]) {
+      sqlText = markdownMatch[2].trim();
+    }
+    // 2. 尝试匹配纯文本模式 (针对 "已生成查询语句：" 这种无 Markdown 的场景)
+    else {
+      // 匹配以常见的 SQL 关键字开头 (SELECT/INSERT/UPDATE 等)
+      // (?:...)? 是非捕获组，匹配可选的前缀提示语
+      const plainMatch = displayText.match(/(?:已生成查询语句[：:]\s*)?\n?(SELECT\s+[\s\S]+|INSERT\s+[\s\S]+|UPDATE\s+[\s\S]+|DELETE\s+[\s\S]+|DROP\s+[\s\S]+|CREATE\s+[\s\S]+|ALTER\s+[\s\S]+)/i);
+      if (plainMatch && plainMatch[1]) {
+        // 简单的二次校验：长度大于 10 且包含空格，避免误判
+        const potentialSql = plainMatch[1].trim();
+        if (potentialSql.length > 10) {
+          sqlText = potentialSql;
+        }
+      }
+    }
+  }
+
+  // 如果提取到了 SQL，进行文本清洗，避免重复显示
   if (sqlText && sqlText.trim()) {
-    // 如果文本内容包含 SQL，则将其移除
-    if (displayText.includes(sqlText)) {
+    // 1. 优先移除 Markdown 块
+    const codeBlockRegex = /```(sql)?\s*[\s\S]*?\s*```/gi;
+    if (codeBlockRegex.test(displayText)) {
+      displayText = displayText.replace(codeBlockRegex, '');
+    }
+    // 2. 如果还有残留 (或者原本就是纯文本 SQL)，尝试通过字符串替换移除
+    else if (displayText.includes(sqlText)) {
       displayText = displayText.replace(sqlText, '');
     }
-    // 额外的清理：移除可能残留的 Markdown 代码块标记 (如 ```sql ```)
-    // 这一步是为了防止后端返回格式为 "Here is SQL:\n```sql\nSELECT...\n```" 的情况
-    displayText = displayText.replace(/```sql\s*```/gi, '').replace(/```\s*```/g, '');
+
+    // 3. 移除特定的提示语 (如果 SQL 被提取了，这些提示语也就没用了)
+    displayText = displayText.replace(/已生成查询语句[：:]\s*/g, '');
+
+    // 额外的清理：移除可能残留的空 Markdown 标记
+    displayText = displayText.replace(/```\s*```/g, '');
     displayText = displayText.trim();
   }
 
@@ -80,7 +111,7 @@ const mapBackendMessageToFrontend = (msg: ChatMessageResponse): Message => {
     role: msg.message_type === 'assistant' ? 'model' : 'user',
     text: displayText, // 使用清洗后的文本
     type: type,
-    sql: sqlText || undefined, // SQL 语句
+    sql: sqlText || undefined, // SQL 语句，有值时前端会渲染黑框
     tableData: tableData,
     timestamp: Date.now(), // 历史接口暂无时间戳，使用当前时间
     requiresConfirmation: msg.requires_confirmation // 是否需要确认
@@ -165,6 +196,7 @@ export const Workspace: React.FC<WorkspaceProps> = ({ project, onBack }) => {
       try {
         // 调用后端获取消息历史
         const res = await sessionApi.getMessages(Number(activeSessionId));
+        // 使用更新后的 map 函数处理消息
         const mappedMessages = res.map(mapBackendMessageToFrontend);
 
         setSessions(prev => prev.map(s =>
