@@ -116,3 +116,12 @@ class RedisOperationFailedException(AppException):
     """Redis 操作失败"""
     def __init__(self, operation: str = "operation"):
         super().__init__(code=500, detail=f"Redis {operation} failed")
+
+
+class SQLOperationFailedException(AppException):
+    """SQL执行失败"""
+    def __init__(self, operation: str = "operation", detail: str = ""):
+        if detail:
+            super().__init__(code=500, detail=f"SQL {operation} failed: {detail}")
+        else:
+            super().__init__(code=500, detail=f"SQL {operation} failed")

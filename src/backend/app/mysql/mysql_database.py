@@ -1,11 +1,13 @@
 from typing import Optional
 
+from sqlalchemy import text
+from sqlalchemy.engine import url
 from sqlalchemy.ext.asyncio import AsyncEngine, create_async_engine
 
-from app.config.base import MySQLConfig
-from app.core.exceptions import InvalidOperationException
-from app.core.log import log
-from app.models import DatabaseInstance
+from config.base import MySQLConfig
+from core.exceptions import InvalidOperationException
+from core.log import log
+from models import DatabaseInstance
 
 
 class MysqlHelper:
@@ -19,6 +21,18 @@ class MysqlHelper:
 
     _root_engine: Optional[AsyncEngine] = None
     _user_engine: dict[int, AsyncEngine] = {}
+    _user_exist: set[str] = set()
+
+    # 测试有没有连上MySQL
+    @classmethod
+    async def test_connection(cls):
+        """
+        测试连接
+        :return:
+        """
+        engine = await cls.get_root_engine()
+        async with engine.connect() as conn:
+            await conn.execute(text("select 1"))
 
     @classmethod
     async def init_root_engine(cls, mysql_config: MySQLConfig) -> None:
@@ -42,20 +56,18 @@ class MysqlHelper:
         )
 
     @classmethod
-    async def init_user_engine(cls, mysql_config: MySQLConfig, database_instance: DatabaseInstance):
+    async def init_user_engine(cls, mysql_config: MySQLConfig, instance_id: int, user_database_url: url):
         """
         初始化用户引擎
-        :param mysql_config:
-        :param database_instance:
-        :return:
         """
         connect_args = {
             "auth_plugin": mysql_config.plugin,
             "ssl": mysql_config.ssl
         }
 
-        cls._user_engine[database_instance.instance_id] = create_async_engine(
-            database_instance.user_database_url,
+        log.info(f"init user engine: {user_database_url}")
+        cls._user_engine[instance_id] = create_async_engine(
+            user_database_url,
             connect_args=connect_args,
             pool_size=mysql_config.pool_size,
             pool_recycle=mysql_config.pool_recycle,
@@ -120,3 +132,41 @@ class MysqlHelper:
 
         log.info(f"get user engine: {database_instance.instance_id}")
         return cls._user_engine[database_instance.instance_id]
+
+    @classmethod
+    def is_user_engine_exists(cls, instance_id: int) -> bool:
+        """
+        判断用户引擎是否存在
+        :param instance_id:
+        :return:
+        """
+        return instance_id in cls._user_engine
+
+    @classmethod
+    async def check_user_exists(cls, db_username: str) -> bool:
+        """
+        检查MySQL中是否存在指定用户
+        :param db_username: 数据库用户名
+        :return: 如果用户存在返回True，否则返回False
+        """
+        if cls._root_engine is None:
+            raise InvalidOperationException("请先初始化root用户引擎")
+
+        if db_username in cls._user_exist:
+            return True
+            
+        try:
+            engine = cls._root_engine
+            async with engine.connect() as conn:
+                result = await conn.execute(
+                    text("SELECT User FROM mysql.user WHERE User = :username"), 
+                    {"username": db_username}
+                )
+                user_exists = result.fetchone() is not None
+                await conn.close()
+                if user_exists:
+                    cls._user_exist.add(db_username)
+                return user_exists
+        except Exception as e:
+            log.error(f"检查用户是否存在时出错: {e}")
+            return False
