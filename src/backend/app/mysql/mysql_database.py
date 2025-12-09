@@ -170,3 +170,28 @@ class MysqlHelper:
         except Exception as e:
             log.error(f"检查用户是否存在时出错: {e}")
             return False
+
+    @classmethod
+    async def check_privilege(cls, db_username: str, db_name: str) -> bool:
+        """
+        检查用户对数据库的权限
+        :param db_username: 数据库用户名
+        :param db_name: 数据库名称
+        :return: 如果用户对数据库有读写权限返回True，否则返回False
+        """
+        if cls._root_engine is None:
+            raise InvalidOperationException("请先初始化root用户引擎")
+
+        try:
+            engine = await cls.get_root_engine()
+            async with engine.connect() as conn:
+                result = await conn.execute(
+                    text("SELECT * FROM information_schema.user_privileges WHERE GRANTEE = :username AND TABLE_SCHEMA = :db_name"),
+                    {"username": f"'{db_username}'@'%'", "db_name": db_name}
+                )
+                privileges = result.fetchall()
+                await conn.close()
+                return len(privileges) > 0
+        except Exception as e:
+            log.error(f"检查用户权限时出错: {e}")
+            return False

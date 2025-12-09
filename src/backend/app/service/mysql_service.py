@@ -1,100 +1,74 @@
 from sqlalchemy import URL
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from core.config import config
 from core.log import log
+from crud.crud_database_instance import crud_database_instance
+from crud.crud_project import crud_project
+from models import DatabaseInstance
 from mysql.mysql_database import MysqlHelper
-from mysql.mysql_execute import execute_sql_root
+from mysql.mysql_execute import execute_sql_root, execute_dql_user, execute_dml_user
 
 
-async def create_mysql_user(db_name: str, db_username: str, db_password: str, mysql_url: URL, instance_id: int):
+async def create_mysql_user(db_username: str, db_password: str):
     """创建MySQL用户并使用sha256_password插件"""
-    try:
-        # 创建使用 sha256_password 插件的用户
-        for user_host in ["%", "localhost"]:
-            # 使用 sha256_password 插件创建用户
-            create_sql = (
-                f"CREATE USER '{db_username}'@'{user_host}' "
-                f"IDENTIFIED WITH sha256_password BY '{db_password}'"
-            )
-            await execute_sql_root(create_sql)
-            log.info(f"[MySQL] User {db_username}@{user_host} created with sha256_password")
-
-            # 授予权限
-            grant_sql = f"GRANT ALL PRIVILEGES ON `{db_name}`.* TO '{db_username}'@'{user_host}'"
-            await execute_sql_root(grant_sql)
-            log.info(f"[MySQL] Privileges granted to {db_username}@{user_host} on {db_name}")
-
-        # 刷新权限
-        try:
-            await execute_sql_root("FLUSH PRIVILEGES")
-            log.info(f"[MySQL] Privileges flushed successfully")
-        except Exception as flush_error:
-            log.warning(f"[MySQL] FLUSH PRIVILEGES failed: {str(flush_error)}")
-
-        log.info(f"[MySQL] User setup completed for {db_username}")
-
-        # 重新构建 URL，确保包含正确的认证插件参数
-        from urllib.parse import quote
-        encoded_password = quote(db_password, safe='')
-
-        # 构建使用 sha256_password 的连接 URL
-        sha256_mysql_url = URL.create(
-            drivername="mysql+aiomysql",
-            username=db_username,
-            password=encoded_password,
-            host="localhost",
-            port=3306,
-            database=db_name,
-            query={
-                "auth_plugin": "sha256_password",
-                "charset": "utf8mb4"
-            }
+    # 创建使用 sha256_password 插件的用户
+    for user_host in ["%", "localhost"]:
+        # 使用 sha256_password 插件创建用户
+        create_sql = (
+            f"CREATE USER '{db_username}'@'{user_host}' "
+            f"IDENTIFIED WITH sha256_password BY '{db_password}'"
         )
+        await execute_sql_root(create_sql)
+        log.info(f"[MySQL] User {db_username}@{user_host} created with sha256_password")
 
-        log.info(
-            f"[MySQL] Using sha256_password URL: mysql+aiomysql://{db_username}:***@127.0.0.1:3306/{db_name}?auth_plugin=sha256_password")
+async def grant_privileges(db_name: str, db_username: str):
+    """给用户授权"""
 
-        # 初始化用户引擎
-        try:
-            await MysqlHelper.init_user_engine(config.mysql, instance_id, sha256_mysql_url)
-            log.info(f"[MySQL] User engine initialized successfully with sha256_password")
-        except Exception as engine_error:
-            log.warning(f"[MySQL] Failed to initialize user engine with sha256_password: {str(engine_error)}")
+    for user_host in ["%", "localhost"]:
+        grant_sql = f"GRANT ALL PRIVILEGES ON `{db_name}`.* TO '{db_username}'@'{user_host}'"
+        await execute_sql_root(grant_sql)
+        log.info(f"[MySQL] Privileges granted to {db_username}@{user_host} on {db_name}")
 
-            # 如果 sha256_password 失败，回退到 mysql_native_password
-            log.info("[MySQL] Falling back to mysql_native_password")
+    log.info(f"[MySQL] Privileges granted for {db_username}")
+    await execute_sql_root("FLUSH PRIVILEGES")
+    log.info(f"[MySQL] Privileges flushed successfully")
 
-            # 在 MySQL 中修改用户插件
-            for user_host in ["%", "localhost"]:
-                alter_sql = (
-                    f"ALTER USER '{db_username}'@'{user_host}' "
-                    f"IDENTIFIED WITH mysql_native_password BY '{db_password}'"
-                )
-                try:
-                    await execute_sql_root(alter_sql)
-                    log.info(f"[MySQL] Changed plugin to mysql_native_password for {db_username}@{user_host}")
-                except Exception as alter_error:
-                    log.error(f"[MySQL] Failed to change plugin: {str(alter_error)}")
+async def sql_execute_in_mysql(db: AsyncSession, project_id: int, sql: str, sql_type: str):
+    """
+    在MySQL数据库中执行SQL语句
+    :param db:
+    :param project_id:
+    :param sql_type:
+    :param sql: SQL语句
+    :return:
+    """
+    # 获取数据库实例
+    project = await crud_project.get(db, project_id)
+    instance = await crud_database_instance.get(db, project.instance_id)
 
-            await execute_sql_root("FLUSH PRIVILEGES")
+    # 先检查是否有engine
+    if not MysqlHelper.is_user_engine_exists(instance.instance_id):
+        log.info(f"[MySQL] Engine {instance.instance_id} not exists, creating...")
+        # 如果没有，再检查是否在MySQL创建了用户
+        if not MysqlHelper.check_privilege(instance.db_username, instance.db_name):
+            log.info(f"[MySQL] User {instance.db_username} not exists, creating...")
+            # 没有，则创建用户
+            await create_mysql_user(instance.db_username, instance.db_password)
+        # 检查权限
+        if not MysqlHelper.check_privilege(instance.db_username, instance.db_name):
+            log.error(f"[MySQL] User {instance.db_username} does not have privileges on {instance.db_name}")
+            # 没有权限，则授权
+            await grant_privileges(instance.db_name, instance.db_username)
 
-            # 使用 mysql_native_password 重新尝试
-            native_mysql_url = URL.create(
-                drivername="mysql+aiomysql",
-                username=db_username,
-                password=encoded_password,
-                host="127.0.0.1",
-                port=3306,
-                database=db_name,
-                query={
-                    "auth_plugin": "mysql_native_password",
-                    "charset": "utf8mb4"
-                }
-            )
+        # 现在有用户，有权限，可以初始化引擎
+        await MysqlHelper.init_user_engine(config.mysql, instance.instance_id, instance.user_database_url)
+        log.info(f"[MySQL] Engine {instance.instance_id} created successfully")
 
-            await MysqlHelper.init_user_engine(config.mysql, instance_id, native_mysql_url)
-            log.info(f"[MySQL] User engine initialized successfully with mysql_native_password")
-
-    except Exception as e:
-        log.error(f"[MySQL] Failed to create user: {str(e)}", exc_info=True)
-        raise
+    # 现在有引擎了，执行SQL
+    if sql_type == "SELECT":
+        log.info(f"[MySQL] Executing SQL: {sql}")
+        return await execute_dql_user(sql, instance)
+    else:
+        log.info(f"[MySQL] Executing SQL: {sql}")
+        return await execute_dml_user(sql, instance)

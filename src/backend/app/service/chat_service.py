@@ -17,7 +17,7 @@ from core.log import log
 from mysql.mysql_execute import execute_dql_user, execute_dml_user
 from core.config import config
 from core.exceptions import DatabaseOperationFailedException, SQLOperationFailedException
-from service.mysql_service import create_mysql_user
+from service.mysql_service import create_mysql_user, sql_execute_in_mysql
 
 # -----------------------
 # AI 配置
@@ -29,7 +29,7 @@ AI_API_KEY = "sk-2025texttosql"
 # 【重要】Mock 开关
 # True = 开启模拟模式（不联网，返回假数据，用于开发调试）
 # False = 关闭模拟模式（尝试连接真实 AI）
-MOCK_MODE = False
+MOCK_MODE = True
 
 
 # -----------------------
@@ -211,6 +211,17 @@ async def process_chat(db: AsyncSession, session_id: int, user_input: str, user_
     # 3. 模型生成 SQL
     sql_text = await call_ai_agent(schema_text, user_input)
 
+    if sql_text.startswith("-- Error calling AI:"):
+        return ChatResponse(
+            message_id=user_msg.message_id,
+            content=sql_text,
+            message_type=MessageType.ASSISTANT,
+            sql_text=sql_text,
+            sql_type="",
+            requires_confirmation=False,
+            data=None
+        )
+
     # 4. SQL 类型判断
     sql_type = "UNKNOWN"
     try:
@@ -221,7 +232,11 @@ async def process_chat(db: AsyncSession, session_id: int, user_input: str, user_
     except Exception as e:
         log.warning(f"SQL Parse warning: {e}")
 
-    # 5. 创建 AI 回复消息
+    # 5. 执行 SQL
+    sql_result = await sql_execute_in_mysql(db, project_id, sql_text, sql_type)
+    log.info(f"SQL Result: {sql_result}")
+
+    # 6. 创建 AI 回复消息
     reply_content = f"已生成查询语句：\n{sql_text}"
 
     ai_message = await crud_message.create_message(
@@ -236,5 +251,5 @@ async def process_chat(db: AsyncSession, session_id: int, user_input: str, user_
         sql_text=sql_text,
         sql_type=sql_type,
         requires_confirmation=sql_type in ["INSERT", "UPDATE", "DELETE", "DROP", "ALTER"],
-        data=None
+        data=sql_result
     )
