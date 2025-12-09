@@ -7,6 +7,7 @@ from core.config import config
 from core.log import log
 from core.database import PsqlHelper
 import models
+from mysql.mysql_database import MysqlHelper
 from redis.redis import init_redis, close_redis, get_redis, init_redis_listener, close_redis_listener
 from redis.expiration_listener import redis_expire_listener
 from api.v1.api import api_router
@@ -27,6 +28,12 @@ async def startup_services(app: FastAPI):
     # 初始化数据库连接
     log.info("initialize database linking")
     app.state.psql_engine = await PsqlHelper.init_conn_psql(app.state.config.db)
+
+    # 初始化Mysql连接
+    await MysqlHelper.init_root_engine(config.mysql)
+
+    # 测试Mysql连接
+    await MysqlHelper.test_connection()
 
     # 初始化Redis连接
     log.info("initialize redis linking")

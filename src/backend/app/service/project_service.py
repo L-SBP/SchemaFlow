@@ -12,17 +12,26 @@ import string
 import asyncio
 from bs4 import BeautifulSoup
 
+from core.sql_dialect_converter import SQLDialectConverter
+from core.sql_sort import sort_ddl_by_dependency
 # 隐式绝对导入
 from crud.crud_project import crud_project
 from crud.crud_database_instance import crud_database_instance
 from crud.crud_user_account import crud_user_account
+from mysql.mysql_converter import MySQLConverter
+from mysql.mysql_execute import execute_sql_root
+from mysql.mysql_converter import MySQLConverter
+from mysql.mysql_execute import execute_sql_root
 from schema import project as schemas
 from core.exceptions import ItemNotFoundException, DatabaseOperationFailedException, OperationNotPermittedException, \
     ValidationException
 from core.auth import decode_jwt_token, create_access_token
 from core.config import config
 from core.database import PsqlHelper
+from mysql.mysql_database import MysqlHelper
+from core.log import log
 import re
+from sqlalchemy.exc import SQLAlchemyError
 from pypinyin import lazy_pinyin, Style  # <--- 1. 新增导入
 
 # ==========================================
@@ -173,36 +182,105 @@ async def bg_generate_schema_task(project_id: int, requirements: str, db_name: s
         None, SchemaGenerator.run_generation, requirements, db_name
     )
 
-    # 2. 获取新的数据库会话 (因为 HTTP 请求的 Session 已经关闭)
-    # 注意：这里临时创建一个 Engine，生产环境建议从全局变量导入 async_engine
-    temp_engine = PsqlHelper._get_async_engine(config.db)
+    # # 模拟生成结果
+    # schema_res = "test"
+    # ddl_res = """CREATE DATABASE ce_shi_xiang_mu_1_oaz9;
+    #
+    # CREATE TABLE Hotel (Name TEXT NOT NULL, Address TEXT, Phone TEXT, PRIMARY KEY(Name));
+    #
+    # CREATE TABLE Room (Type TEXT NOT NULL, Price NUMERIC, Quantity NUMERIC, PRIMARY KEY(Type));
+    #
+    # CREATE TABLE Booking (BookingID TEXT NOT NULL, RoomType TEXT NOT NULL, StartDate DATETIME, EndDate DATETIME, PRIMARY KEY(BookingID), FOREIGN KEY(RoomType) REFERENCES Room(Type));
+    #
+    # CREATE TABLE User (UserID TEXT NOT NULL, Name TEXT, Contact TEXT, Discount NUMERIC, CreditCard TEXT, PRIMARY KEY(UserID));
+    #
+    # CREATE TABLE Booking_Room (BookingID TEXT NOT NULL, RoomType TEXT NOT NULL, Duration NUMERIC, RoomPreference TEXT, PRIMARY KEY(BookingID, RoomType), FOREIGN KEY(BookingID) REFERENCES Booking(BookingID), FOREIGN KEY(RoomType) REFERENCES Room(Type));
+    #
+    # CREATE TABLE User_Booking (UserID TEXT NOT NULL, BookingID TEXT NOT NULL, PaymentMethod TEXT, LoyaltyProgram TEXT, PRIMARY KEY(UserID, BookingID), FOREIGN KEY(UserID) REFERENCES User(UserID), FOREIGN KEY(BookingID) REFERENCES Booking(BookingID));"""
+
+
+    db_name_extracted = None
 
     try:
-        if schema_res and ddl_res:
-            print(f"[Task] Generation successful for Project {project_id}")
+        # 1. 执行DDL（创建数据库和表）
+        create_db_match = re.search(r'CREATE\s+DATABASE\s+`?(\w+)`?', ddl_res, re.IGNORECASE)
+        if not create_db_match:
+            raise ValueError("Invalid CREATE DATABASE statement")
+        db_name_extracted = create_db_match.group(1)
 
-            async with PsqlHelper.get_session(temp_engine) as session:
-                # 构造符合 JSONB 的数据结构
+        # 执行数据库创建
+        await execute_sql_root(f"CREATE DATABASE IF NOT EXISTS `{db_name_extracted}`;")
+        await execute_sql_root(f"USE `{db_name_extracted}`;")
+
+        # 执行表创建
+        sorted_statements = sort_ddl_by_dependency(ddl_res, dialect="mysql")
+        for stmt in sorted_statements:
+            if not stmt.strip() or re.search(r'CREATE\s+DATABASE', stmt, re.IGNORECASE):
+                continue
+            log.info(f"[MySQL] Executing: {stmt}")
+            await execute_sql_root(f"{stmt};")
+
+        log.info(f"[MySQL] Schema created successfully for {db_name_extracted}")
+
+        # 2. 更新元数据
+        async with PsqlHelper.get_session(PsqlHelper._get_async_engine(config.db)) as session:
+            async with session.begin():
+                project = await crud_project.get(session, project_id)
+                instance = await crud_database_instance.get(session, project.instance_id)
+
+                # 直接更新实例对象属性
+                instance.db_name = db_name_extracted
+                instance.status = "active"
+
+                # 获取用户名和密码
+                db_username = instance.db_username
+                db_password = instance.db_password
+                instance_id = instance.instance_id
+
+                # 更新项目
                 schema_definition_json = {
-                    "schema": schema_res,  # 原始 Schema 文本
-                    "ddl": ddl_res  # 原始 DDL 语句
+                    "schema": schema_res,
+                    "ddl": ddl_res
                 }
 
-                # 更新项目：写入 JSONB 字段，并将状态改为 active
-                await crud_project.update(
-                    session,
-                    project_id,
-                    schema_definition=schema_definition_json,
-                    project_status='active'
-                )
-        else:
-            print(f"[Task] Generation failed for Project {project_id}")
-            # 可选：更新状态为 error 或保持 initializing
+                project.schema_definition = schema_definition_json
+                project.project_status = 'active'
+
+                # 提交所有更改
+                session.add(instance)
+                session.add(project)
+
+        log.info(f"[PostgreSQL] Schema metadata updated for project {project_id}")
+
+        # 3. 创建MySQL连接URL
+        # 注意：使用正确的驱动配置，假设 config.mysql.driver 是 'mysql+pymysql'
+        mysql_url = URL.create(
+            drivername=config.mysql.driver,
+            username=db_username,
+            password=db_password,
+            host=instance.db_host,
+            port=instance.db_port,
+            database=db_name_extracted
+        )
+
+        log.info(f"[Task] Schema generation completed, user creation queued for project {project_id}")
 
     except Exception as e:
-        print(f"[Task] Database update error: {e}")
+        log.error(f"[Task] Fatal error during schema creation: {str(e)}", exc_info=True)
+
+        # 清理：删除已创建的数据库
+        if db_name_extracted:
+            try:
+                await execute_sql_root(f"DROP DATABASE IF EXISTS `{db_name_extracted}`;")
+                log.info(f"[Cleanup] Dropped database {db_name_extracted} due to error")
+            except Exception as cleanup_error:
+                log.error(f"[Cleanup] Failed to drop database: {str(cleanup_error)}", exc_info=True)
+
+        # 更新项目状态为错误
+        # await _set_project_status(project_id, 'error')
+
     finally:
-        # 释放临时连接
+        temp_engine = PsqlHelper._get_async_engine(config.db)
         await temp_engine.dispose()
 
 
@@ -268,8 +346,8 @@ async def create_project_service(
             db_host="127.0.0.1",
             db_port=3306,
             db_name="pending_init",
-            db_username="pending_user",
-            db_password="pending_password",
+            db_username=f"test_{user_id}",
+            db_password="User_secure_2025",
             status="inactive"
         )
 

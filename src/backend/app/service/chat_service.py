@@ -9,9 +9,15 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from crud.crud_message import crud_message
 from crud.crud_project import crud_project
+from crud.crud_database_instance import crud_database_instance
 from models.session import Session as SessionModel
+from mysql.mysql_database import MysqlHelper
 from schema.chat import ChatResponse, MessageType
 from core.log import log
+from mysql.mysql_execute import execute_dql_user, execute_dml_user
+from core.config import config
+from core.exceptions import DatabaseOperationFailedException, SQLOperationFailedException
+from service.mysql_service import create_mysql_user
 
 # -----------------------
 # AI 配置

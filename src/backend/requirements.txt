@@ -32,7 +32,7 @@ httpx==0.25.2
 aiohttp==3.9.1
 
 # SQL安全校验
-sqlglot==21.0.0
+sqlglot==24.0.0
 
 # 日志
 loguru==0.7.2

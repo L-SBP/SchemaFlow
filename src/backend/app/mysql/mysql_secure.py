@@ -1,8 +1,8 @@
 import re
 from typing import List
 
-from app.core.exceptions import SQLSecurityException
-from app.core.config import config
+from core.exceptions import SQLSecurityException
+from core.config import config
 
 def normalize_sql(sql: str) -> str:
     """
