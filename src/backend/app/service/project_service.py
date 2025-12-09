@@ -32,6 +32,8 @@ from mysql.mysql_database import MysqlHelper
 from core.log import log
 import re
 from sqlalchemy.exc import SQLAlchemyError
+from sqlalchemy import text
+from sqlalchemy.engine import URL
 from pypinyin import lazy_pinyin, Style  # <--- 1. 新增导入
 
 # ==========================================
@@ -39,15 +41,14 @@ from pypinyin import lazy_pinyin, Style  # <--- 1. 新增导入
 # ==========================================
 class SchemaGenerator:
     BASE_HOST = "http://43.154.73.48:5000"
-
+    DDL_API_URL = "https://schema2ddl.strangeloop.fun/generate/ddl"  # 新增 DDL 生成接口
     @staticmethod
-    def _parse_html(html_content: str):
+    def _parse_html_schema_only(html_content: str) -> str:
         """
-        解析 HTML 提取 Schema 和 DDL
-        修复：增加了 SQL 语句去重逻辑，防止 Appendix 章节导致代码重复
+        仅解析 HTML 提取 Schema (Logical Design)，忽略 DDL
         """
         if not html_content:
-            return "", ""
+            return ""
         soup = BeautifulSoup(html_content, 'html.parser')
 
         # 1. 提取 Schema (Logical Design)
@@ -65,58 +66,72 @@ class SchemaGenerator:
                     schema_text.append(text)
                 current = current.find_next_sibling()
 
-        # 2. 提取 DDL (核心修复：去重)
-        ddl_list = []
-        seen_sql = set()  # <--- 用于记录已经添加过的 SQL 内容
-
-        sql_blocks = soup.find_all('code', class_='language-sql')
-
-        for block in sql_blocks:
-            sql_text = block.get_text().strip()
-
-            # [新增过滤逻辑] 如果是 ALTER TABLE 语句，直接跳过
-            # 这里的判断可以根据实际生成内容的格式进行微调
-            if sql_text.upper().startswith("ALTER TABLE"):
-                continue
-
-            # 只有非空且【未出现过】的 SQL 块才添加
-            if sql_text and sql_text not in seen_sql:
-                ddl_list.append(sql_text)
-                seen_sql.add(sql_text)  # <--- 标记为已添加
-
-        # 3. DDL 重排序 (确保 CREATE DATABASE 放最前面)
-        create_db_idx = -1
-        for i, sql in enumerate(ddl_list):
-            if "CREATE DATABASE" in sql.upper():
-                create_db_idx = i
-                break
-
-        # 如果找到了 CREATE DATABASE 且不在第一位，把它挪到第一位
-        if create_db_idx > 0:
-            ddl_list.insert(0, ddl_list.pop(create_db_idx))
-
-        return "\n\n".join(schema_text), "\n\n".join(ddl_list)
+        return "\n\n".join(schema_text)
 
     @classmethod
-    def run_generation(cls, requirements: str, db_name: str, db_type: str = "MySQL", ai_model: str = "gpt4"):
-        session_hash = ''.join(random.choices(string.ascii_lowercase + string.digits, k=11))
-        # 注意顺序：1.Model, 2.DB Name, 3.Requirements , 4.DBMS
-        inputs = [ai_model, db_name, requirements, db_type]
-
-        headers = {"Content-Type": "application/json"}
+    def _request_ddl_remote(cls, schema_text: str, requirements: str, db_type: str, model: str = "gpt4") -> str:
+        """
+        步骤 2: 调用远程接口生成 DDL
+        """
+        payload = {
+            "database_requirment": requirements,
+            "schema": schema_text,
+            "target_db_type": db_type,
+            "model": model  # 暂定为 gpt4
+        }
 
         try:
-            # 1. 提交任务
+            # 设置超时时间
+            resp = requests.post(cls.DDL_API_URL, json=payload, timeout=120)
+
+            if resp.status_code == 200:
+                res_json = resp.json()
+
+                # =========================================================
+                # 修改：根据新的 JSON 结构解析
+                # 结构示例: {'validations': '...', 'ddl_statements': 'CREATE TABLE...'}
+                # =========================================================
+                ddl = res_json.get("ddl_statements", "")
+
+                if not ddl:
+                    print(f"[SchemaGen] Warning: 'ddl_statements' not found in response: {res_json}")
+
+                return ddl
+            else:
+                print(f"[SchemaGen] DDL API failed: {resp.status_code} - {resp.text}")
+                return ""
+        except Exception as e:
+            print(f"[SchemaGen] DDL API Exception: {e}")
+            return ""
+
+    @classmethod
+    def run_generation(cls, requirements: str, db_name: str, db_type: str, ai_model: str = "gpt4"):
+        """
+        执行两步生成：
+        1. Gradio -> 获取 Schema
+        2. DDL API -> 获取 DDL
+        """
+        # --- 步骤 1: 获取 Schema (使用用户选择的 ai_model) ---
+        session_hash = ''.join(random.choices(string.ascii_lowercase + string.digits, k=11))
+
+        # Gradio Inputs: [Model, DB Name, Requirements, DBMS]
+        inputs = [ai_model, db_name, requirements, db_type]
+        headers = {"Content-Type": "application/json"}
+
+        schema_res = ""
+
+        try:
+            # 1.1 提交任务
             resp = requests.post(
                 f"{cls.BASE_HOST}/gradio_api/queue/join",
                 json={"data": inputs, "session_hash": session_hash, "fn_index": 0},
                 headers=headers, timeout=10
             )
             if resp.status_code != 200:
-                print(f"[SchemaGen] Submission failed: {resp.text}")
+                print(f"[SchemaGen] Step 1 Submission failed: {resp.text}")
                 return None, None
 
-            # 2. 监听结果 (使用 requests stream, 阻塞式但运行在后台线程)
+            # 1.2 监听结果
             resp = requests.get(
                 f"{cls.BASE_HOST}/gradio_api/queue/data?session_hash={session_hash}",
                 headers=headers, stream=True, timeout=120
@@ -131,13 +146,25 @@ class SchemaGenerator:
                             if msg.get('msg') == 'process_completed':
                                 output_data = msg.get('output', {}).get('data', [])
                                 if output_data:
-                                    return cls._parse_html(output_data[0])
+                                    # 解析 HTML 获取 Schema
+                                    schema_res = cls._parse_html_schema_only(output_data[0])
                         except:
                             continue
         except Exception as e:
-            print(f"[SchemaGen] Error: {e}")
+            print(f"[SchemaGen] Step 1 Error: {e}")
             return None, None
-        return None, None
+
+        if not schema_res:
+            print("[SchemaGen] Failed to retrieve schema from Step 1.")
+            return None, None
+
+        # --- 步骤 2: 获取 DDL (使用获得的 Schema + 暂定的 gpt4) ---
+        print(f"[SchemaGen] Step 1 success. Schema length: {len(schema_res)}. Starting Step 2...")
+
+        # 注意：第二个请求的 model 暂定为 gpt4
+        ddl_res = cls._request_ddl_remote(schema_res, requirements, db_type, model="gpt4")
+
+        return schema_res, ddl_res
 
 
 # ==========================================
@@ -173,116 +200,120 @@ def generate_meaningful_db_name(project_name: str, user_id: int) -> str:
 
 
 # ==========================================
-# 新增：后台任务处理函数
+# 后台任务处理函数
 # ==========================================
-async def bg_generate_schema_task(project_id: int, requirements: str, db_name: str, ai_model: str):
+async def bg_generate_schema_task(project_id: int, requirements: str, db_name: str, db_type: str, ai_model: str):
     """
-    后台任务：调用 Gradio 生成 Schema，并更新数据库状态
+    后台任务：调用生成器，创建数据库，更新状态
     """
-    print(f"[Task] Starting schema generation for Project {project_id} using {ai_model}...")
+    log.info(f"[Task] Starting generation for Project {project_id} (DB: {db_type}, Model: {ai_model})...")
 
-    # 1. 执行生成 (这是一个耗时的同步 IO 操作，使用 executor 运行)
+    # 1. 执行生成
     loop = asyncio.get_event_loop()
     schema_res, ddl_res = await loop.run_in_executor(
-        None, SchemaGenerator.run_generation, requirements, db_name, "MySQL", ai_model
+        None, SchemaGenerator.run_generation, requirements, db_name, db_type, ai_model
     )
 
-    # # 模拟生成结果
-    # schema_res = "test"
-    # ddl_res = """CREATE DATABASE ce_shi_xiang_mu_1_oaz9;
-    #
-    # CREATE TABLE Hotel (Name TEXT NOT NULL, Address TEXT, Phone TEXT, PRIMARY KEY(Name));
-    #
-    # CREATE TABLE Room (Type TEXT NOT NULL, Price NUMERIC, Quantity NUMERIC, PRIMARY KEY(Type));
-    #
-    # CREATE TABLE Booking (BookingID TEXT NOT NULL, RoomType TEXT NOT NULL, StartDate DATETIME, EndDate DATETIME, PRIMARY KEY(BookingID), FOREIGN KEY(RoomType) REFERENCES Room(Type));
-    #
-    # CREATE TABLE User (UserID TEXT NOT NULL, Name TEXT, Contact TEXT, Discount NUMERIC, CreditCard TEXT, PRIMARY KEY(UserID));
-    #
-    # CREATE TABLE Booking_Room (BookingID TEXT NOT NULL, RoomType TEXT NOT NULL, Duration NUMERIC, RoomPreference TEXT, PRIMARY KEY(BookingID, RoomType), FOREIGN KEY(BookingID) REFERENCES Booking(BookingID), FOREIGN KEY(RoomType) REFERENCES Room(Type));
-    #
-    # CREATE TABLE User_Booking (UserID TEXT NOT NULL, BookingID TEXT NOT NULL, PaymentMethod TEXT, LoyaltyProgram TEXT, PRIMARY KEY(UserID, BookingID), FOREIGN KEY(UserID) REFERENCES User(UserID), FOREIGN KEY(BookingID) REFERENCES Booking(BookingID));"""
+    if not schema_res or not ddl_res:
+        log.error(f"[Task] Generation failed for Project {project_id}")
+        # 建议在此更新项目状态为 failed
+        return
 
+    log.info(f"[{ai_model}] Generated Schema Content:\n{schema_res}")
+    log.info(f"[{ai_model}] Generated DDL Content:\n{ddl_res}")
 
-    db_name_extracted = None
+    db_created = False
 
     try:
-        # 1. 执行DDL（创建数据库和表）
-        create_db_match = re.search(r'CREATE\s+DATABASE\s+`?(\w+)`?', ddl_res, re.IGNORECASE)
-        if not create_db_match:
-            raise ValueError("Invalid CREATE DATABASE statement")
-        db_name_extracted = create_db_match.group(1)
+        # =================================================================
+        # [修复] 获取 Root Engine 并使用同一个 Connection 执行所有操作
+        # 避免连接池重置导致 USE database 失效
+        # =================================================================
+        root_engine = await MysqlHelper.get_root_engine()
 
-        # 执行数据库创建
-        await execute_sql_root(f"CREATE DATABASE IF NOT EXISTS `{db_name_extracted}`;")
-        await execute_sql_root(f"USE `{db_name_extracted}`;")
+        async with root_engine.connect() as conn:
+            # 2.1 创建数据库
+            log.info(f"[{db_type}] Creating Database: {db_name}")
+            await conn.execute(text(f"CREATE DATABASE IF NOT EXISTS `{db_name}`;"))
+            db_created = True
 
-        # 执行表创建
-        sorted_statements = sort_ddl_by_dependency(ddl_res, dialect="mysql")
-        for stmt in sorted_statements:
-            if not stmt.strip() or re.search(r'CREATE\s+DATABASE', stmt, re.IGNORECASE):
-                continue
-            log.info(f"[MySQL] Executing: {stmt}")
-            await execute_sql_root(f"{stmt};")
+            # 2.2 切换数据库上下文 (USE)
+            log.info(f"[{db_type}] Switching context to: {db_name}")
+            await conn.execute(text(f"USE `{db_name}`;"))
 
-        log.info(f"[MySQL] Schema created successfully for {db_name_extracted}")
+            # 2.3 执行表创建 DDL
+            sorted_statements = sort_ddl_by_dependency(ddl_res, dialect=db_type)
 
-        # 2. 更新元数据
+            for stmt in sorted_statements:
+                if not stmt.strip():
+                    continue
+                # 过滤掉 CREATE DATABASE
+                if re.search(r'CREATE\s+DATABASE', stmt, re.IGNORECASE):
+                    continue
+
+                log.info(f"[{db_type}] Executing: {stmt[:50]}...")
+                await conn.execute(text(stmt))
+
+            # 提交事务
+            await conn.commit()
+
+        log.info(f"[{db_type}] Schema created successfully for {db_name}")
+
+        # 3. 拼接完整 DDL 用于保存
+        full_ddl_for_storage = f"CREATE DATABASE IF NOT EXISTS `{db_name}`;\nUSE `{db_name}`;\n\n{ddl_res}"
+
+        # 4. 更新元数据 (PostgreSQL)
         async with PsqlHelper.get_session(PsqlHelper._get_async_engine(config.db)) as session:
             async with session.begin():
                 project = await crud_project.get(session, project_id)
                 instance = await crud_database_instance.get(session, project.instance_id)
 
-                # 直接更新实例对象属性
-                instance.db_name = db_name_extracted
+                instance.db_name = db_name
                 instance.status = "active"
 
-                # 获取用户名和密码
+                # 获取连接信息用于生成 URL (虽然这里没真正连接，但用于日志或返回)
                 db_username = instance.db_username
                 db_password = instance.db_password
-                instance_id = instance.instance_id
+                instance_host = instance.db_host
+                instance_port = instance.db_port
 
-                # 更新项目
                 schema_definition_json = {
                     "schema": schema_res,
-                    "ddl": ddl_res
+                    "ddl": full_ddl_for_storage
                 }
 
                 project.schema_definition = schema_definition_json
                 project.project_status = 'active'
 
-                # 提交所有更改
                 session.add(instance)
                 session.add(project)
 
         log.info(f"[PostgreSQL] Schema metadata updated for project {project_id}")
 
-        # 3. 创建MySQL连接URL
-        # 注意：使用正确的驱动配置，假设 config.mysql.driver 是 'mysql+pymysql'
-        mysql_url = URL.create(
-            drivername=config.mysql.driver,
-            username=db_username,
-            password=db_password,
-            host=instance.db_host,
-            port=instance.db_port,
-            database=db_name_extracted
-        )
-
-        log.info(f"[Task] Schema generation completed, user creation queued for project {project_id}")
+        # 可选：生成连接字符串记录日志 (修复了 URL 导入)
+        # mysql_url = URL.create(
+        #     drivername=config.mysql.driver,
+        #     username=db_username,
+        #     password=db_password,
+        #     host=instance_host,
+        #     port=instance_port,
+        #     database=db_name
+        # )
+        # log.info(f"Connection URL generated: {mysql_url}")
 
     except Exception as e:
         log.error(f"[Task] Fatal error during schema creation: {str(e)}", exc_info=True)
 
-        # 清理：删除已创建的数据库
-        if db_name_extracted:
+        # 错误清理
+        if db_created:
             try:
-                await execute_sql_root(f"DROP DATABASE IF EXISTS `{db_name_extracted}`;")
-                log.info(f"[Cleanup] Dropped database {db_name_extracted} due to error")
+                cleanup_engine = await MysqlHelper.get_root_engine()
+                async with cleanup_engine.connect() as conn:
+                    await conn.execute(text(f"DROP DATABASE IF EXISTS `{db_name}`;"))
+                    await conn.commit()
+                log.info(f"[Cleanup] Dropped database {db_name} due to error")
             except Exception as cleanup_error:
                 log.error(f"[Cleanup] Failed to drop database: {str(cleanup_error)}", exc_info=True)
-
-        # 更新项目状态为错误
-        # await _set_project_status(project_id, 'error')
 
     finally:
         temp_engine = PsqlHelper._get_async_engine(config.db)
@@ -384,6 +415,7 @@ async def create_project_service(
             project_id=db_obj.project_id,
             requirements=requirements_text,
             db_name=temp_db_name,
+            db_type=db_type,
             ai_model = ai_model
         )
 
