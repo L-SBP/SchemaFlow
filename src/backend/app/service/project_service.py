@@ -1,9 +1,6 @@
 # backend/app/service/project_service.py
 
 from typing import Optional, Dict, Any
-
-from sqlalchemy import URL
-from sqlalchemy.engine import url
 from sqlalchemy.ext.asyncio import AsyncSession as Session
 from datetime import datetime, timedelta, timezone
 from jose import jwt, JWTError
@@ -20,6 +17,9 @@ from core.sql_sort import sort_ddl_by_dependency
 # 隐式绝对导入
 from crud.crud_project import crud_project
 from crud.crud_database_instance import crud_database_instance
+from crud.crud_user_account import crud_user_account
+from mysql.mysql_converter import MySQLConverter
+from mysql.mysql_execute import execute_sql_root
 from mysql.mysql_converter import MySQLConverter
 from mysql.mysql_execute import execute_sql_root
 from schema import project as schemas
@@ -283,6 +283,7 @@ async def bg_generate_schema_task(project_id: int, requirements: str, db_name: s
         temp_engine = PsqlHelper._get_async_engine(config.db)
         await temp_engine.dispose()
 
+
 # --- 辅助函数 ---
 async def _verify_delete_token(token: str, user_id: int, project_id: int) -> bool:
     try:
@@ -319,6 +320,16 @@ async def create_project_service(
 ) -> schemas.ProjectAsyncResponse:
     """创建项目：先创建 DB 实例，再创建项目记录，最后调度异步任务"""
     try:
+        # [新增逻辑 1] 检查用户额度
+        user = await crud_user_account.get(db, user_id)
+        if not user:
+            raise ItemNotFoundException("User not found")
+
+        # 检查是否超过最大数据库数量限制
+        if user.used_databases >= user.max_databases:
+            raise OperationNotPermittedException(
+                f"Quota exceeded. You have used {user.used_databases}/{user.max_databases} databases."
+            )
         project_data = project_in.model_dump()
         db_type = project_data.pop('db_type')
 
@@ -346,6 +357,13 @@ async def create_project_service(
         project_data['project_status'] = 'initializing'
 
         db_obj = await crud_project.create(db, **project_data)
+
+        # [新增逻辑 2] 增加用户已用额度
+        await crud_user_account.update(
+            db,
+            user,
+            used_databases=user.used_databases + 1
+        )
 
         # 3. 调度异步任务
         # 核心修复：这里不再传递 db 参数
@@ -448,6 +466,21 @@ async def delete_project_service(
     if not await _verify_delete_token(confirmation_token, user_id, project_id):
         raise OperationNotPermittedException("Invalid token.")
 
+    # [优化逻辑] 为了安全，再次确认项目状态，避免重复扣除额度
+    project = await crud_project.get(db, project_id)
+    if not project or project.project_status == 'deleted':
+        # 如果已经是删除状态，直接返回 True，但不重复操作数据库
+        return True
+
     # 执行软删除
     await crud_project.change_status(db, project_id, 'deleted')
+
+    # [新增逻辑 3] 释放用户额度 (减 1)
+    user = await crud_user_account.get(db, user_id)
+    if user and user.used_databases > 0:
+        await crud_user_account.update(
+            db,
+            user,
+            used_databases=user.used_databases - 1
+        )
     return True
