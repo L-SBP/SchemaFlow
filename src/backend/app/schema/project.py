@@ -31,6 +31,7 @@ class ProjectCreate(BaseModel):
     project_name: str = Field(..., min_length=1, max_length=50, description="项目名称")
     db_type: Literal['mysql', 'postgresql', 'sqlite'] = Field(..., description="数据库类型")
     description: str = Field(..., max_length=1000, description="项目描述")
+    ai_model: Literal["gpt4", "deepseek", "chatgpt"] = Field("gpt4",description="用于生成Schema的AI模型")
 
 
 class ProjectUpdate(BaseModel):

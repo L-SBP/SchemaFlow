@@ -74,6 +74,11 @@ class SchemaGenerator:
         for block in sql_blocks:
             sql_text = block.get_text().strip()
 
+            # [新增过滤逻辑] 如果是 ALTER TABLE 语句，直接跳过
+            # 这里的判断可以根据实际生成内容的格式进行微调
+            if sql_text.upper().startswith("ALTER TABLE"):
+                continue
+
             # 只有非空且【未出现过】的 SQL 块才添加
             if sql_text and sql_text not in seen_sql:
                 ddl_list.append(sql_text)
@@ -93,10 +98,10 @@ class SchemaGenerator:
         return "\n\n".join(schema_text), "\n\n".join(ddl_list)
 
     @classmethod
-    def run_generation(cls, requirements: str, db_name: str, db_type: str = "MySQL"):
+    def run_generation(cls, requirements: str, db_name: str, db_type: str = "MySQL", ai_model: str = "gpt4"):
         session_hash = ''.join(random.choices(string.ascii_lowercase + string.digits, k=11))
         # 注意顺序：1.Model, 2.DB Name, 3.Requirements , 4.DBMS
-        inputs = ["gpt4", db_name, requirements, db_type]
+        inputs = [ai_model, db_name, requirements, db_type]
 
         headers = {"Content-Type": "application/json"}
 
@@ -170,16 +175,16 @@ def generate_meaningful_db_name(project_name: str, user_id: int) -> str:
 # ==========================================
 # 新增：后台任务处理函数
 # ==========================================
-async def bg_generate_schema_task(project_id: int, requirements: str, db_name: str):
+async def bg_generate_schema_task(project_id: int, requirements: str, db_name: str, ai_model: str):
     """
     后台任务：调用 Gradio 生成 Schema，并更新数据库状态
     """
-    print(f"[Task] Starting schema generation for Project {project_id}...")
+    print(f"[Task] Starting schema generation for Project {project_id} using {ai_model}...")
 
     # 1. 执行生成 (这是一个耗时的同步 IO 操作，使用 executor 运行)
     loop = asyncio.get_event_loop()
     schema_res, ddl_res = await loop.run_in_executor(
-        None, SchemaGenerator.run_generation, requirements, db_name
+        None, SchemaGenerator.run_generation, requirements, db_name, "MySQL", ai_model
     )
 
     # # 模拟生成结果
@@ -333,6 +338,13 @@ async def create_project_service(
         project_data = project_in.model_dump()
         db_type = project_data.pop('db_type')
 
+        # ==============================================================================
+        # TODO: 后续考虑在项目中增加选用的模型这个字段
+        # 修改：提取 ai_model，并在存入数据库前移除 (Project表中无此字段)
+        # 默认值为 'gpt4'
+        # ==============================================================================
+        ai_model = project_data.pop('ai_model', 'gpt4')
+
         requirements_text = project_data.get('description', '')
         project_name = project_data.get('project_name', 'project')
 
@@ -371,7 +383,8 @@ async def create_project_service(
             bg_generate_schema_task,
             project_id=db_obj.project_id,
             requirements=requirements_text,
-            db_name=temp_db_name
+            db_name=temp_db_name,
+            ai_model = ai_model
         )
 
         return schemas.ProjectAsyncResponse.model_validate(db_obj)
