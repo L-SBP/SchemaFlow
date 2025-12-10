@@ -17,10 +17,12 @@ class ProjectStatusEnum(str, Enum):
 class CreationStageEnum(str, Enum):
     """3.2.2. 创建进度阶段"""
     INITIALIZING = "initializing"
-    GENERATING_SCHEMA = "generating_schema"
-    GENERATING_DDL = "generating_ddl"
-    EXECUTING_DDL = "executing_ddl"
-    COMPLETED = "completed"
+    GENERATING_SCHEMA = "generating_schema"  # 正在生成 Schema
+    SCHEMA_GENERATED = "schema_generated"  # Schema 生成完毕，等待用户确认
+    GENERATING_DDL = "generating_ddl"  # 正在生成 DDL
+    DDL_GENERATED = "ddl_generated"  # DDL 生成完毕，等待用户部署
+    EXECUTING_DDL = "executing_ddl"  # 正在部署
+    COMPLETED = "completed"  # 完成
 
 
 # --- 2. 请求 DTOs ---
@@ -59,6 +61,17 @@ class ProjectUpdate(BaseModel):
         None,
         description="前端修改后的DDL和Schema结构 {'ddl': '...', 'schema': '...'}"
     )
+    ddl_statement: Optional[str] = None
+
+
+class GenerateDDLRequest(BaseModel):
+    """
+    用户确认 Schema 后，请求生成 DDL 的参数。
+    """
+    confirmed_schema: str = Field(..., description="用户确认或修改后的 Schema 内容")
+    # 如果用户在确认 Schema 阶段同时也微调了需求，可以传此参数更新项目描述，否则使用原描述
+    requirements: Optional[str] = Field(None, description="可选：修正后的需求描述")
+
 
 # --- ：部署请求 DTO ---
 class ProjectDeployRequest(BaseModel):
@@ -165,6 +178,7 @@ class ProjectDetailOut(ProjectListOne):
         None,
         description="AI生成的包含 'schema' 和 'ddl' 的JSON对象"
     )
+    ddl_statement: Optional[str] = Field(None, description="DDL 语句文本")
 
     model_config = ConfigDict(from_attributes=True)
 

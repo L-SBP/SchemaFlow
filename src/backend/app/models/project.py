@@ -23,7 +23,11 @@ class Project(Base):
 
     # 表注释和约束
     __table_args__ = (
-        CheckConstraint("project_status IN ('active', 'initializing', 'deleted')", name='ck_project_status'),
+        # [修复] 在列表中加入 'pending_confirmation'
+        CheckConstraint(
+            "project_status IN ('active', 'initializing', 'pending_confirmation', 'deleted')",
+            name='ck_project_status'
+        ),
         Index('idx_projects_user_id', 'user_id'),
         Index('idx_projects_status', 'project_status'),
         Index('idx_projects_updated_at', 'updated_at'),
@@ -62,8 +66,26 @@ class Project(Base):
     schema_definition = Column(
         JSONB,
         nullable=True,
-        comment='AI生成的DDL结构（表、字段、约束等）'
+        comment='AI生成的Schema结构（JSON格式，包含schema文本和元数据）'
     )
+
+    # --- 新增字段 ---
+    ddl_statement = Column(
+        Text,
+        nullable=True,
+        comment='AI生成的DDL语句'
+    )
+    # ----------------
+
+    # --- 新增字段 ---
+    creation_stage = Column(
+        String(50),
+        default='initializing',
+        nullable=False,
+        comment='创建进度阶段 (initializing, generating_schema, schema_generated, generating_ddl, ddl_generated, executing_ddl, completed)'
+    )
+    # ----------------
+
     project_status = Column(
         Text,
         default='active',

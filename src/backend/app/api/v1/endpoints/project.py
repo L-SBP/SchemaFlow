@@ -12,7 +12,7 @@ from core.exceptions import ItemNotFoundException, OperationNotPermittedExceptio
 
 router = APIRouter()
 
-# 1. 创建项目 (只生成 Schema/DDL，不执行)
+# 1. 创建项目 (第一步：只生成 Schema)
 @router.post("/", response_model=schemas.ProjectAsyncResponse, status_code=status.HTTP_202_ACCEPTED)
 async def create_project(
     project_in: schemas.ProjectCreate,
@@ -21,52 +21,56 @@ async def create_project(
     current_user: Any = Depends(deps.get_current_active_user),
 ) -> Any:
     """
-    创建一个新项目，并异步生成数据库 Schema/DDL。
-
-    Args:
-        project_in (schemas.ProjectCreate): 项目创建请求体。
-        background_tasks (BackgroundTasks): FastAPI 后台任务对象。
-        db (Session): 数据库会话依赖。
-        current_user (Any): 当前登录用户。
-
-    Returns:
-        Any: 项目异步创建响应。
-
-    Raises:
-        HTTPException: 创建失败时抛出 500 错误。
+    创建项目第一步：
+    1. 创建项目记录。
+    2. 触发后台任务生成 Logical Schema。
+    3. 返回项目ID，用户需轮询状态直到 schema_generated。
     """
     try:
-        # 调用 Service：创建记录 -> 触发后台生成任务 -> 返回
         return await project_service.create_project_service(db, project_in, current_user.user_id, background_tasks)
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
 # =========================================================
-# 新增接口：执行部署 (生成-确认-执行 流程的最后一步)
+# 新增接口：生成 DDL (第二步：用户确认 Schema 后调用)
 # =========================================================
-@router.post("/{project_id}/deploy", response_model=schemas.ProjectResponse)
-async def deploy_project(
+@router.post("/{project_id}/generate-ddl", response_model=schemas.ProjectAsyncResponse, status_code=status.HTTP_202_ACCEPTED)
+async def generate_ddl(
     project_id: int,
-    deploy_data: schemas.ProjectDeployRequest, # 接收前端传回的 confirmed_ddl
-    background_tasks: BackgroundTasks, # 如果执行时间长，也可以放后台，这里演示同步或简单的异步等待
+    request_data: schemas.GenerateDDLRequest,
+    background_tasks: BackgroundTasks,
     db: Session = Depends(deps.get_db),
     current_user: Any = Depends(deps.get_current_active_user),
 ) -> Any:
     """
-    用户确认 Schema 和 DDL 后，调用此接口进行最终的数据库部署。
+    创建项目第二步：
+    1. 接收用户确认/修改后的 Schema。
+    2. 触发后台任务生成 DDL。
+    """
+    try:
+        return await project_service.request_ddl_generation_service(
+            db, project_id, current_user.user_id, request_data, background_tasks
+        )
+    except ItemNotFoundException:
+        raise HTTPException(status_code=404, detail="Project not found")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
-    Args:
-        project_id (int): 项目 ID。
-        deploy_data (schemas.ProjectDeployRequest): 部署请求体，包含确认后的 DDL。
-        background_tasks (BackgroundTasks): FastAPI 后台任务对象。
-        db (Session): 数据库会话依赖。
-        current_user (Any): 当前登录用户。
-
-    Returns:
-        Any: 项目部署结果。
-
-    Raises:
-        HTTPException: 项目未找到或部署失败时抛出。
+# =========================================================
+# 执行部署 (第三步：用户确认 DDL 后调用)
+# =========================================================
+@router.post("/{project_id}/deploy", response_model=schemas.ProjectResponse)
+async def deploy_project(
+    project_id: int,
+    deploy_data: schemas.ProjectDeployRequest,
+    db: Session = Depends(deps.get_db),
+    current_user: Any = Depends(deps.get_current_active_user),
+) -> Any:
+    """
+    创建项目第三步：
+    1. 接收用户确认/修改后的 DDL。
+    2. 执行建库建表。
+    3. 项目状态变为 Active。
     """
     try:
         return await project_service.deploy_project_service(
@@ -76,37 +80,6 @@ async def deploy_project(
         raise HTTPException(status_code=404, detail="Project not found")
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Deployment failed: {str(e)}")
-
-# 4. 更新项目信息 (改名/改描述 - 纯元数据修改，不触发 AI)
-@router.patch("/{project_id}", response_model=schemas.ProjectResponse)
-async def update_project_info(
-    project_id: int,
-    update_data: schemas.ProjectUpdate,
-    db: Session = Depends(deps.get_db),
-    current_user: Any = Depends(deps.get_current_active_user),
-) -> Any:
-    """
-    更新项目信息（如名称、描述等元数据）。
-
-    Args:
-        project_id (int): 项目 ID。
-        update_data (schemas.ProjectUpdate): 更新内容。
-        db (Session): 数据库会话依赖。
-        current_user (Any): 当前登录用户。
-
-    Returns:
-        Any: 更新后的项目信息响应。
-
-    Raises:
-        HTTPException: 项目未找到时抛出 404 错误。
-    """
-    try:
-        # 此 Service 仅调用 CRUD 更新字段，没有任何 AI 调用逻辑，符合需求
-        return await project_service.update_project_info_service(
-            db, project_id, current_user.user_id, update_data.model_dump(exclude_unset=True)
-        )
-    except ItemNotFoundException:
-        raise HTTPException(status_code=404, detail="Not found")
 
 
 # 2. 获取列表 (分页)
