@@ -41,6 +41,14 @@ from core.sql_sort import sort_ddl_by_dependency  # 确保导入了这个函数
 # 新增：Schema 生成工具函数 (集成之前的逻辑)
 # ==========================================
 class SchemaGenerator:
+    """
+    项目 Schema 生成工具类。
+
+    Methods:
+        _parse_html_schema_only(html_content: str) -> str: 解析 HTML 获取 Schema。
+        _request_ddl_remote(...): 远程调用 DDL 生成接口。
+        run_generation(...): 执行 Schema 和 DDL 生成流程。
+    """
     BASE_HOST = "http://43.154.73.48:5000"
     DDL_API_URL = "https://schema2ddl.strangeloop.fun/generate/ddl"  # 新增 DDL 生成接口
     @staticmethod
@@ -111,6 +119,18 @@ class SchemaGenerator:
         执行两步生成：
         1. Gradio -> 获取 Schema
         2. DDL API -> 获取 DDL
+        Args:
+            requirements (str): 项目需求描述。
+            db_name (str): 目标数据库名称。
+            db_type (str): 数据库类型（如 mysql、postgres）。
+            ai_model (str, optional): 使用的 AI 模型，默认 'gpt4'。
+
+        Returns:
+            Tuple[str, str]: 包含生成的 Logical Design Schema 和 DDL。
+
+        Raises:
+            requests.RequestException: 网络请求失败。
+            ValueError: 解析结果异常。
         """
         # --- 步骤 1: 获取 Schema (使用用户选择的 ai_model) ---
         session_hash = ''.join(random.choices(string.ascii_lowercase + string.digits, k=11))
@@ -173,6 +193,16 @@ class SchemaGenerator:
 # ==========================================
 def generate_meaningful_db_name(project_name: str, user_id: int) -> str:
     """
+    根据项目名称和用户 ID 生成符合数据库命名规范的唯一数据库名。
+
+    Args:
+        project_name (str): 项目名称。
+        user_id (int): 用户 ID。
+
+    Returns:
+        str: 生成的数据库名称。
+    """
+    """
     将项目名称转换为符合数据库命名规范的字符串 (拼音/英文 + 下划线)
     例如: "电商管理平台" -> "dianshang_guanli_pingtai_1_x82a"
     """
@@ -204,6 +234,21 @@ def generate_meaningful_db_name(project_name: str, user_id: int) -> str:
 # 1. 修改后台任务：只生成，不执行 (Generate Only Task)
 # ==============================================================================
 async def bg_generate_schema_only_task(project_id: int, requirements: str, db_name: str, db_type: str, ai_model: str):
+    """
+    后台任务：调用 SchemaGenerator 生成 Schema 和 DDL，并保存到数据库。
+
+    Args:
+        project_id (int): 项目 ID。
+        requirements (str): 项目需求描述。
+        db_name (str): 生成的数据库名称。
+        db_type (str): 数据库类型（如 mysql）。
+        ai_model (str): 使用的 AI 模型。
+
+    Returns:
+        None
+
+    该任务不会直接执行建表，仅生成并保存 Schema/DDL。
+    """
     """
     后台任务：调用生成器 -> 获取 Schema 和 DDL -> 存入数据库 JSON 字段 -> 结束。
     并不执行 CREATE TABLE。
@@ -291,11 +336,27 @@ async def _verify_delete_token(token: str, user_id: int, project_id: int) -> boo
 # 2. 修改 Create Service：调用新的“只生成”任务
 # ==============================================================================
 async def create_project_service(
-        db: Session,
-        project_in: schemas.ProjectCreate,
-        user_id: int,
-        background_tasks: BackgroundTasks
+    db: Session,
+    project_in: schemas.ProjectCreate,
+    user_id: int,
+    background_tasks: BackgroundTasks
 ) -> schemas.ProjectAsyncResponse:
+    """
+    创建项目并异步生成 Schema/DDL。
+
+    Args:
+        db (Session): 数据库会话。
+        project_in (schemas.ProjectCreate): 项目创建参数。
+        user_id (int): 用户 ID。
+        background_tasks (BackgroundTasks): 后台任务对象。
+
+    Returns:
+        schemas.ProjectAsyncResponse: 项目异步创建响应。
+
+    Raises:
+        ItemNotFoundException: 用户不存在。
+        OperationNotPermittedException: 超出配额。
+    """
     # ... (前面的配额检查代码保持不变) ...
 
     # 检查用户额度
@@ -352,6 +413,19 @@ async def create_project_service(
 async def get_projects_list_service(
         db: Session, user_id: int, search: Optional[str], page: int, page_size: int
 ) -> schemas.PaginatedProjectList:
+    """
+    获取指定用户的项目列表，支持分页和搜索。
+
+    Args:
+        db (Session): 数据库会话。
+        user_id (int): 用户 ID。
+        search (Optional[str]): 搜索关键字。
+        page (int): 页码。
+        page_size (int): 每页数量。
+
+    Returns:
+        schemas.PaginatedProjectList: 分页后的项目列表。
+    """
     skip = (page - 1) * page_size
     total = await crud_project.get_total_count_by_user(db, user_id, search)
     items = await crud_project.get_by_user(db, user_id, skip, page_size, search)
@@ -371,6 +445,23 @@ async def deploy_project_service(
         user_id: int,
         deploy_data: schemas.ProjectDeployRequest
 ) -> schemas.ProjectResponse:
+    """
+    执行项目部署，接收用户确认的 DDL 并建库建表。
+
+    Args:
+        db (Session): 数据库会话。
+        project_id (int): 项目 ID。
+        user_id (int): 用户 ID。
+        deploy_data (schemas.ProjectDeployRequest): 部署请求参数。
+
+    Returns:
+        schemas.ProjectResponse: 项目部署后的响应。
+
+    Raises:
+        ItemNotFoundException: 项目不存在或无权限。
+        ValidationException: DDL 预处理失败。
+        DatabaseOperationFailedException: 部署执行失败。
+    """
     """
     接收用户确认的 DDL，执行建库和建表操作，将项目状态改为 Active。
     支持通过 use_smart_parse 参数控制是否启用方言转换和拓扑排序。
@@ -489,7 +580,21 @@ async def get_project_detail_service(
         db: Session,
         project_id: int,
         user_id: int
-) -> schemas.ProjectResponse:  # <--- 修正点 1：这里原来是 ProjectDetailResponse
+) -> schemas.ProjectResponse:
+    """
+    获取项目详情，校验用户权限。
+
+    Args:
+        db (Session): 数据库会话。
+        project_id (int): 项目 ID。
+        user_id (int): 用户 ID。
+
+    Returns:
+        schemas.ProjectResponse: 项目详情响应。
+
+    Raises:
+        ItemNotFoundException: 项目不存在或无权限。
+    """
     """
     Service: 获取项目详情，并检查用户权限。
     """
@@ -511,6 +616,22 @@ async def update_project_info_service(
         user_id: int,
         update_data: Dict[str, Any]
 ) -> schemas.ProjectResponse:
+    """
+    更新项目基本信息（名称或描述），不涉及 AI 生成或 DDL 执行。
+
+    Args:
+        db (Session): 数据库会话。
+        project_id (int): 项目 ID。
+        user_id (int): 用户 ID。
+        update_data (Dict[str, Any]): 更新字段。
+
+    Returns:
+        schemas.ProjectResponse: 更新后的项目详情响应。
+
+    Raises:
+        ItemNotFoundException: 项目不存在或无权限。
+        OperationNotPermittedException: 项目已删除无法更新。
+    """
     """
     修改名字或描述。
     注意：此函数完全不涉及 AI 生成或 DDL 执行，
@@ -535,6 +656,22 @@ async def update_project_info_service(
 async def confirm_delete_project_service(
         db: Session, project_id: int, user_id: int, confirmation_text: str
 ) -> schemas.ConfirmationTokenResponse:
+    """
+    生成项目删除确认 Token。
+
+    Args:
+        db (Session): 数据库会话。
+        project_id (int): 项目 ID。
+        user_id (int): 用户 ID。
+        confirmation_text (str): 确认文本，必须为 'DELETE'。
+
+    Returns:
+        schemas.ConfirmationTokenResponse: 包含确认 Token 及过期时间。
+
+    Raises:
+        ValidationException: 确认文本错误。
+        ItemNotFoundException: 项目不存在或无权限。
+    """
     if confirmation_text != "DELETE":
         raise ValidationException("Confirmation text must be 'DELETE'.")
 
@@ -555,6 +692,22 @@ async def confirm_delete_project_service(
 async def delete_project_service(
         db: Session, project_id: int, user_id: int, confirmation_token: str
 ) -> bool:
+    """
+    执行项目删除操作，校验 Token 并释放用户额度。
+
+    Args:
+        db (Session): 数据库会话。
+        project_id (int): 项目 ID。
+        user_id (int): 用户 ID。
+        confirmation_token (str): 删除确认 Token。
+
+    Returns:
+        bool: 删除操作是否成功。
+
+    Raises:
+        OperationNotPermittedException: Token 校验失败或项目已删除。
+        ItemNotFoundException: 项目不存在。
+    """
     if not await _verify_delete_token(confirmation_token, user_id, project_id):
         raise OperationNotPermittedException("Invalid token.")
 

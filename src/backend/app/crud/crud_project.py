@@ -60,7 +60,22 @@ class CRUDProject:
     async def get_by_user(
             db: AsyncSession, user_id: int, skip: int = 0, limit: int = 100, search: Optional[str] = None
     ) -> List[Project]:
-        """获取用户项目列表 (修改：Join查询并手动挂载 db_type)"""
+        """
+        获取指定用户的项目列表，支持分页和模糊搜索。
+
+        Args:
+            db (AsyncSession): 数据库会话。
+            user_id (int): 用户ID。
+            skip (int, optional): 跳过的记录数。
+            limit (int, optional): 返回的最大记录数。
+            search (Optional[str], optional): 项目名称模糊搜索关键字。
+
+        Returns:
+            List[Project]: 项目对象列表。
+
+        Raises:
+            DatabaseOperationFailedException: 查询失败时抛出。
+        """
         try:
             # 修改查询：Join DatabaseInstance
             query = select(Project, DatabaseInstance.db_type).join(
@@ -92,7 +107,21 @@ class CRUDProject:
     async def get_total_count_by_user(
             db: AsyncSession, user_id: int, search: Optional[str] = None
     ) -> int:
-        """获取总记录数 (用于分页)"""
+        """
+        获取指定用户的项目总数（用于分页）。
+
+        Args:
+            db (AsyncSession): SQLAlchemy异步数据库会话。
+            user_id (int): 用户的唯一标识ID。
+            search (Optional[str], optional): 项目名称模糊搜索关键字。
+
+        Returns:
+            int: 满足条件的项目总数。
+
+        Raises:
+            DatabaseOperationFailedException: 数据库操作失败时抛出。
+            SQLAlchemyError: SQLAlchemy底层异常。
+        """
         try:
             query = select(func.count(Project.project_id)).where(
                 Project.user_id == user_id,
@@ -121,7 +150,17 @@ class CRUDProject:
 
     @staticmethod
     async def change_status(db: AsyncSession, project_id: int, status: str) -> Optional[Project]:
-        """更改状态 (用于软删除)"""
+        """
+        更改项目状态（用于软删除）。
+
+        Args:
+            db (AsyncSession): 数据库会话。
+            project_id (int): 项目ID。
+            status (str): 新的项目状态。
+
+        Returns:
+            Optional[Project]: 更新后的项目对象或 None。
+        """
         return await CRUDProject.update(db, project_id, project_status=status)
 
 

@@ -26,7 +26,15 @@ class CreationStageEnum(str, Enum):
 # --- 2. 请求 DTOs ---
 
 class ProjectCreate(BaseModel):
-    """3.2.1 创建项目请求"""
+    """
+    创建项目请求体。
+
+    Attributes:
+        project_name (str): 项目名称。
+        db_type (Literal): 数据库类型（mysql、postgresql、sqlite）。
+        description (str): 项目描述。
+        ai_model (Literal): 用于生成Schema的AI模型。
+    """
     project_name: str = Field(..., min_length=1, max_length=50, description="项目名称")
     db_type: Literal['mysql', 'postgresql', 'sqlite'] = Field(..., description="数据库类型")
     description: str = Field(..., max_length=1000, description="项目描述")
@@ -34,7 +42,14 @@ class ProjectCreate(BaseModel):
 
 
 class ProjectUpdate(BaseModel):
-    """3.2.4 更新项目请求 (PATCH)"""
+    """
+    更新项目请求体（PATCH）。
+
+    Attributes:
+        project_name (Optional[str]): 项目名称。
+        description (Optional[str]): 项目描述。
+        schema_definition (Optional[Dict[str, Any]]): 前端修改后的DDL和Schema结构。
+    """
     project_name: Optional[str] = Field(None, min_length=1, max_length=50)
     description: Optional[str] = Field(None, max_length=500)
     # =========================================================
@@ -47,7 +62,14 @@ class ProjectUpdate(BaseModel):
 
 # --- ：部署请求 DTO ---
 class ProjectDeployRequest(BaseModel):
-    """用户确认并提交部署的请求"""
+    """
+    用户确认并提交部署的请求体。
+
+    Attributes:
+        confirmed_ddl (str): 用户确认后的最终 DDL 语句。
+        confirmed_schema (Optional[str]): 对应的 Schema 描述。
+        use_smart_parse (bool): 是否使用后端的方言转换和拓扑排序。
+    """
     confirmed_ddl: str = Field(..., description="用户确认后的最终 DDL 语句")
     confirmed_schema: Optional[str] = Field(None, description="对应的 Schema 描述")
     # --- 预留接口：控制是否使用后端的高级解析功能 ---
@@ -65,7 +87,15 @@ class DeleteConfirmationRequest(BaseModel):
 # --- 3. 响应 DTOs ---
 
 class ProjectAsyncResponse(BaseModel):
-    """3.2.1 异步创建响应 (202 Accepted)"""
+    """
+    异步创建项目的响应体 (202 Accepted)。
+
+    Attributes:
+        project_id (int): 项目 ID。
+        project_name (str): 项目名称。
+        project_status (ProjectStatusEnum): 项目状态。
+        message (str): 响应消息。
+    """
     project_id: int
     project_name: str
     # 使用 alias="status" 匹配前端期望的 {"status": "..."}
@@ -76,7 +106,17 @@ class ProjectAsyncResponse(BaseModel):
 
 
 class ProjectListOne(BaseModel):
-    """3.2.3 列表单项"""
+    """
+    项目列表单项。
+
+    Attributes:
+        project_id (int): 项目 ID。
+        project_name (str): 项目名称。
+        description (Optional[str]): 项目描述。
+        project_status (ProjectStatusEnum): 项目状态。
+        updated_at (datetime): 更新时间。
+        db_type (str): 数据库类型。
+    """
     project_id: int
     project_name: str
     description: Optional[str] = None
@@ -87,7 +127,15 @@ class ProjectListOne(BaseModel):
 
 
 class PaginatedProjectList(BaseModel):
-    """3.2.3 分页列表包装器"""
+    """
+    项目分页列表包装器。
+
+    Attributes:
+        total (int): 项目总数。
+        page (int): 当前页码。
+        page_size (int): 每页数量。
+        items (List[ProjectListOne]): 项目列表。
+    """
     total: int
     page: int
     page_size: int
@@ -97,7 +145,15 @@ class PaginatedProjectList(BaseModel):
 
 
 class ProjectDetailOut(ProjectListOne):
-    """详情 DTO 内部结构"""
+    """
+    项目详情 DTO。
+
+    Attributes:
+        created_at (datetime): 创建时间。
+        creation_stage (Optional[CreationStageEnum]): 创建进度阶段。
+        progress_percentage (Optional[int]): 创建进度百分比。
+        schema_definition (Optional[Dict[str, Any]]): AI生成的包含 'schema' 和 'ddl' 的JSON对象。
+    """
     created_at: datetime
     creation_stage: Optional[CreationStageEnum] = CreationStageEnum.INITIALIZING
     progress_percentage: Optional[int] = 0
@@ -114,13 +170,24 @@ class ProjectDetailOut(ProjectListOne):
 
 
 class ProjectResponse(BaseModel):
-    """3.2.2 / 3.2.4 单个项目包装器 {"data": ...}"""
+    """
+    单个项目包装器。
+
+    Attributes:
+        data (ProjectDetailOut): 项目详情数据。
+    """
     data: ProjectDetailOut
 
     model_config = ConfigDict(from_attributes=True)
 
 
 class ConfirmationTokenResponse(BaseModel):
-    """3.2.5 删除令牌响应"""
+    """
+    删除令牌响应体。
+
+    Attributes:
+        confirmation_token (str): 删除令牌。
+        expires_at (datetime): 令牌过期时间。
+    """
     confirmation_token: str
     expires_at: datetime

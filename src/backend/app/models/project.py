@@ -5,6 +5,20 @@ from core.database import Base
 
 
 class Project(Base):
+    """
+    项目表 ORM 模型，存储用户业务场景的逻辑定义。
+
+    Attributes:
+        project_id (int): 项目ID。
+        user_id (int): 所属用户ID。
+        instance_id (int): 关联的数据库实例ID。
+        project_name (str): 项目名称。
+        description (str): 业务需求描述。
+        schema_definition (dict): AI生成的DDL结构。
+        project_status (str): 项目状态。
+        created_at (datetime): 创建时间。
+        updated_at (datetime): 最后更新时间。
+    """
     __tablename__ = 'project'
 
     # 表注释和约束
