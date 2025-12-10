@@ -6,12 +6,11 @@ from datetime import datetime
 from enum import Enum
 
 
-# --- 1. 枚举定义 (严格匹配文档) ---
-
+# --- 1. 枚举定义 ---
 class ProjectStatusEnum(str, Enum):
-    """3.2. 项目状态：initializing, active, deleted"""
-    INITIALIZING = "initializing"
-    ACTIVE = "active"  # <--- 修正：文档要求是 active
+    INITIALIZING = "initializing"          # 正在生成或等待确认
+    PENDING_CONFIRMATION = "pending_confirmation" # (新增建议) 生成完毕，等待用户确认
+    ACTIVE = "active"                      # 已部署
     DELETED = "deleted"
 
 
@@ -45,6 +44,13 @@ class ProjectUpdate(BaseModel):
         None,
         description="前端修改后的DDL和Schema结构 {'ddl': '...', 'schema': '...'}"
     )
+
+# --- ：部署请求 DTO ---
+class ProjectDeployRequest(BaseModel):
+    """用户确认并提交部署的请求"""
+    confirmed_ddl: str = Field(..., description="用户确认后的最终 DDL 语句")
+    confirmed_schema: Optional[str] = Field(None, description="对应的 Schema 描述")
+
 
 
 class DeleteConfirmationRequest(BaseModel):
