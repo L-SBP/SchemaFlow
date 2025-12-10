@@ -35,6 +35,7 @@ from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy import text
 from sqlalchemy.engine import URL
 from pypinyin import lazy_pinyin, Style  # <--- 1. 新增导入
+from core.sql_sort import sort_ddl_by_dependency  # 确保导入了这个函数
 
 # ==========================================
 # 新增：Schema 生成工具函数 (集成之前的逻辑)
@@ -220,6 +221,12 @@ async def bg_generate_schema_only_task(project_id: int, requirements: str, db_na
         # 这里可以更新状态为 error，或者保留 initializing 让用户重试
         return
 
+    # =========================================================
+    # [修复 1] 恢复日志打印，方便调试查看 AI 生成结果
+    # =========================================================
+    log.info(f"[{ai_model}] Generated Schema Content:\n{schema_res}")
+    log.info(f"[{ai_model}] Generated DDL Content:\n{ddl_res}")
+
     log.info(f"[{ai_model}] Generated content ready. Saving to DB for confirmation...")
 
     # 2. 存入 PostgreSQL 的 project.schema_definition 字段
@@ -229,9 +236,11 @@ async def bg_generate_schema_only_task(project_id: int, requirements: str, db_na
         async with session.begin():
             project = await crud_project.get(session, project_id)
             if project:
-                # 构造包含 db_name 的完整 DDL 预览
-                # 注意：这里我们加上 USE 语句方便前端展示，但实际执行时会重新处理
-                full_ddl_preview = f"-- Database: {db_name}\n\n{ddl_res}"
+                # =========================================================
+                # [修复 2] 拼接完整的 CREATE DATABASE 和 USE 语句
+                # 替代之前的 -- 注释，避免 deploy 时正则匹配失败导致第一张表被跳过
+                # =========================================================
+                full_ddl_preview = f"CREATE DATABASE IF NOT EXISTS `{db_name}`;\nUSE `{db_name}`;\n\n{ddl_res}"
 
                 schema_data = {
                     "schema": schema_res,
@@ -364,58 +373,86 @@ async def deploy_project_service(
 ) -> schemas.ProjectResponse:
     """
     接收用户确认的 DDL，执行建库和建表操作，将项目状态改为 Active。
+    支持通过 use_smart_parse 参数控制是否启用方言转换和拓扑排序。
     """
     # 1. 校验项目
     project = await crud_project.get(db, project_id)
     if not project or project.user_id != user_id:
         raise ItemNotFoundException("Project not found")
 
-    if project.project_status == 'active':
-        # 如果已经是 active，可能是重复点击，直接返回
-        return schemas.ProjectResponse(data=schemas.ProjectDetailOut.model_validate(project))
-
     # 获取关联的 Instance 信息
     instance = await crud_database_instance.get(db, project.instance_id)
     db_name = instance.db_name
-    db_type = instance.db_type
+    db_type = instance.db_type  # e.g. 'mysql'
 
-    # 获取用户最终确认的 DDL
+    # 获取 DDL
     final_ddl = deploy_data.confirmed_ddl
 
-    # 2. 执行物理建库操作
+    # 2. 准备执行语句列表
+    execution_statements = []
+
+    try:
+        # =============================================================
+        # 预留接口逻辑：根据 use_smart_parse 决定处理方式
+        # =============================================================
+        if deploy_data.use_smart_parse:
+            log.info(f"[Deploy] Smart Parse ENABLED for Project {project_id}. Running cleanup & sort.")
+
+            # 步骤 A: 清洗 DDL (去除 -- 注释，防止干扰解析器)
+            lines = final_ddl.splitlines()
+            cleaned_lines = [line for line in lines if not line.strip().startswith('--')]
+            cleaned_ddl = "\n".join(cleaned_lines)
+
+            # 步骤 B: 调用方言转换和拓扑排序
+            # sort_ddl_by_dependency 内部使用了 sqlglot，会自动处理方言转换并按依赖排序
+            try:
+                execution_statements = sort_ddl_by_dependency(cleaned_ddl, dialect=db_type)
+            except Exception as sort_err:
+                log.error(f"[Deploy] Smart Parse failed: {sort_err}")
+                raise ValidationException(f"SQL解析或排序失败: {str(sort_err)}。请检查DDL语法。")
+
+        else:
+            log.info(f"[Deploy] Smart Parse DISABLED for Project {project_id}. Running raw execution.")
+            # 简单分割，不做任何排序和转换 (适用于未来 DDL 已经完美的情况)
+            execution_statements = [s.strip() for s in final_ddl.split(';') if s.strip()]
+
+    except Exception as e:
+        raise ValidationException(f"DDL Pre-processing failed: {str(e)}")
+
+    # 3. 执行物理建库操作
     log.info(f"[Deploy] Starting deployment for Project {project_id}, DB: {db_name}")
-    db_created = False
 
     try:
         root_engine = await MysqlHelper.get_root_engine()
 
         async with root_engine.connect() as conn:
-            # 2.1 创建数据库
-            log.info(f"[{db_type}] Creating Database: {db_name}")
-            await conn.execute(text(f"CREATE DATABASE IF NOT EXISTS `{db_name}`;"))
-            db_created = True
+            # 3.1 重置数据库 (Drop & Create) - 确保环境干净
+            log.info(f"[{db_type}] Resetting Database: {db_name}")
+            await conn.execute(text(f"DROP DATABASE IF EXISTS `{db_name}`;"))
+            await conn.execute(text(f"CREATE DATABASE `{db_name}`;"))
 
-            # 2.2 切换上下文
+            # 3.2 切换上下文
             await conn.execute(text(f"USE `{db_name}`;"))
 
-            # 2.3 执行 DDL
-            # 注意：前端传回的 DDL 可能是一个大字符串，我们需要分割或直接执行
-            # 如果是 MySQL，sqlalchemy 的 execute 通常只支持单条，除非 driver 支持 multi=True
-            # 最稳妥的方式是按分号拆分并清洗
+            # 3.3 执行语句
+            for stmt in execution_statements:
+                if not stmt.strip():
+                    continue
 
-            # 使用之前的 sort_ddl_by_dependency 或者简单的 split
-            # 这里假设 final_ddl 已经是用户确认过的，我们进行简单的分割执行
-            statements = [s.strip() for s in final_ddl.split(';') if s.strip()]
+                # 过滤掉 CREATE DATABASE (因为我们已经在 3.1 手动执行了)
+                if re.search(r'CREATE\s+DATABASE', stmt, re.IGNORECASE):
+                    continue
 
-            for stmt in statements:
-                # 简单的安全过滤
-                if re.match(r'^\s*(CREATE|ALTER|INSERT|DROP|GRANT)', stmt, re.IGNORECASE):
-                    await conn.execute(text(stmt))
+                # 过滤掉 USE 语句 (避免上下文切换冲突)
+                if re.match(r'^\s*USE\s+', stmt, re.IGNORECASE):
+                    continue
+
+                log.info(f"[{db_type}] Executing: {stmt[:60]}...")
+                await conn.execute(text(stmt))
 
             await conn.commit()
 
-        # 3. 更新项目状态为 Active
-        # 更新 schema_definition 以保存最终版本
+        # 4. 更新项目状态为 Active
         current_schema_def = project.schema_definition or {}
         current_schema_def['ddl'] = final_ddl
         if deploy_data.confirmed_schema:
@@ -438,10 +475,9 @@ async def deploy_project_service(
         return schemas.ProjectResponse(data=schemas.ProjectDetailOut.model_validate(refreshed_project))
 
     except Exception as e:
-        log.error(f"[Deploy] Error: {e}", exc_info=True)
-        # 如果建库成功但建表失败，考虑是否回滚(删除库)或者保留让用户手动修
-        # 这里策略是：如果不完全成功，抛出异常，前端提示用户 DDL 有误
-        raise DatabaseOperationFailedException(f"Deployment failed: {str(e)}")
+        log.error(f"[Deploy] Database Execution Error: {e}", exc_info=True)
+        # 抛出异常，前端提示部署失败
+        raise DatabaseOperationFailedException(f"Deployment failed during execution: {str(e)}")
 
 
 

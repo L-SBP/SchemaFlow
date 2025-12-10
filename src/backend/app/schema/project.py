@@ -50,7 +50,11 @@ class ProjectDeployRequest(BaseModel):
     """用户确认并提交部署的请求"""
     confirmed_ddl: str = Field(..., description="用户确认后的最终 DDL 语句")
     confirmed_schema: Optional[str] = Field(None, description="对应的 Schema 描述")
-
+    # --- 预留接口：控制是否使用后端的高级解析功能 ---
+    use_smart_parse: bool = Field(
+        False,
+        description="是否使用后端的方言转换和拓扑排序。默认为True。未来如果AI生成的DDL足够完美，可设为False直接执行。"
+    )
 
 
 class DeleteConfirmationRequest(BaseModel):
