@@ -1,3 +1,11 @@
+"""
+Chat services.
+
+Generates SQL from natural language using an AI service, formats project schema
+for prompting, and records conversation messages. Includes a mock mode for
+offline development.
+"""
+
 import json
 import httpx
 import sqlparse
@@ -37,8 +45,19 @@ MOCK_MODE = False
 # -----------------------
 def format_schema_to_text(schema_data):
     """
-    将 JSON 对象转换为模型习惯的文本格式：
-    Table: table_name, columns = [col1, col2, ...]
+    将项目的 Schema 数据转换为提示文本。
+
+    将 JSON 结构转换为多行文本，每行格式为
+    `Table: <name>, columns = [col1, col2, ...]`。
+
+    Args:
+        schema_data (str | dict | list): 项目 Schema，可能为字符串或对象。
+
+    Returns:
+        str: 格式化后的提示文本。
+
+    Raises:
+        ValueError: 当输入无法被识别或解析为期望结构时（内部吞并，并返回原始字符串）。
     """
     if not schema_data:
         return ""
@@ -75,6 +94,19 @@ def format_schema_to_text(schema_data):
 # 获取 Session → Project
 # -----------------------
 async def get_project_id_by_session(db: AsyncSession, session_id: int) -> int:
+    """
+    根据会话 ID 获取项目 ID。
+
+    Args:
+        db (AsyncSession): 数据库会话。
+        session_id (int): 会话 ID。
+
+    Returns:
+        int: 项目 ID。
+
+    Raises:
+        HTTPException: 当会话不存在时返回 404。
+    """
     result = await db.execute(
         select(SessionModel).where(SessionModel.session_id == session_id)
     )
@@ -88,6 +120,16 @@ async def get_project_id_by_session(db: AsyncSession, session_id: int) -> int:
 # 获取 Schema (已修改为返回特定文本格式)
 # -----------------------
 async def get_project_schema_text(db, project_id):
+    """
+    获取项目 Schema 的提示文本。
+
+    Args:
+        db (AsyncSession): 数据库会话。
+        project_id (int): 项目 ID。
+
+    Returns:
+        str: 格式化后的 Schema 文本，若缺失则为 "No schema defined."。
+    """
     project = await crud_project.get(db, project_id)
     if not project or not project.schema_definition:
         return "No schema defined."
@@ -100,7 +142,15 @@ async def get_project_schema_text(db, project_id):
 # Mock 逻辑 (模拟 AI)
 # -----------------------
 async def mock_ai_response(question: str):
-    """模拟 AI 的行为，根据关键词返回不同类型的 SQL"""
+    """
+    模拟 AI 服务，根据问题关键词返回不同类型的 SQL。
+
+    Args:
+        question (str): 用户输入的问题文本。
+
+    Returns:
+        str: 生成的 SQL 文本。
+    """
     log.info(f"【MOCK模式】正在模拟 AI 回复... 问题: {question}")
 
     # 模拟 1.5 秒网络延迟，让前端 Loading 转一会儿
@@ -130,6 +180,16 @@ async def mock_ai_response(question: str):
 # 调用 AI Agent
 # -----------------------
 async def call_ai_agent(schema_text, question):
+    """
+    调用外部 AI 服务从自然语言生成 SQL。
+
+    Args:
+        schema_text (str): 作为上下文的 Schema 提示文本。
+        question (str): 用户问题。
+
+    Returns:
+        str: 生成的 SQL 文本，可能为空或包含错误提示。
+    """
     # 1. 如果开启了 Mock 模式，直接拦截并返回
     if MOCK_MODE:
         return await mock_ai_response(question)
@@ -197,6 +257,18 @@ I want you to answer the following question.
 #   主流程
 # -----------------------
 async def process_chat(db: AsyncSession, session_id: int, user_input: str, user_id: int):
+    """
+    处理一次聊天请求：存储消息、生成 SQL、创建回复并返回结果。
+
+    Args:
+        db (AsyncSession): 数据库会话。
+        session_id (int): 会话 ID。
+        user_input (str): 用户输入文本。
+        user_id (int): 用户 ID。
+
+    Returns:
+        ChatResponse: 包含 AI 回复、SQL 文本和类型等信息的响应。
+    """
     # 1. 存用户消息
     user_msg = await crud_message.create_message(
         db, session_id, user_input, role="user"

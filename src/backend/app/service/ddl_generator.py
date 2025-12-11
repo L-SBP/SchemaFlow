@@ -1,3 +1,10 @@
+"""
+DDL generation script.
+
+Simple client for a remote service that produces DDL statements from textual
+requirements and logical schema. Intended for tooling and integration testing.
+"""
+
 import requests
 
 url = "https://schema2ddl.strangeloop.fun/generate/ddl"

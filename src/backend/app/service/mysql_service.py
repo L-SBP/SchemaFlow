@@ -1,3 +1,10 @@
+"""
+MySQL user provisioning.
+
+Create per-project MySQL users with preferred authentication plugins, grant
+privileges, and initialize user engines with fallbacks.
+"""
+
 from sqlalchemy import URL
 
 from core.config import config
@@ -7,7 +14,21 @@ from mysql.mysql_execute import execute_sql_root
 
 
 async def create_mysql_user(db_name: str, db_username: str, db_password: str, mysql_url: URL, instance_id: int):
-    """创建MySQL用户并使用sha256_password插件"""
+    """
+    创建 MySQL 用户并优先使用 `sha256_password` 插件。
+
+    在失败时自动回退到 `mysql_native_password`，同时完成权限授予与用户引擎初始化。
+
+    Args:
+        db_name (str): 数据库名称。
+        db_username (str): 用户名。
+        db_password (str): 明文密码（用于初始化）。
+        mysql_url (URL): 根连接 URL（未直接使用，仅保持签名）。
+        instance_id (int): 关联实例 ID。
+
+    Raises:
+        Exception: 创建或初始化过程中出现的错误会向上抛出。
+    """
     try:
         # 创建使用 sha256_password 插件的用户
         for user_host in ["%", "localhost"]:

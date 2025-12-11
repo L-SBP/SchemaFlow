@@ -1,4 +1,10 @@
-# backend/app/service/user_service.py (完整修正版本)
+"""
+User services.
+
+Handle registration, login, logout, token caching, profile and settings
+operations, and login history retrieval. Encapsulates validation, security,
+and CRUD orchestration.
+"""
 
 from typing import Optional, List, Dict, Any  # 确保导入了所有类型
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -25,7 +31,16 @@ from schema import user as schemas  # 导入 User Schemas
 # ----------------------------------------------------------------------
 
 async def check_email_exists(db: AsyncSession, email: str) -> bool:
-    """检查邮箱是否已存在"""
+    """
+    检查邮箱是否已存在。
+
+    Args:
+        db (AsyncSession): 数据库会话。
+        email (str): 邮箱地址。
+
+    Returns:
+        bool: True 表示已存在。
+    """
     log.info(f"Checking email {email} exists")
     existing_user = await crud_user_account.get_by_email(db, email)
     if existing_user:
@@ -34,7 +49,16 @@ async def check_email_exists(db: AsyncSession, email: str) -> bool:
 
 
 async def check_username_exists(db: AsyncSession, username: str) -> bool:
-    """检查给定用户名是否已存在"""
+    """
+    检查用户名是否已存在。
+
+    Args:
+        db (AsyncSession): 数据库会话。
+        username (str): 用户名。
+
+    Returns:
+        bool: True 表示已存在。
+    """
     existing_user = await crud_user_account.get_by_username(db, username)
     if existing_user:
         return True
@@ -42,7 +66,19 @@ async def check_username_exists(db: AsyncSession, username: str) -> bool:
 
 
 async def service_check_user_exists(db: AsyncSession, username_or_email: str) -> Optional[UserAccount]:
-    """查询用户，用于登录等场景的基础验证"""
+    """
+    根据用户名或邮箱查询用户。
+
+    Args:
+        db (AsyncSession): 数据库会话。
+        username_or_email (str): 用户名或邮箱。
+
+    Returns:
+        Optional[UserAccount]: 用户对象或 None。
+
+    Raises:
+        exceptions.DatabaseOperationFailedException: 查询异常。
+    """
     try:
         user: Optional[UserAccount] = await crud_user_account.get_by_username_or_email(
             db=db, username_or_email=username_or_email
@@ -63,7 +99,23 @@ async def service_register_user(
         password: str,
         code: str
 ) -> Optional[UserAccount]:
-    """使用提供的信息注册新用户"""
+    """
+    注册新用户。
+
+    Args:
+        db (AsyncSession): 数据库会话。
+        username (str): 用户名。
+        email (str): 邮箱。
+        password (str): 明文密码。
+        code (str): 邮箱验证码。
+
+    Returns:
+        Optional[UserAccount]: 新建的用户对象。
+
+    Raises:
+        exceptions.UsernameHasBeenRegisteredException: 用户名已存在。
+        exceptions.DatabaseOperationFailedException: 创建失败。
+    """
     log.info(f"Registering user {username}")
 
     # 验证码验证
@@ -96,7 +148,22 @@ async def service_login(
         username: str,
         password: str
 ) -> Optional[UserAccount]:
-    """用户登录业务逻辑"""
+    """
+    用户登录。
+
+    Args:
+        db (AsyncSession): 数据库会话。
+        username (str): 用户名。
+        password (str): 明文密码。
+
+    Returns:
+        Optional[UserAccount]: 登录成功的用户对象。
+
+    Raises:
+        exceptions.UserNotFoundException: 用户不存在。
+        exceptions.PasswordInvalidException: 密码错误。
+        exceptions.UserStatusForbiddenException: 用户状态异常。
+    """
     user = await service_check_user_exists(db, username)
 
     if not user:
@@ -118,7 +185,15 @@ async def service_login(
 
 
 async def service_save_token_in_redis(token: str):
-    """Token 缓存到 Redis"""
+    """
+    将 Token 缓存到 Redis。
+
+    Args:
+        token (str): 访问 Token。
+
+    Returns:
+        bool: 是否缓存成功。
+    """
     redis = get_redis()
     if redis:
         await redis.set(f"token:{token}", "1", ex=config.jwt.token_expire_time_seconds)
@@ -128,7 +203,15 @@ async def service_save_token_in_redis(token: str):
 
 
 async def service_abolish_token_in_redis(token: str):
-    """Token 从 Redis 中删除/废除"""
+    """
+    从 Redis 中删除/废除 Token。
+
+    Args:
+        token (str): 访问 Token。
+
+    Returns:
+        bool: 是否删除成功。
+    """
     redis = get_redis()
     if redis:
         await redis.delete(f"token:{token}")
@@ -146,7 +229,24 @@ async def create_login_record(
         failure_reason: str | None = None,
         device_info: dict | None = None,
 ) -> UserLoginHistory:
-    """创建登录记录（Router 调用）"""
+    """
+    创建登录记录。
+
+    Args:
+        db (AsyncSession): 数据库会话。
+        user_id (int | None): 用户 ID。
+        ip_address (str): 登录 IP。
+        login_status (str): 登录状态。
+        user_agent (str | None): UA 字符串。
+        failure_reason (str | None): 失败原因。
+        device_info (dict | None): 设备信息。
+
+    Returns:
+        UserLoginHistory: 新建的登录记录。
+
+    Raises:
+        ValidationException: 必填项缺失。
+    """
     log.info(f"user_id={user_id}, ip_address={ip_address}, login_status={login_status}")
     if not ip_address or not login_status:
         raise ValidationException("用户ID、IP地址、登录状态不能为空")
@@ -166,7 +266,16 @@ async def service_logout(
         db: AsyncSession,
         token: str
 ) -> bool:
-    """用户登出业务逻辑"""
+    """
+    用户登出。
+
+    Args:
+        db (AsyncSession): 数据库会话。
+        token (str): 访问 Token。
+
+    Returns:
+        bool: 是否登出成功。
+    """
     # 从Redis中删除token，使其失效
     if not await service_abolish_token_in_redis(token):
         log.error(f"Failed to abolish token {token} in redis")
@@ -200,7 +309,21 @@ async def get_current_user(
         db: AsyncSession,
         username_or_email: str,
 ) -> UserAccount:
-    """获取当前用户业务逻辑"""
+    """
+    获取当前用户。
+
+    Args:
+        db (AsyncSession): 数据库会话。
+        username_or_email (str): 用户名或邮箱。
+
+    Returns:
+        UserAccount: 用户对象。
+
+    Raises:
+        exceptions.UserNotFoundException: 用户不存在。
+        exceptions.UserStatusForbiddenException: 用户状态异常。
+        exceptions.DatabaseOperationFailedException: 查询失败。
+    """
     try:
         user: Optional[UserAccount] = await crud_user_account.get_by_username_or_email(
             db=db, username_or_email=username_or_email
@@ -222,7 +345,20 @@ async def get_current_user(
 # ----------------------------------------------------------------------
 
 async def get_user_me_service(db: AsyncSession, user_id: int) -> schemas.UserMe:
-    """Service 逻辑：获取当前登录用户的详细信息。"""
+    """
+    获取当前登录用户的详细信息。
+
+    Args:
+        db (AsyncSession): 数据库会话。
+        user_id (int): 用户 ID。
+
+    Returns:
+        schemas.UserMe: 用户信息。
+
+    Raises:
+        exceptions.UserNotFoundException: 用户不存在。
+        exceptions.DatabaseOperationFailedException: 查询失败。
+    """
     log.info(f"Fetching profile for user {user_id}")
     try:
         user_orm = await crud_user_account.get(db, user_id)
@@ -241,7 +377,22 @@ async def update_password_service(
         user_id: int,
         password_data: schemas.UserUpdatePassword
 ) -> schemas.UserMe:
-    """Service 逻辑：验证旧密码并更新新密码。"""
+    """
+    验证旧密码并更新为新密码。
+
+    Args:
+        db (AsyncSession): 数据库会话。
+        user_id (int): 用户 ID。
+        password_data (schemas.UserUpdatePassword): 密码更新参数。
+
+    Returns:
+        schemas.UserMe: 更新后的用户信息。
+
+    Raises:
+        exceptions.UserNotFoundException: 用户不存在。
+        exceptions.PasswordInvalidException: 旧密码错误。
+        exceptions.DatabaseOperationFailedException: 更新失败。
+    """
     log.info(f"Updating password for user {user_id}")
     try:
         db_user = await crud_user_account.get(db, user_id)
@@ -271,7 +422,22 @@ async def update_username_service(
         user_id: int,
         username_data: schemas.UserUpdateUsername
 ) -> schemas.UserMe:
-    """Service 逻辑：更新用户名，并检查唯一性。"""
+    """
+    更新用户名并检查唯一性。
+
+    Args:
+        db (AsyncSession): 数据库会话。
+        user_id (int): 用户 ID。
+        username_data (schemas.UserUpdateUsername): 用户名更新参数。
+
+    Returns:
+        schemas.UserMe: 更新后的用户信息。
+
+    Raises:
+        exceptions.UsernameHasBeenRegisteredException: 用户名重复。
+        exceptions.UserNotFoundException: 用户不存在。
+        exceptions.DatabaseOperationFailedException: 更新失败。
+    """
     log.info(f"Updating username for user {user_id} to {username_data.username}")
     try:
         if await check_username_exists(db, username_data.username):
@@ -299,7 +465,21 @@ async def update_avatar_service(
         user_id: int,
         avatar_data: schemas.UserUpdateAvatar
 ) -> schemas.UserMe:
-    """Service 逻辑：更新用户头像 URL。"""
+    """
+    更新用户头像 URL。
+
+    Args:
+        db (AsyncSession): 数据库会话。
+        user_id (int): 用户 ID。
+        avatar_data (schemas.UserUpdateAvatar): 头像更新参数。
+
+    Returns:
+        schemas.UserMe: 更新后的用户信息。
+
+    Raises:
+        exceptions.UserNotFoundException: 用户不存在。
+        exceptions.DatabaseOperationFailedException: 更新失败。
+    """
     log.info(f"Updating avatar for user {user_id}")
     try:
         db_user = await crud_user_account.get(db, user_id)
@@ -321,7 +501,21 @@ async def request_update_email_service(
         user_id: int,
         request_data: schemas.UserUpdateEmailRequest
 ) -> bool:
-    """Service 逻辑：检查新邮箱是否可用，并发送验证码。"""
+    """
+    检查新邮箱是否可用，并发送验证码。
+
+    Args:
+        db (AsyncSession): 数据库会话。
+        user_id (int): 用户 ID。
+        request_data (schemas.UserUpdateEmailRequest): 邮箱更新请求参数。
+
+    Returns:
+        bool: 是否发送成功。
+
+    Raises:
+        exceptions.EmailHasBeenRegisteredException: 邮箱已被注册。
+        exceptions.DatabaseOperationFailedException: 检查失败。
+    """
     log.info(f"User {user_id} requesting email change to {request_data.new_email}")
     try:
         if await check_email_exists(db, request_data.new_email):
@@ -342,7 +536,22 @@ async def confirm_update_email_service(
         user_id: int,
         confirm_data: schemas.UserUpdateEmailConfirm
 ) -> schemas.UserMe:
-    """Service 逻辑：验证验证码，并最终更新邮箱。"""
+    """
+    验证验证码并最终更新邮箱。
+
+    Args:
+        db (AsyncSession): 数据库会话。
+        user_id (int): 用户 ID。
+        confirm_data (schemas.UserUpdateEmailConfirm): 邮箱确认参数。
+
+    Returns:
+        schemas.UserMe: 更新后的用户信息。
+
+    Raises:
+        exceptions.CodeInvalidException: 验证码错误。
+        exceptions.UserNotFoundException: 用户不存在。
+        exceptions.DatabaseOperationFailedException: 更新失败。
+    """
     log.info(f"User {user_id} confirming new email {confirm_data.new_email}")
 
     # 1. 业务逻辑：校验验证码
@@ -373,7 +582,16 @@ async def get_login_history_service(
     page_size: int
 ) -> schemas.PaginatedLoginHistory:
     """
-    Service 逻辑：获取登录历史分页数据
+    获取登录历史分页数据。
+
+    Args:
+        db (AsyncSession): 数据库会话。
+        user_id (int): 用户 ID。
+        page (int): 页码。
+        page_size (int): 每页数量。
+
+    Returns:
+        schemas.PaginatedLoginHistory: 分页结果。
     """
     # 1. 计算 offset
     skip = (page - 1) * page_size

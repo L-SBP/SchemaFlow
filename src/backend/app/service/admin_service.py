@@ -1,4 +1,10 @@
-# backend/app/service/admin_service.py
+"""
+Admin services.
+
+Implements administrative operations such as managing users, announcements,
+and system statistics. These services validate inputs, call CRUD layers, and
+shape responses for admin UIs.
+"""
 
 from typing import List, Optional, Literal, Dict, Any
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -36,7 +42,19 @@ from crud.crud_admin_data import crud_admin_data
 
 async def get_admin_user_list_service(db: AsyncSession, page: int, page_size: int, search: Optional[str],
                                       status: str) -> AdminUserListResponse:
-    """Service: 获取用户列表 (4.1.1)"""
+    """
+    获取管理员视角的用户列表。
+
+    Args:
+        db (AsyncSession): 数据库会话。
+        page (int): 页码。
+        page_size (int): 每页数量。
+        search (Optional[str]): 搜索关键字。
+        status (str): 用户状态过滤条件。
+
+    Returns:
+        AdminUserListResponse: 包含分页信息与用户条目的响应。
+    """
     items_data, total = await crud_admin_data.get_user_list_with_stats(db, page, page_size, search, status)
     items_dto = [AdminUserListItem(**data) for data in items_data]
     return AdminUserListResponse(total=total, page=page, page_size=page_size, items=items_dto)
@@ -46,7 +64,21 @@ async def get_admin_user_list_service(db: AsyncSession, page: int, page_size: in
 async def update_user_status_service(db: AsyncSession, user_id: int,
                                      data: AdminUpdateUserStatusRequest,
                                      admin_user_id: int) -> AdminUpdateUserStatusResponse:
-    """修改用户状态 (4.1.2)"""
+    """
+    修改指定用户的状态。
+
+    Args:
+        db (AsyncSession): 数据库会话。
+        user_id (int): 目标用户 ID。
+        data (AdminUpdateUserStatusRequest): 状态更新请求体。
+        admin_user_id (int): 执行操作的管理员用户 ID。
+
+    Returns:
+        AdminUpdateUserStatusResponse: 更新后的状态信息。
+
+    Raises:
+        ItemNotFoundException: 用户不存在。
+    """
     # 1. 先查询用户是否存在 (获取 ORM 对象)
     user_obj = await crud_user_account.get(db, user_id)
 
@@ -68,7 +100,20 @@ async def update_user_status_service(db: AsyncSession, user_id: int,
 
 async def update_user_quota_service(db: AsyncSession, user_id: int,
                                     data: AdminUpdateUserQuotaRequest) -> AdminUpdateUserQuotaResponse:
-    """调整用户资源额度 (4.1.3)"""
+    """
+    调整用户的资源额度。
+
+    Args:
+        db (AsyncSession): 数据库会话。
+        user_id (int): 目标用户 ID。
+        data (AdminUpdateUserQuotaRequest): 额度更新请求体。
+
+    Returns:
+        AdminUpdateUserQuotaResponse: 更新后的额度信息。
+
+    Raises:
+        ItemNotFoundException: 用户不存在。
+    """
     # 1. 先获取对象
     user_obj = await crud_user_account.get(db, user_id)
 
@@ -91,14 +136,37 @@ async def update_user_quota_service(db: AsyncSession, user_id: int,
 
 async def create_announcement_service(db: AsyncSession, data: AnnouncementCreateRequest,
                                       admin_user_id: int) -> AnnouncementResponse:
-    """创建新公告 (4.2.1)"""
+    """
+    创建新公告。
+
+    Args:
+        db (AsyncSession): 数据库会话。
+        data (AnnouncementCreateRequest): 公告创建请求体。
+        admin_user_id (int): 创建者管理员用户 ID。
+
+    Returns:
+        AnnouncementResponse: 创建后的公告信息。
+    """
     announcement_orm = await crud_announcement.create(db, created_by=admin_user_id, **data.model_dump())
     return AnnouncementResponse.model_validate(announcement_orm)
 
 
 async def update_announcement_service(db: AsyncSession, announcement_id: int,
                                       data: AnnouncementUpdateRequest) -> AnnouncementResponse:
-    """更新公告内容和状态 (4.2.2)"""
+    """
+    更新公告内容或状态。
+
+    Args:
+        db (AsyncSession): 数据库会话。
+        announcement_id (int): 公告 ID。
+        data (AnnouncementUpdateRequest): 更新请求体。
+
+    Returns:
+        AnnouncementResponse: 更新后的公告信息。
+
+    Raises:
+        ItemNotFoundException: 公告不存在。
+    """
     update_data = data.model_dump(exclude_unset=True)
     announcement_orm = await crud_announcement.update(db, announcement_id=announcement_id, update_data=update_data)
     if not announcement_orm:
@@ -107,7 +175,16 @@ async def update_announcement_service(db: AsyncSession, announcement_id: int,
 
 
 async def delete_announcement_service(db: AsyncSession, announcement_id: int) -> None:
-    """删除公告 (4.2.3)"""
+    """
+    删除公告。
+
+    Args:
+        db (AsyncSession): 数据库会话。
+        announcement_id (int): 公告 ID。
+
+    Raises:
+        ItemNotFoundException: 公告不存在。
+    """
     success = await crud_announcement.remove(db, announcement_id)
     if not success:
         raise ItemNotFoundException("Announcement not found.")
@@ -118,7 +195,17 @@ async def delete_announcement_service(db: AsyncSession, announcement_id: int) ->
 # ----------------------------------------------------------------------
 
 async def get_admin_list_service(db: AsyncSession, page: int, page_size: int) -> AdminListResponse:
-    """获取管理员列表 (4.3.1)"""
+    """
+    获取管理员列表。
+
+    Args:
+        db (AsyncSession): 数据库会话。
+        page (int): 页码。
+        page_size (int): 每页数量。
+
+    Returns:
+        AdminListResponse: 管理员分页列表。
+    """
     admin_orms, total = await crud_admin_data.get_admin_list(db, page, page_size)
     items_dto = [AdminListItem.model_validate(orm) for orm in admin_orms]
     return AdminListResponse(total=total, page=page, page_size=page_size, items=items_dto)
@@ -126,13 +213,33 @@ async def get_admin_list_service(db: AsyncSession, page: int, page_size: int) ->
 
 async def get_violation_logs_service(db: AsyncSession, page: int, page_size: int, risk_level: Optional[str],
                                      resolution_status: Optional[str]) -> ViolationLogListResponse:
-    """获取违规记录列表 (4.4.2)"""
+    """
+    获取违规记录列表。
+
+    Args:
+        db (AsyncSession): 数据库会话。
+        page (int): 页码。
+        page_size (int): 每页数量。
+        risk_level (Optional[str]): 风险等级过滤。
+        resolution_status (Optional[str]): 处置状态过滤。
+
+    Returns:
+        ViolationLogListResponse: 违规记录分页列表。
+    """
     logs_data, total = await crud_admin_data.get_violation_logs(db, page, page_size, risk_level, resolution_status)
     items_dto = [ViolationLogListItem(**data) for data in logs_data]
     return ViolationLogListResponse(total=total, page=page, page_size=page_size, items=items_dto)
 
 
 async def get_admin_stats_service(db: AsyncSession) -> AdminStatsResponse:
-    """获取系统统计看板数据 (4.4.1)"""
+    """
+    获取系统统计数据。
+
+    Args:
+        db (AsyncSession): 数据库会话。
+
+    Returns:
+        AdminStatsResponse: 统计看板数据。
+    """
     stats_data = await crud_admin_data.get_system_stats(db)
     return AdminStatsResponse(**stats_data)

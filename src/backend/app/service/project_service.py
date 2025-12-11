@@ -1,4 +1,10 @@
-# backend/app/service/project_service.py
+"""
+Project services.
+
+Own the lifecycle of projects: schema generation, DDL generation, deployment,
+metadata updates, listing, detail retrieval, and deletion. Integrates with AI
+generators, database helpers, and CRUD layers.
+"""
 
 from typing import Optional, Dict, Any
 from sqlalchemy.ext.asyncio import AsyncSession as Session
