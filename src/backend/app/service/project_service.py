@@ -1,9 +1,8 @@
 """
-Project services.
+项目服务。
 
-Own the lifecycle of projects: schema generation, DDL generation, deployment,
-metadata updates, listing, detail retrieval, and deletion. Integrates with AI
-generators, database helpers, and CRUD layers.
+负责项目生命周期：生成 Schema、生成 DDL、部署、元数据更新、列表与详情、删除
+等；集成 AI 生成器、数据库助手与 CRUD 层。
 """
 
 from typing import Optional, Dict, Any
@@ -41,7 +40,7 @@ from sqlalchemy.engine import URL
 from pypinyin import lazy_pinyin, Style  # <--- 1. 新增导入
 
 # ==========================================
-# 新增：Schema 生成工具函数 (集成之前的逻辑)
+# Schema 生成工具函数
 # ==========================================
 class SchemaGenerator:
     """
@@ -53,7 +52,7 @@ class SchemaGenerator:
         run_generation(...): 执行 Schema 和 DDL 生成流程。
     """
     BASE_HOST = "http://43.154.73.48:5000"
-    DDL_API_URL = "https://schema2ddl.strangeloop.fun/generate/ddl"  # 新增 DDL 生成接口
+    DDL_API_URL = "https://schema2ddl.strangeloop.fun/generate/ddl"
     @staticmethod
     def _parse_html_schema_only(html_content: str) -> str:
         """
@@ -83,7 +82,7 @@ class SchemaGenerator:
     @classmethod
     def generate_schema(cls, requirements: str, db_name: str, db_type: str, ai_model: str = "gpt4") -> str:
         """
-        步骤 1: 仅生成 Schema (Logical Design)
+        仅生成 Schema (Logical Design)
         """
         session_hash = ''.join(random.choices(string.ascii_lowercase + string.digits, k=11))
         inputs = [ai_model, db_name, requirements, db_type]
@@ -125,7 +124,7 @@ class SchemaGenerator:
     @classmethod
     def generate_ddl(cls, schema_text: str, requirements: str, db_type: str, model: str = "gpt4") -> str:
         """
-        步骤 2: 根据 Schema 和需求生成 DDL
+        根据 Schema 和需求生成 DDL
         """
         payload = {
             "database_requirment": requirements,
@@ -147,7 +146,7 @@ class SchemaGenerator:
 
 
 # ==========================================
-# 新增：生成有意义的数据库名称
+# 数据库名称生成
 # ==========================================
 def generate_meaningful_db_name(project_name: str, user_id: int) -> str:
     """
@@ -189,9 +188,15 @@ def generate_meaningful_db_name(project_name: str, user_id: int) -> str:
 
 
 # ==============================================================================
-# 后台任务 1: 仅生成 Schema
+# 后台任务：生成 Schema
 # ==============================================================================
-async def bg_generate_schema_task(project_id: int, requirements: str, db_name: str, db_type: str, ai_model: str):
+async def bg_generate_schema_task(
+    project_id: int, 
+    requirements: str, 
+    db_name: str, 
+    db_type: str, 
+    ai_model: str
+):
     """
     后台任务：调用 SchemaGenerator 生成 Schema
     该任务不会直接执行建表，仅生成 Schema。
@@ -243,9 +248,15 @@ async def bg_generate_schema_task(project_id: int, requirements: str, db_name: s
 
 
 # ==============================================================================
-# 后台任务 2: 根据 Schema 生成 DDL
+# 后台任务：生成 DDL
 # ==============================================================================
-async def bg_generate_ddl_task(project_id: int, schema_text: str, requirements: str, db_type: str, db_name: str):
+async def bg_generate_ddl_task(
+    project_id: int, 
+    schema_text: str, 
+    requirements: str, 
+    db_type: str, 
+    db_name: str
+):
     log.info(f"[Task] Starting DDL GENERATION for Project {project_id}...")
     loop = asyncio.get_event_loop()
 
@@ -279,7 +290,7 @@ async def bg_generate_ddl_task(project_id: int, schema_text: str, requirements: 
 
 
 # ==============================================================================
-# 2. 修改 Create Service：调用新的“只生成”任务
+# 创建项目：异步执行ddl语句
 # ==============================================================================
 async def create_project_service(
     db: Session,
@@ -361,14 +372,14 @@ async def create_project_service(
 
 
 # ==============================================================================
-# 2. 请求生成 DDL (用户确认 Schema 后调用)
+# 请求生成 DDL
 # ==============================================================================
 async def request_ddl_generation_service(
-        db: Session,
-        project_id: int,
-        user_id: int,
-        data: schemas.GenerateDDLRequest,
-        background_tasks: BackgroundTasks
+    db: Session,
+    project_id: int,
+    user_id: int,
+    data: schemas.GenerateDDLRequest,
+    background_tasks: BackgroundTasks
 ) -> schemas.ProjectAsyncResponse:
     """
     用户确认 Schema，后端触发 DDL 生成任务。
@@ -419,13 +430,13 @@ async def request_ddl_generation_service(
 
 
 # ==============================================================================
-# 3. 新增 Service：执行部署 (Execute DDL)
+# 部署执行
 # ==============================================================================
 async def deploy_project_service(
-        db: Session,
-        project_id: int,
-        user_id: int,
-        deploy_data: schemas.ProjectDeployRequest
+    db: Session,
+    project_id: int,
+    user_id: int,
+    deploy_data: schemas.ProjectDeployRequest
 ) -> schemas.ProjectResponse:
     """
     执行项目部署，接收用户确认的 DDL 并建库建表。
@@ -570,9 +581,13 @@ async def deploy_project_service(
 
 
 
-# --- 2. 获取列表 ---
+# --- 项目列表 ---
 async def get_projects_list_service(
-        db: Session, user_id: int, search: Optional[str], page: int, page_size: int
+    db: Session, 
+    user_id: int, 
+    search: Optional[str], 
+    page: int, 
+    page_size: int
 ) -> schemas.PaginatedProjectList:
     """
     获取指定用户的项目列表，支持分页和搜索。
@@ -598,12 +613,12 @@ async def get_projects_list_service(
 
 
 # ----------------------------------------------------------------------
-# 3. GET Project Detail
+# 项目详情
 # ----------------------------------------------------------------------
 async def get_project_detail_service(
-        db: Session,
-        project_id: int,
-        user_id: int
+    db: Session,
+    project_id: int,
+    user_id: int
 ) -> schemas.ProjectResponse:
     """
     获取项目详情，校验用户权限。
@@ -632,13 +647,13 @@ async def get_project_detail_service(
 
 
 # ==============================================================================
-# 4. 确认 Update Service 不包含 AI 逻辑
+# 更新项目信息（无 AI）
 # ==============================================================================
 async def update_project_info_service(
-        db: Session,
-        project_id: int,
-        user_id: int,
-        update_data: Dict[str, Any]
+    db: Session,
+    project_id: int,
+    user_id: int,
+    update_data: Dict[str, Any]
 ) -> schemas.ProjectResponse:
     """
     更新项目基本信息（名称或描述），不涉及 AI 生成或 DDL 执行。
@@ -676,9 +691,12 @@ async def update_project_info_service(
 
 
 
-# --- 5. 确认删除 (生成Token) ---
+# --- 生成删除确认 Token ---
 async def confirm_delete_project_service(
-        db: Session, project_id: int, user_id: int, confirmation_text: str
+    db: Session, 
+    project_id: int, 
+    user_id: int, 
+    confirmation_text: str
 ) -> schemas.ConfirmationTokenResponse:
     """
     生成项目删除确认 Token。
@@ -713,7 +731,11 @@ async def confirm_delete_project_service(
 
 
 # --- 辅助函数 ---
-async def _verify_delete_token(token: str, user_id: int, project_id: int) -> bool:
+async def _verify_delete_token(
+    token: str,
+    user_id: int,
+    project_id: int,
+) -> bool:
     try:
         # 直接使用 jwt.decode 获取完整 payload，而不是用 auth.decode_jwt_token
         payload = jwt.decode(
@@ -739,9 +761,12 @@ async def _verify_delete_token(token: str, user_id: int, project_id: int) -> boo
         return False
 
 
-# --- 6. 最终删除 ---
+# --- 删除项目 ---
 async def delete_project_service(
-        db: Session, project_id: int, user_id: int, confirmation_token: str
+    db: Session, 
+    project_id: int, 
+    user_id: int, 
+    confirmation_token: str
 ) -> bool:
     """
     执行项目删除操作，校验 Token 并释放用户额度。

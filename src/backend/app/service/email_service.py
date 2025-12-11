@@ -1,8 +1,7 @@
 """
-Email services.
+邮件服务。
 
-Send verification codes and validate them during email updates and registration
-flows. Relies on core email utilities and central exception definitions.
+发送并验证邮箱验证码，用于邮箱更新与注册流程；依赖核心邮件工具与异常定义。
 """
 from datetime import datetime
 
@@ -10,7 +9,7 @@ from core.log import log
 from core.email_utils import send_verify_email, verify_code
 from core import exceptions
 
-async def service_send_verification_code(email: str):
+async def service_send_verification_code(email: str) -> None:
     """
     向指定邮箱发送验证码。
 

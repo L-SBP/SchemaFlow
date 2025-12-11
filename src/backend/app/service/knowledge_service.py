@@ -1,8 +1,8 @@
 """
-Knowledge services.
+术语服务。
 
-Manage domain knowledge terms per project, including CRUD, import/export, and
-pagination. Performs permission checks, validation, and error handling.
+管理项目的领域术语，包括增删改查、导入/导出与分页；负责权限校验、数据校验
+与错误处理。
 """
 import os
 import pandas as pd
@@ -28,10 +28,13 @@ if not os.path.exists(EXPORT_DIR):
     os.makedirs(EXPORT_DIR)
 
 # ----------------------------------------------------------------------
-# 3.4.1 创建术语
+# 术语创建
 # ----------------------------------------------------------------------
 async def create_knowledge_service(
-        db: Session, project_id: int, user_id: int, data: schemas.KnowledgeCreate
+    db: Session, 
+    project_id: int, 
+    user_id: int, 
+    data: schemas.KnowledgeCreate
 ) -> schemas.KnowledgeResponse:
     """
     创建新术语，并检查权限与唯一性。
@@ -63,14 +66,14 @@ async def create_knowledge_service(
     return schemas.KnowledgeResponse.model_validate(new_term)
 
 # ----------------------------------------------------------------------
-# [新增] 更新术语
+# 术语更新
 # ----------------------------------------------------------------------
 async def update_knowledge_service(
-        db: Session,
-        project_id: int,
-        knowledge_id: int,
-        user_id: int,
-        update_data: schemas.KnowledgeUpdate  # 建议使用 Update 模型，而不是 Create
+    db: Session,
+    project_id: int,
+    knowledge_id: int,
+    user_id: int,
+    update_data: schemas.KnowledgeUpdate  # 建议使用 Update 模型，而不是 Create
 ) -> schemas.KnowledgeResponse:
     """
     更新术语内容，验证项目归属与权限。
@@ -110,10 +113,13 @@ async def update_knowledge_service(
 
 
 # ----------------------------------------------------------------------
-# [新增] 批量删除
+# 批量删除术语
 # ----------------------------------------------------------------------
 async def batch_delete_knowledge_service(
-        db: Session, project_id: int, user_id: int, knowledge_ids: List[int]
+    db: Session, 
+    project_id: int, 
+    user_id: int, 
+    knowledge_ids: List[int]
 ) -> int:
     """
     批量删除术语。
@@ -141,10 +147,15 @@ async def batch_delete_knowledge_service(
 
 
 # ----------------------------------------------------------------------
-# 3.4.2 获取术语列表
+# 术语列表（分页）
 # ----------------------------------------------------------------------
 async def get_knowledge_list_service(
-        db: Session, project_id: int, user_id: int, page: int, page_size: int, search: Optional[str]
+    db: Session, 
+    project_id: int, 
+    user_id: int, 
+    page: int, 
+    page_size: int, 
+    search: Optional[str]
 ) -> schemas.PaginatedKnowledgeList:
     """
     获取术语列表（分页）。
@@ -178,10 +189,13 @@ async def get_knowledge_list_service(
 
 
 # ----------------------------------------------------------------------
-# 3.4.3 批量导入术语
+# 批量导入术语
 # ----------------------------------------------------------------------
 async def import_knowledge_service(
-        db: Session, project_id: int, user_id: int, file: UploadFile
+    db: Session, 
+    project_id: int, 
+    user_id: int, 
+    file: UploadFile
 ) -> schemas.ImportResponse:
     """
     解析 Excel/CSV 文件并批量导入术语。
@@ -282,10 +296,12 @@ async def import_knowledge_service(
     )
 
 # ----------------------------------------------------------------------
-# 3.4.4 导出术语
+# 术语导出
 # ----------------------------------------------------------------------
 async def export_knowledge_service(
-        db: Session, project_id: int, user_id: int
+    db: Session, 
+    project_id: int, 
+    user_id: int
 ) -> schemas.ExportResponse:
     """
     导出术语为 Excel 文件并返回下载 URL。

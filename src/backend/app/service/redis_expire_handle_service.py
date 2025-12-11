@@ -1,8 +1,7 @@
 """
-Redis expiration handlers.
+Redis 过期事件处理。
 
-Process token expiration events outside request context by constructing sessions
-and invoking logout routines.
+于无请求上下文下处理 Token 过期，构造会话并调用登出逻辑。
 """
 
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -11,7 +10,7 @@ from service.user_service import service_logout
 from core.config import config
 from core.log import log
 
-async def service_handle_expire_token(token: str):
+async def service_handle_expire_token(token: str) -> None:
     """
     处理过期的 Token（无请求上下文）。
 

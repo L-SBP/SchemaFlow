@@ -1,9 +1,8 @@
 """
-Chat services.
+聊天服务。
 
-Generates SQL from natural language using an AI service, formats project schema
-for prompting, and records conversation messages. Includes a mock mode for
-offline development.
+对接外部 AI，将自然语言生成 SQL；格式化项目 Schema 作为提示，并记录会话
+消息；支持离线调试的模拟模式。
 """
 
 import json
@@ -43,7 +42,7 @@ MOCK_MODE = False
 # -----------------------
 # 工具：将 Schema JSON 转为日志里的文本格式
 # -----------------------
-def format_schema_to_text(schema_data):
+def format_schema_to_text(schema_data: str | dict | list) -> str:
     """
     将项目的 Schema 数据转换为提示文本。
 
@@ -119,7 +118,7 @@ async def get_project_id_by_session(db: AsyncSession, session_id: int) -> int:
 # -----------------------
 # 获取 Schema (已修改为返回特定文本格式)
 # -----------------------
-async def get_project_schema_text(db, project_id):
+async def get_project_schema_text(db: AsyncSession, project_id: int) -> str:
     """
     获取项目 Schema 的提示文本。
 
@@ -141,7 +140,7 @@ async def get_project_schema_text(db, project_id):
 # -----------------------
 # Mock 逻辑 (模拟 AI)
 # -----------------------
-async def mock_ai_response(question: str):
+async def mock_ai_response(question: str) -> str:
     """
     模拟 AI 服务，根据问题关键词返回不同类型的 SQL。
 
@@ -179,7 +178,7 @@ async def mock_ai_response(question: str):
 # -----------------------
 # 调用 AI Agent
 # -----------------------
-async def call_ai_agent(schema_text, question):
+async def call_ai_agent(schema_text: str, question: str) -> str:
     """
     调用外部 AI 服务从自然语言生成 SQL。
 
@@ -214,7 +213,7 @@ I want you to answer the following question.
         ],
         "temperature": 0.1,
         "stream": False,
-        "stop": [";", "<|im_end|>"]  # <--- 新增：遇到分号或结束符立即停止
+        "stop": [";", "<|im_end|>"]  # <--- 遇到分号或结束符立即停止
     }
 
     headers = {
@@ -233,7 +232,7 @@ I want you to answer the following question.
         raw = resp.json()
 
         # =======================================================
-        # 新增：打印 AI 返回的完整原始数据
+        # 打印 AI 返回的完整原始数据
         # =======================================================
         log.info(f"【AI Debug】Raw Response: {json.dumps(raw, ensure_ascii=False)}")
 
@@ -256,7 +255,12 @@ I want you to answer the following question.
 # -----------------------
 #   主流程
 # -----------------------
-async def process_chat(db: AsyncSession, session_id: int, user_input: str, user_id: int):
+async def process_chat(
+    db: AsyncSession,
+    session_id: int,
+    user_input: str,
+    user_id: int,
+) -> ChatResponse:
     """
     处理一次聊天请求：存储消息、生成 SQL、创建回复并返回结果。
 

@@ -1,8 +1,7 @@
 """
-Chat service (test variant).
+聊天服务（测试变体）。
 
-Experimental version of chat-to-SQL pipeline for debugging and validation.
-Connects to a configurable AI endpoint and returns SQL with basic parsing.
+用于调试/验证 chat-to-SQL 流程，连接可配置的 AI 端点并返回基础解析结果。
 """
 
 import json
@@ -59,7 +58,7 @@ async def get_project_id_by_session(db: AsyncSession, session_id: int) -> int:
 # -----------------------
 # 获取 Schema
 # -----------------------
-async def get_project_schema(db, project_id):
+async def get_project_schema(db: AsyncSession, project_id: int) -> str:
     """
     获取项目 Schema 的 JSON 文本。
 
@@ -82,7 +81,7 @@ async def get_project_schema(db, project_id):
 # -----------------------
 # 获取术语库
 # -----------------------
-async def get_domain_knowledge(db, project_id):
+async def get_domain_knowledge(db: AsyncSession, project_id: int) -> str:
     """
     获取项目的术语库并格式化为提示文本。
 
@@ -108,7 +107,11 @@ async def get_domain_knowledge(db, project_id):
 # -----------------------
 # 调用 Claude Agent
 # -----------------------
-async def call_ai_agent(schema, glossary, question):
+async def call_ai_agent(
+    schema: str,
+    glossary: str,
+    question: str,
+) -> dict:
     """
     调用外部 AI 服务，要求返回包含 `sql` 字段的 JSON。
 
@@ -185,7 +188,12 @@ async def call_ai_agent(schema, glossary, question):
 # -----------------------
 #   主流程（修改版）
 # -----------------------
-async def process_chat(db: AsyncSession, session_id: int, user_input: str, user_id: int):
+async def process_chat(
+    db: AsyncSession,
+    session_id: int,
+    user_input: str,
+    user_id: int,
+) -> ChatResponse:
     """
     主流程：存储消息、调用 AI、识别 SQL 类型并返回响应。
 

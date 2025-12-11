@@ -1,9 +1,8 @@
 """
-User services.
+用户服务。
 
-Handle registration, login, logout, token caching, profile and settings
-operations, and login history retrieval. Encapsulates validation, security,
-and CRUD orchestration.
+处理注册、登录、登出、Token 缓存、个人资料与设置、登录历史等；封装校验、
+安全与 CRUD 编排。
 """
 
 from typing import Optional, List, Dict, Any  # 确保导入了所有类型
@@ -93,11 +92,11 @@ async def service_check_user_exists(db: AsyncSession, username_or_email: str) ->
 # ----------------------------------------------------------------------
 
 async def service_register_user(
-        db: AsyncSession,
-        username: str,
-        email: str,
-        password: str,
-        code: str
+    db: AsyncSession,
+    username: str,
+    email: str,
+    password: str,
+    code: str
 ) -> Optional[UserAccount]:
     """
     注册新用户。
@@ -144,9 +143,9 @@ async def service_register_user(
 
 
 async def service_login(
-        db: AsyncSession,
-        username: str,
-        password: str
+    db: AsyncSession,
+    username: str,
+    password: str
 ) -> Optional[UserAccount]:
     """
     用户登录。
@@ -184,7 +183,7 @@ async def service_login(
     return user
 
 
-async def service_save_token_in_redis(token: str):
+async def service_save_token_in_redis(token: str) -> bool:
     """
     将 Token 缓存到 Redis。
 
@@ -202,7 +201,7 @@ async def service_save_token_in_redis(token: str):
     return False
 
 
-async def service_abolish_token_in_redis(token: str):
+async def service_abolish_token_in_redis(token: str) -> bool:
     """
     从 Redis 中删除/废除 Token。
 
@@ -221,13 +220,13 @@ async def service_abolish_token_in_redis(token: str):
 
 
 async def create_login_record(
-        db: AsyncSession,
-        user_id: int | None,
-        ip_address: str,
-        login_status: str,
-        user_agent: str | None = None,
-        failure_reason: str | None = None,
-        device_info: dict | None = None,
+    db: AsyncSession,
+    user_id: int | None,
+    ip_address: str,
+    login_status: str,
+    user_agent: str | None = None,
+    failure_reason: str | None = None,
+    device_info: dict | None = None,
 ) -> UserLoginHistory:
     """
     创建登录记录。
@@ -306,8 +305,8 @@ async def service_logout(
 
 
 async def get_current_user(
-        db: AsyncSession,
-        username_or_email: str,
+    db: AsyncSession,
+    username_or_email: str,
 ) -> UserAccount:
     """
     获取当前用户。
@@ -373,9 +372,9 @@ async def get_user_me_service(db: AsyncSession, user_id: int) -> schemas.UserMe:
 
 
 async def update_password_service(
-        db: AsyncSession,
-        user_id: int,
-        password_data: schemas.UserUpdatePassword
+    db: AsyncSession,
+    user_id: int,
+    password_data: schemas.UserUpdatePassword
 ) -> schemas.UserMe:
     """
     验证旧密码并更新为新密码。
@@ -418,9 +417,9 @@ async def update_password_service(
 
 
 async def update_username_service(
-        db: AsyncSession,
-        user_id: int,
-        username_data: schemas.UserUpdateUsername
+    db: AsyncSession,
+    user_id: int,
+    username_data: schemas.UserUpdateUsername
 ) -> schemas.UserMe:
     """
     更新用户名并检查唯一性。
@@ -461,9 +460,9 @@ async def update_username_service(
 
 
 async def update_avatar_service(
-        db: AsyncSession,
-        user_id: int,
-        avatar_data: schemas.UserUpdateAvatar
+    db: AsyncSession,
+    user_id: int,
+    avatar_data: schemas.UserUpdateAvatar
 ) -> schemas.UserMe:
     """
     更新用户头像 URL。
@@ -497,9 +496,9 @@ async def update_avatar_service(
 
 
 async def request_update_email_service(
-        db: AsyncSession,
-        user_id: int,
-        request_data: schemas.UserUpdateEmailRequest
+    db: AsyncSession,
+    user_id: int,
+    request_data: schemas.UserUpdateEmailRequest
 ) -> bool:
     """
     检查新邮箱是否可用，并发送验证码。
@@ -532,9 +531,9 @@ async def request_update_email_service(
 
 
 async def confirm_update_email_service(
-        db: AsyncSession,
-        user_id: int,
-        confirm_data: schemas.UserUpdateEmailConfirm
+    db: AsyncSession,
+    user_id: int,
+    confirm_data: schemas.UserUpdateEmailConfirm
 ) -> schemas.UserMe:
     """
     验证验证码并最终更新邮箱。

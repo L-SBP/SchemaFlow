@@ -1,9 +1,8 @@
 """
-Admin services.
+管理员服务。
 
-Implements administrative operations such as managing users, announcements,
-and system statistics. These services validate inputs, call CRUD layers, and
-shape responses for admin UIs.
+提供用户、公告与系统统计的管理能力，进行输入校验、调用 CRUD 层，并整形为
+管理端响应。
 """
 
 from typing import List, Optional, Literal, Dict, Any
@@ -37,11 +36,16 @@ from crud.crud_admin_data import crud_admin_data
 
 
 # ----------------------------------------------------------------------
-# 4.1 用户管理 Service
+# 用户管理
 # ----------------------------------------------------------------------
 
-async def get_admin_user_list_service(db: AsyncSession, page: int, page_size: int, search: Optional[str],
-                                      status: str) -> AdminUserListResponse:
+async def get_admin_user_list_service(
+    db: AsyncSession,
+    page: int,
+    page_size: int,
+    search: Optional[str],
+    status: str,
+) -> AdminUserListResponse:
     """
     获取管理员视角的用户列表。
 
@@ -61,9 +65,12 @@ async def get_admin_user_list_service(db: AsyncSession, page: int, page_size: in
 
 
 # 在参数列表中添加 admin_user_id: int
-async def update_user_status_service(db: AsyncSession, user_id: int,
-                                     data: AdminUpdateUserStatusRequest,
-                                     admin_user_id: int) -> AdminUpdateUserStatusResponse:
+async def update_user_status_service(
+    db: AsyncSession,
+    user_id: int,
+    data: AdminUpdateUserStatusRequest,
+    admin_user_id: int,
+) -> AdminUpdateUserStatusResponse:
     """
     修改指定用户的状态。
 
@@ -98,8 +105,11 @@ async def update_user_status_service(db: AsyncSession, user_id: int,
     )
 
 
-async def update_user_quota_service(db: AsyncSession, user_id: int,
-                                    data: AdminUpdateUserQuotaRequest) -> AdminUpdateUserQuotaResponse:
+async def update_user_quota_service(
+    db: AsyncSession,
+    user_id: int,
+    data: AdminUpdateUserQuotaRequest
+) -> AdminUpdateUserQuotaResponse:
     """
     调整用户的资源额度。
 
@@ -131,11 +141,14 @@ async def update_user_quota_service(db: AsyncSession, user_id: int,
 
 
 # ----------------------------------------------------------------------
-# 4.2 公告管理 Service
+# 公告管理
 # ----------------------------------------------------------------------
 
-async def create_announcement_service(db: AsyncSession, data: AnnouncementCreateRequest,
-                                      admin_user_id: int) -> AnnouncementResponse:
+async def create_announcement_service(
+    db: AsyncSession,
+    data: AnnouncementCreateRequest,
+    admin_user_id: int
+) -> AnnouncementResponse:
     """
     创建新公告。
 
@@ -151,8 +164,11 @@ async def create_announcement_service(db: AsyncSession, data: AnnouncementCreate
     return AnnouncementResponse.model_validate(announcement_orm)
 
 
-async def update_announcement_service(db: AsyncSession, announcement_id: int,
-                                      data: AnnouncementUpdateRequest) -> AnnouncementResponse:
+async def update_announcement_service(
+    db: AsyncSession,
+    announcement_id: int,
+    data: AnnouncementUpdateRequest
+) -> AnnouncementResponse:
     """
     更新公告内容或状态。
 
@@ -191,7 +207,7 @@ async def delete_announcement_service(db: AsyncSession, announcement_id: int) ->
 
 
 # ----------------------------------------------------------------------
-# 4.3/4.4 系统状态 Service
+# 系统状态
 # ----------------------------------------------------------------------
 
 async def get_admin_list_service(db: AsyncSession, page: int, page_size: int) -> AdminListResponse:
@@ -211,8 +227,13 @@ async def get_admin_list_service(db: AsyncSession, page: int, page_size: int) ->
     return AdminListResponse(total=total, page=page, page_size=page_size, items=items_dto)
 
 
-async def get_violation_logs_service(db: AsyncSession, page: int, page_size: int, risk_level: Optional[str],
-                                     resolution_status: Optional[str]) -> ViolationLogListResponse:
+async def get_violation_logs_service(
+    db: AsyncSession,
+    page: int,
+    page_size: int,
+    risk_level: Optional[str],
+    resolution_status: Optional[str]
+) -> ViolationLogListResponse:
     """
     获取违规记录列表。
 

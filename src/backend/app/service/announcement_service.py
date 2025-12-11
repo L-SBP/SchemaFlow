@@ -1,12 +1,12 @@
 """
-Announcement services.
+公告服务。
 
-Provides read-only announcement retrieval for end users. Creation and updates
-are handled by admin services.
+为用户侧提供公告列表与详情的只读访问；创建与更新由管理员服务处理。
 """
 
 from sqlalchemy.ext.asyncio import AsyncSession
 from crud.crud_announcement import crud_announcement
+from typing import Any, Dict
 
 
 class AnnouncementService:
@@ -22,7 +22,7 @@ class AnnouncementService:
         status: str | None,
         page: int,
         page_size: int
-    ):
+    ) -> Dict[str, Any]:
         """
         获取公告列表。
 
@@ -53,7 +53,7 @@ class AnnouncementService:
     async def get_announcement_detail(
         db: AsyncSession,
         announcement_id: int
-    ):
+    ) -> Any:
         """
         获取公告详情。
 

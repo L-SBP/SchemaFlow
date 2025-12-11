@@ -1,7 +1,6 @@
 """
-Service layer package.
+服务层包。
 
-Provides application business logic for users, projects, reports, chat, admin,
-and integrations. Modules here orchestrate CRUD operations, validation, and
-cross-service workflows while keeping API endpoints thin.
+负责用户、项目、报表、聊天、管理及集成等业务逻辑的编排，协调 CRUD
+操作、校验与跨服务流程，保持 API 端点精简。
 """

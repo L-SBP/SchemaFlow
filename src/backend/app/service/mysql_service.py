@@ -1,8 +1,8 @@
 """
-MySQL user provisioning.
+MySQL 用户配置服务。
 
-Create per-project MySQL users with preferred authentication plugins, grant
-privileges, and initialize user engines with fallbacks.
+为项目创建 MySQL 用户、授予权限，并优先使用 `sha256_password`，必要时回退
+`mysql_native_password`；同时初始化用户引擎。
 """
 
 from sqlalchemy import URL
@@ -13,7 +13,13 @@ from mysql.mysql_database import MysqlHelper
 from mysql.mysql_execute import execute_sql_root
 
 
-async def create_mysql_user(db_name: str, db_username: str, db_password: str, mysql_url: URL, instance_id: int):
+async def create_mysql_user(
+    db_name: str, 
+    db_username: str, 
+    db_password: str, 
+    mysql_url: URL, 
+    instance_id: int
+) -> None:
     """
     创建 MySQL 用户并优先使用 `sha256_password` 插件。
 

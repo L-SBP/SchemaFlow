@@ -1,9 +1,8 @@
 """
-Report services.
+报表服务。
 
-Create, read, update, delete, and export analytical reports backed by cached
-query results and AI-generated statements. Provides history retrieval utilities
-for building charts.
+基于缓存查询结果与 AI 语句提供报表的创建、读取、更新、删除与导出；并提供
+历史查询数据以构建图表。
 """
 
 from typing import List, Dict, Any
@@ -21,7 +20,7 @@ from models.project import Project
 # 如果报错循环依赖，请保持函数内导入
 
 # --------------------------
-# 1. 获取报表列表 (Read)
+# 报表列表
 # --------------------------
 async def get_report_list(db: Session, project_id: int) -> List[schemas.Report]:
     """
@@ -80,7 +79,7 @@ async def get_report_list(db: Session, project_id: int) -> List[schemas.Report]:
 
 
 # --------------------------
-# 2. 获取历史查询记录 (Source for creating reports)
+# 历史查询记录
 # --------------------------
 async def get_history_queries_service(db: Session, project_id: int) -> List[schemas.HistoryQuery]:
     """
@@ -135,9 +134,13 @@ async def get_history_queries_service(db: Session, project_id: int) -> List[sche
 
 
 # --------------------------
-# 3. 创建报表 (Create - 真正入库)
+# 创建报表
 # --------------------------
-async def create_report_service(db: Session, project_id: int, payload: schemas.ReportCreate):
+async def create_report_service(
+    db: Session,
+    project_id: int,
+    payload: schemas.ReportCreate,
+) -> schemas.Report:
     """
     创建报表记录并返回标准响应。
 
@@ -193,7 +196,7 @@ async def create_report_service(db: Session, project_id: int, payload: schemas.R
 
 
 # --------------------------
-# 4. 删除报表 (Delete)
+# 删除报表
 # --------------------------
 async def delete_report_service(db: Session, report_id: int) -> bool:
     """
@@ -216,9 +219,13 @@ async def delete_report_service(db: Session, report_id: int) -> bool:
 
 
 # --------------------------
-# 5. 修改报表 (Update)
+# 更新报表
 # --------------------------
-async def update_report_service(db: Session, report_id: int, payload: schemas.ReportUpdate):
+async def update_report_service(
+    db: Session,
+    report_id: int,
+    payload: schemas.ReportUpdate,
+) -> schemas.Report:
     """
     更新报表基础属性与图表配置。
 
@@ -275,9 +282,13 @@ async def update_report_service(db: Session, report_id: int, payload: schemas.Re
 
 
 # --------------------------
-# 6. 导出报表 (Export)
+# 导出报表
 # --------------------------
-async def export_report_service(db: Session, report_id: int, format: str):
+async def export_report_service(
+    db: Session,
+    report_id: int,
+    format: str,
+) -> dict:
     """
     导出报表，返回下载链接与过期时间。
 
