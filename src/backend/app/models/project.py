@@ -2,7 +2,7 @@ from sqlalchemy import Column, Integer, String, Text, DateTime, ForeignKey, Chec
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.sql import func
 from core.database import Base
-
+from sqlalchemy.orm import relationship
 
 class Project(Base):
     """
@@ -41,6 +41,9 @@ class Project(Base):
         primary_key=True,
         comment='项目ID'
     )
+    # 【新增】正向关联：让 Project 知道它下面有哪些 Sessions
+    # 这样以后你可以用 project.sessions 获取所有会话列表
+    sessions = relationship("Session", back_populates="project", cascade="all, delete-orphan")
     user_id = Column(
         Integer,
         ForeignKey('user_account.user_id', ondelete='CASCADE'),
