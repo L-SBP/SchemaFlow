@@ -100,7 +100,7 @@ dev:
     # 用户名
     username: root
     # 密码
-    password: 265515Wlr
+    password: root_secure_2025
     # SSL
     ssl: false
     # plugin
