@@ -18,11 +18,46 @@ from models.ai_generated_statement import AIGeneratedStatement
 from models.project import Project
 # 注意：Message 和 Session 我们将在函数内部导入，或者你可以尝试在这里导入
 # 如果报错循环依赖，请保持函数内导入
+async def _verify_project_ownership(
+    db: Session,
+    project_id: int,
+    user_id: int,
+):
+    project = await db.get(Project, project_id)
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+
+    if project.user_id != user_id:
+        raise HTTPException(status_code=403, detail="Permission denied")
+
+    return project
+
+async def _verify_report_ownership(
+    db: Session,
+    report_id: int,
+    user_id: int,
+) -> AnalysisReport:
+    report = await db.get(AnalysisReport, report_id)
+    if not report:
+        raise HTTPException(status_code=404, detail="Report not found")
+
+    project = await db.get(Project, report.project_id)
+    if not project or project.user_id != user_id:
+        raise HTTPException(status_code=403, detail="Permission denied")
+
+    return report
 
 # --------------------------
 # 报表列表
 # --------------------------
-async def get_report_list(db: Session, project_id: int) -> List[schemas.Report]:
+
+
+async def get_report_list(
+    db: Session,
+    project_id: int,
+    user_id: int,
+)-> List[schemas.Report]:
+    await _verify_project_ownership(db, project_id, user_id)
     """
     获取项目的报表列表并关联数据源与语句。
 
@@ -81,7 +116,13 @@ async def get_report_list(db: Session, project_id: int) -> List[schemas.Report]:
 # --------------------------
 # 历史查询记录
 # --------------------------
-async def get_history_queries_service(db: Session, project_id: int) -> List[schemas.HistoryQuery]:
+async def get_history_queries_service(
+    db: Session,
+    project_id: int,
+    user_id: int,
+) -> List[schemas.HistoryQuery]:
+    await _verify_project_ownership(db, project_id, user_id)
+
     """
     获取项目历史查询记录，返回用户原始提问与结果。
 
@@ -139,6 +180,7 @@ async def get_history_queries_service(db: Session, project_id: int) -> List[sche
 async def create_report_service(
     db: Session,
     project_id: int,
+    user_id: int,
     payload: schemas.ReportCreate,
 ) -> schemas.Report:
     """
@@ -156,8 +198,8 @@ async def create_report_service(
         HTTPException: 项目或数据源不存在。
     """
     # 1. 校验项目
-    project_exists = await db.get(Project, project_id)
-    if not project_exists:
+    project = await _verify_project_ownership(db, project_id, user_id)
+    if not project:
         raise HTTPException(status_code=404, detail="Project not found")
     
     # 2. 校验数据源 (Query Result) 是否存在
@@ -198,7 +240,7 @@ async def create_report_service(
 # --------------------------
 # 删除报表
 # --------------------------
-async def delete_report_service(db: Session, report_id: int) -> bool:
+async def delete_report_service(db: Session, report_id: int, user_id: int) -> bool:
     """
     删除指定报表。
 
@@ -209,12 +251,10 @@ async def delete_report_service(db: Session, report_id: int) -> bool:
     Returns:
         bool: 是否删除成功。
     """
-    stmt = delete(AnalysisReport).where(AnalysisReport.report_id == report_id)
-    result = await db.execute(stmt)
+    report = await _verify_report_ownership(db, report_id, user_id)
+
+    await db.delete(report)
     await db.commit()
-    
-    if result.rowcount == 0:
-        return False
     return True
 
 
@@ -224,6 +264,7 @@ async def delete_report_service(db: Session, report_id: int) -> bool:
 async def update_report_service(
     db: Session,
     report_id: int,
+    user_id: int,
     payload: schemas.ReportUpdate,
 ) -> schemas.Report:
     """
@@ -241,7 +282,8 @@ async def update_report_service(
         HTTPException: 报表不存在。
     """
     # 1. 检查是否存在
-    report_obj = await db.get(AnalysisReport, report_id)
+    report_obj = await _verify_report_ownership(db, report_id, user_id)
+
     if not report_obj:
         raise HTTPException(status_code=404, detail="Report not found")
 

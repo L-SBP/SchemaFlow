@@ -1,7 +1,7 @@
 from sqlalchemy import Column, String, CheckConstraint, Index, Integer, ForeignKey, DateTime
 from sqlalchemy.sql import func
 from core.database import Base
-
+from sqlalchemy.orm import relationship
 class Session(Base):
     __tablename__ = 'session'
 
@@ -23,6 +23,8 @@ class Session(Base):
         nullable=False,
         comment='关联的项目ID'
     )
+    # 【新增】反向关联：让 Session 知道它属于哪个 Project
+    project = relationship("Project", back_populates="sessions")
     session_name = Column(
         String(100),
         nullable=False,

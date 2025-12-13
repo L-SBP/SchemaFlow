@@ -20,6 +20,9 @@ dev:
     version: 1.0.0
     # 是否自动重载
     reload: true
+  #新增ai配置
+  ai:
+    modelscope_api_key: "ms-5990c475-35aa-444d-80eb-01c7f0d5719b"
 
   # 业务数据库配置(PostgresSQL)
   db:
@@ -97,7 +100,7 @@ dev:
     # 用户名
     username: root
     # 密码
-    password: root_secure_2025
+    password: 265515Wlr
     # SSL
     ssl: false
     # plugin

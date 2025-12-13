@@ -37,4 +37,5 @@ def get_config(config_file="config.yaml", env=None) -> BaseConfig:
     # 返回对应的配置类实例
     return BaseConfig(**env_config)
 
-config = get_config()
+settings = get_config()
+config = settings  # 保留 config 别名，防止其他旧代码报错

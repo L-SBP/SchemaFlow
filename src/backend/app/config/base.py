@@ -120,6 +120,9 @@ class SMTP(BaseSettings):
     # 验证码有效期
     expire_time_seconds: int
 
+class AIConfig(BaseSettings):
+    modelscope_api_key: str = "dummy_key"
+
 class MySQLConfig(BaseSettings):
     """
     MySQL数据库配置
@@ -176,6 +179,8 @@ class BaseConfig(BaseSettings):
 
     # 应用配置
     app: Appconfig
+    #  ai 配置！
+    ai: AIConfig = AIConfig()
     # PostgresSQL数据库配置
     db: DatabaseConfig
     # Redis配置
