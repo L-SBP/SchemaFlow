@@ -1,4 +1,4 @@
-from typing import Optional
+from typing import Optional, List
 
 from sqlalchemy import text
 from sqlalchemy.engine import url
@@ -143,41 +143,21 @@ class MysqlHelper:
         return instance_id in cls._user_engine
 
     @classmethod
-    async def check_user_exists(cls, db_username: str) -> bool:
+    def is_user_exists(cls, db_username: str) -> bool:
         """
-        检查MySQL中是否存在指定用户
+        检查_user_exist中是否存在指定用户
         :param db_username: 数据库用户名
         :return: 如果用户存在返回True，否则返回False
         """
-        if cls._root_engine is None:
-            raise InvalidOperationException("请先初始化root用户引擎")
 
-        if db_username in cls._user_exist:
-            return True
-            
-        try:
-            engine = cls._root_engine
-            async with engine.connect() as conn:
-                result = await conn.execute(
-                    text("SELECT User FROM mysql.user WHERE User = :username"), 
-                    {"username": db_username}
-                )
-                user_exists = result.fetchone() is not None
-                await conn.close()
-                if user_exists:
-                    cls._user_exist.add(db_username)
-                return user_exists
-        except Exception as e:
-            log.error(f"检查用户是否存在时出错: {e}")
-            return False
+        return db_username in cls._user_exist
 
     @classmethod
-    async def check_privilege(cls, db_username: str, db_name: str) -> bool:
+    async def is_user_exist_in_mysql(cls, db_username: str) -> bool:
         """
-        检查用户对数据库的权限
-        :param db_username: 数据库用户名
-        :param db_name: 数据库名称
-        :return: 如果用户对数据库有读写权限返回True，否则返回False
+        检查数据库中是否存在指定用户
+        :param db_username: 待检查的用户名
+        :return: 如果用户存在返回True，否则返回False
         """
         if cls._root_engine is None:
             raise InvalidOperationException("请先初始化root用户引擎")
@@ -185,13 +165,93 @@ class MysqlHelper:
         try:
             engine = await cls.get_root_engine()
             async with engine.connect() as conn:
+                # 查询 mysql.user 表，检查是否存在该用户
+                # 使用 GRANTEE 格式 'username'@'host' 进行匹配
                 result = await conn.execute(
-                    text("SELECT * FROM information_schema.user_privileges WHERE GRANTEE = :username AND TABLE_SCHEMA = :db_name"),
-                    {"username": f"'{db_username}'@'%'", "db_name": db_name}
+                    text("SELECT User FROM mysql.user WHERE User = :username AND Host = :host"),
+                    {"username": db_username, "host": "%"}
                 )
-                privileges = result.fetchall()
-                await conn.close()
-                return len(privileges) > 0
+                return result.mappings().fetchone() is not None
         except Exception as e:
-            log.error(f"检查用户权限时出错: {e}")
+            log.error(f"检查用户是否存在失败: {e}")
             return False
+
+    @classmethod
+    def add_user(cls, db_username: str):
+        """
+        添加用户
+        :param db_username: 待添加的用户名
+        :return:
+        """
+        if cls._root_engine is None:
+            raise InvalidOperationException("请先初始化root用户引擎")
+        cls._user_exist.add(db_username)
+
+    @classmethod
+    async def check_privilege(cls, db_username: str, db_name: str) -> bool:
+        """
+        检查用户对数据库的读写权限
+        :param db_username: 数据库用户名（仅用户名，如 'test_1'，无需带@%）
+        :param db_name: 数据库名称
+        :return: 如果用户对数据库有读写权限（SELECT/INSERT/UPDATE/DELETE）返回True，否则返回False
+        """
+        if cls._root_engine is None:
+            raise InvalidOperationException("请先初始化root用户引擎")
+
+        # 定义需要的读写权限列表
+        required_privileges = {"SELECT", "INSERT", "UPDATE", "DELETE"}
+        # 标准化GRANTEE格式（避免手动拼接单引号，防止注入）
+        grantee = f"'{db_username}'@'%'"
+
+        try:
+            engine = await cls.get_root_engine()
+            async with engine.connect() as conn:
+                # 查询用户对指定数据库的权限（使用SCHEMA_PRIVILEGES表）
+                result = await conn.execute(
+                    text("""
+                        SELECT PRIVILEGE_TYPE 
+                        FROM information_schema.SCHEMA_PRIVILEGES 
+                        WHERE GRANTEE = :grantee 
+                          AND TABLE_SCHEMA = :db_name
+                    """),
+                    {"grantee": grantee, "db_name": db_name}
+                )
+                # 提取用户拥有的权限
+                user_privileges = {row.PRIVILEGE_TYPE for row in result.fetchall()}
+                # 判断是否包含至少一种读写权限
+                has_write_read_priv = not required_privileges.isdisjoint(user_privileges)
+                return has_write_read_priv
+        except Exception as e:
+            log.error(f"检查用户[{db_username}]对数据库[{db_name}]的权限时出错: {e}", exc_info=True)
+            return False
+
+    @classmethod
+    async def grant_user_privileges(cls, db_name: str, db_username: str):
+        """
+        为用户授予数据库的读写权限
+        :param db_name: 数据库名称
+        :param db_username: 数据库用户名（仅用户名，如 'test_1'，无需带@%）
+        :return:
+        """
+        if cls._root_engine is None:
+            raise InvalidOperationException("请先初始化root用户引擎")
+
+        user_hosts: List[str] = ["%", "localhost"]
+
+        escaped_db_name = db_name.replace("`", "``")
+        escaped_username = db_username.replace("'", "''")
+
+        # 4. 循环授予权限并刷新
+        for host in user_hosts:
+            try:
+                # 安全拼接GRANT语句（仅转义标识符，避免注入）
+                grant_sql = (
+                    f"GRANT ALL PRIVILEGES ON `{escaped_db_name}`.* TO '{escaped_username}'@'{host}'"
+                )
+                async with cls.get_root_engine() as conn:
+                        await conn.execute(text(grant_sql))
+                log.info(f"[MySQL] 成功为用户 '{db_username}'@{host} 授予数据库 '{db_name}' 的所有权限")
+            except Exception as e:
+                raise RuntimeError(
+                    f"为用户 '{db_username}'@{host} 授予数据库 '{db_name}' 权限失败: {str(e)}"
+                ) from e
