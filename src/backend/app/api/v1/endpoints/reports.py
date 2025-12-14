@@ -1,12 +1,10 @@
-# backend/app/api/v1/endpoints/reports.py
-
 from fastapi import APIRouter, Depends, Query, Path, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 from typing import List
 
-# 导入正确的 ReportUpdate Schema
-from schema.report import ReportCreate, Report, HistoryQuery, ReportUpdate 
-from api.v1.deps import get_db
+from schema.report import ReportCreate, Report, HistoryQuery, ReportUpdate
+from schema.user import UserMe
+from api.v1.deps import get_db, get_current_active_user
 from service import report_service
 
 router = APIRouter()
@@ -14,80 +12,134 @@ router = APIRouter()
 # -------------------------------------------
 # 1. 获取报表列表 (Read)
 # -------------------------------------------
-@router.get("/reports", response_model=List[Report])
+@router.get("/reports", response_model=List[Report], summary="获取报表列表")
 async def read_reports(
     projectId: int = Query(..., description="项目ID"),
     db: AsyncSession = Depends(get_db),
+    user: UserMe = Depends(get_current_active_user),
 ):
     """
-    获取指定项目下的所有保存的报表配置。
+    获取指定项目下的所有保存的报表配置（仅限当前用户的项目）。
     """
-    return await report_service.get_report_list(db, projectId)
+    return await report_service.get_report_list(
+        db=db,
+        project_id=projectId,
+        user_id=user.user_id
+    )
+
 
 # -------------------------------------------
 # 2. 获取历史查询记录
 # -------------------------------------------
-@router.get("/history-queries", response_model=List[HistoryQuery])
+@router.get("/history-queries", response_model=List[HistoryQuery], summary="获取历史查询记录")
 async def read_history(
     projectId: int = Query(..., description="项目ID"),
     db: AsyncSession = Depends(get_db),
+    user: UserMe = Depends(get_current_active_user),
 ):
     """
-    获取历史查询结果，用于作为创建新报表的数据源。
+    获取历史查询结果，用于作为创建新报表的数据源（仅限当前用户的项目）。
     """
-    return await report_service.get_history_queries_service(db, projectId)
+    return await report_service.get_history_queries_service(
+        db=db,
+        project_id=projectId,
+        user_id=user.user_id
+    )
+
 
 # -------------------------------------------
 # 3. 创建报表 (Create)
 # -------------------------------------------
-@router.post("/projects/{project_id}/reports", response_model=Report)
+@router.post(
+    "/projects/{project_id}/reports",
+    response_model=Report,
+    summary="创建报表"
+)
 async def create_report(
-    project_id: int,
     body: ReportCreate,
+    project_id: int = Path(..., description="项目ID"),
     db: AsyncSession = Depends(get_db),
+    user: UserMe = Depends(get_current_active_user),
 ):
     """
-    保存报表配置。
+    在指定项目下创建报表（仅限当前用户的项目）。
     """
-    return await report_service.create_report_service(db, project_id, body)
+    return await report_service.create_report_service(
+        db=db,
+        project_id=project_id,
+        payload=body,
+        user_id=user.user_id
+    )
+
 
 # -------------------------------------------
 # 4. 删除报表 (Delete)
 # -------------------------------------------
-@router.delete("/reports/{report_id}", response_model=bool)
+@router.delete(
+    "/reports/{report_id}",
+    response_model=bool,
+    summary="删除报表"
+)
 async def delete_report(
     report_id: int = Path(..., description="报表ID"),
     db: AsyncSession = Depends(get_db),
+    user: UserMe = Depends(get_current_active_user),
 ):
     """
-    删除指定的报表配置。
+    删除指定报表（仅限当前用户）。
     """
-    success = await report_service.delete_report_service(db, report_id)
-    if not success:
-        raise HTTPException(status_code=404, detail="Report not found")
-    return True
+    return await report_service.delete_report_service(
+        db=db,
+        report_id=report_id,
+        user_id=user.user_id
+    )
+
 
 # -------------------------------------------
-# 5. 修改报表信息 (Update) - [已修复]
+# 5. 修改报表信息 (Update)
 # -------------------------------------------
-@router.put("/reports/{report_id}", response_model=Report)
+@router.put(
+    "/reports/{report_id}",
+    response_model=Report,
+    summary="更新报表"
+)
 async def update_report(
-    body: ReportUpdate,  # 注意：Pydantic模型通常放在 Depends 前面
+    body: ReportUpdate,
     report_id: int = Path(..., description="报表ID"),
     db: AsyncSession = Depends(get_db),
+    user: UserMe = Depends(get_current_active_user),
 ):
     """
-    修改报表配置（例如：修改图表类型、修改标题）。
+    修改报表配置（仅限当前用户）。
     """
-    return await report_service.update_report_service(db, report_id, body)
+    return await report_service.update_report_service(
+        db=db,
+        report_id=report_id,
+        payload=body,
+        user_id=user.user_id
+    )
+
 
 # -------------------------------------------
 # 6. 导出报表 (Export)
 # -------------------------------------------
-@router.get("/reports/{report_id}/export", response_model=dict)
+@router.get(
+    "/reports/{report_id}/export",
+    response_model=dict,
+    summary="导出报表"
+)
 async def export_report(
-    report_id: int,
+    report_id: int = Path(..., description="报表ID"),
     format: str = Query("png", regex="^(png|jpeg|pdf)$"),
-    db: AsyncSession = Depends(get_db)
+    db: AsyncSession = Depends(get_db),
+    user: UserMe = Depends(get_current_active_user),
 ):
-    return await report_service.export_report_service(db, report_id, format)
+    """
+    导出报表（仅限当前用户）。
+    """
+    return await report_service.export_report_service(
+        db=db,
+        report_id=report_id,
+        format=format,
+        user_id=user.user_id
+    )

@@ -1,141 +1,115 @@
 import json
 import httpx
 import sqlparse
-import asyncio
-import random
-from fastapi import HTTPException
+from typing import List, Dict, Optional,Any   
+from fastapi import HTTPException, status
 from sqlalchemy.future import select
+from sqlalchemy.orm import selectinload
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from core.config import settings
+from core.log import log
 from crud.crud_message import crud_message
 from crud.crud_project import crud_project
-from crud.crud_database_instance import crud_database_instance
 from models.session import Session as SessionModel
-from mysql.mysql_database import MysqlHelper
+from models.project import Project as ProjectModel
 from schema.chat import ChatResponse, MessageType
-from core.log import log
-from mysql.mysql_execute import execute_dql_user, execute_dml_user
-from core.config import config
-from core.exceptions import DatabaseOperationFailedException, SQLOperationFailedException
-from service.mysql_service import create_mysql_user, sql_execute_in_mysql
 
-# -----------------------
-# AI 配置
-# -----------------------
-AI_SERVICE_URL = "http://1.92.127.206:8080/v1/chat/completions"
-AI_MODEL = "codellama/CodeLlama-13b-Instruct-hf"
-AI_API_KEY = "sk-2025texttosql"
+# =========================================================
+# 1. 模型配置注册表
+# =========================================================
+# 建议：长期来看，这些配置也可以移入数据库或 YAML，但目前作为常量定义在 Service 层是可以接受的
+# 重点是 API Key 必须从 settings 读取
 
-# 【重要】Mock 开关
-# True = 开启模拟模式（不联网，返回假数据，用于开发调试）
-# False = 关闭模拟模式（尝试连接真实 AI）
-MOCK_MODE = True
+MODEL_REGISTRY = {
+    "my-finetuned-sql": {
+        "name": "My Fine-Tuned SQL Model",
+        "api_url": "http://26.64.77.145:1234/v1/chat/completions", # 这里的IP如果是固定的可以留着，如果是变动的建议放config
+        "model_id": "codellama/CodeLlama-13b-Instruct-hf",
+        "api_key": "dummy-key", # 本地模型通常不需要 Key
+        "type": "local_finetune"
+    },
+    "xiyan-sql": {
+        "name": "XiYan-SQL (QwenCoder-32B)",
+        "api_url": "https://api-inference.modelscope.cn/v1/chat/completions",
+        "model_id": "XGenerationLab/XiYanSQL-QwenCoder-32B-2504",
+        "api_key": settings.ai.modelscope_api_key, # <--- 修正：从配置读取
+        "type": "general_llm"
+    },
+    "qwen-coder-32b": {
+        "name": "Qwen2.5-Coder-32B",
+        "api_url": "https://api-inference.modelscope.cn/v1/chat/completions",
+        "model_id": "Qwen/Qwen2.5-Coder-32B-Instruct",
+        "api_key": settings.ai.modelscope_api_key, # <--- 修正：从配置读取
+        "type": "general_llm"
+    },
+    "deepseek-v3": {
+        "name": "DeepSeek V3.1",
+        "api_url": "https://api-inference.modelscope.cn/v1/chat/completions",
+        "model_id": "deepseek-ai/DeepSeek-V3.1",
+        "api_key": settings.ai.modelscope_api_key, # <--- 修正：从配置读取
+        "type": "general_llm"
+    }
+}
 
+DEFAULT_MODEL = "my-finetuned-sql"
 
-# -----------------------
-# 工具：将 Schema JSON 转为日志里的文本格式
-# -----------------------
-def format_schema_to_text(schema_data):
+# =========================================================
+# 2. 辅助函数 (逻辑拆分)
+# =========================================================
+
+# src/backend/app/service/chat_service.py
+
+def _format_schema_to_text(schema_data: Any) -> str:
     """
-    将 JSON 对象转换为模型习惯的文本格式：
-    Table: table_name, columns = [col1, col2, ...]
+    将 Schema JSON 转换为模型易读的文本格式
+    兼容 List 和 Dict 两种结构
     """
     if not schema_data:
         return ""
-
-    lines = []
     try:
-        # 如果数据库里存的是字符串，先转成对象
+        # 1. 如果是字符串，先转成对象
         if isinstance(schema_data, str):
             schema_data = json.loads(schema_data)
+        
+        # 2. 【关键修复】如果是字典且包含 'tables' 键，提取出列表
+        if isinstance(schema_data, dict) and "tables" in schema_data:
+            schema_data = schema_data["tables"]
 
-        # 遍历表结构
-        # 假设结构是: [{"table_name": "student", "columns": ["id", "name"]}]
-        for table in schema_data:
-            t_name = table.get("table_name", "unknown")
-            cols = table.get("columns", [])
+        # 3. 现在的 schema_data 应该是一个列表了，开始遍历
+        lines = []
+        if isinstance(schema_data, list):
+            for table in schema_data:
+                # 兼容 table 可能是 dict 或者 object 的情况
+                if isinstance(table, dict):
+                    t_name = table.get("table_name", "unknown")
+                    cols = table.get("columns", [])
+                else:
+                    # 万一数据很怪，做一个容错
+                    continue
 
-            # 容错处理：确保 cols 是列表
-            if isinstance(cols, str):
-                cols = [cols]
-
-            # 构造日志里的核心格式
-            col_str = ", ".join(str(c) for c in cols)
-            line = f"Table: {t_name}, columns = [{col_str}]"
-            lines.append(line)
+                if isinstance(cols, str): 
+                    cols = [cols]
+                col_str = ", ".join(str(c) for c in cols)
+                lines.append(f"Table: {t_name}, columns = [{col_str}]")
+        else:
+            # 如果结构实在太乱，直接转字符串兜底
+            return str(schema_data)
 
         return "\n".join(lines)
     except Exception as e:
-        log.error(f"Schema formatting error: {e}")
-        # 如果解析失败，为了不报错，返回原始字符串
+        log.error(f"Schema format error: {e}")
+        # 出错了也不要崩，把原始数据给 AI，看它能不能看懂
         return str(schema_data)
-
-
-# -----------------------
-# 获取 Session → Project
-# -----------------------
-async def get_project_id_by_session(db: AsyncSession, session_id: int) -> int:
-    result = await db.execute(
-        select(SessionModel).where(SessionModel.session_id == session_id)
-    )
-    session = result.scalar_one_or_none()
-    if not session:
-        raise HTTPException(404, "Session not found")
-    return session.project_id
-
-
-# -----------------------
-# 获取 Schema (已修改为返回特定文本格式)
-# -----------------------
-async def get_project_schema_text(db, project_id):
-    project = await crud_project.get(db, project_id)
-    if not project or not project.schema_definition:
-        return "No schema defined."
-
-    # 调用上面的工具函数进行转换
-    return format_schema_to_text(project.schema_definition)
-
-
-# -----------------------
-# Mock 逻辑 (模拟 AI)
-# -----------------------
-async def mock_ai_response(question: str):
-    """模拟 AI 的行为，根据关键词返回不同类型的 SQL"""
-    log.info(f"【MOCK模式】正在模拟 AI 回复... 问题: {question}")
-
-    # 模拟 1.5 秒网络延迟，让前端 Loading 转一会儿
-    await asyncio.sleep(1.5)
-
-    q = question.lower()
-
-    # 根据问题包含的词，返回不同的 SQL，测试前端展示效果
-    if "删除" in q or "delete" in q:
-        return "DELETE FROM student WHERE id = 1001;"
-
-    elif "修改" in q or "update" in q:
-        return "UPDATE course SET credit = 4 WHERE name = 'Software Engineering';"
-
-    elif "插入" in q or "添加" in q or "insert" in q:
-        return "INSERT INTO student (id, name, age) VALUES (2024001, 'Test User', 20);"
-
-    elif "平均" in q or "avg" in q:
-        return "SELECT AVG(score) FROM exam_results WHERE course_id = 'SE101';"
-
-    else:
-        # 默认查询
-        return "SELECT * FROM student WHERE major = 'Software Engineering' LIMIT 10;"
-
-
-# -----------------------
-# 调用 AI Agent
-# -----------------------
-async def call_ai_agent(schema_text, question):
-    # 1. 如果开启了 Mock 模式，直接拦截并返回
-    if MOCK_MODE:
-        return await mock_ai_response(question)
-
-    # 2. 构造符合日志格式的 Prompt
-    user_prompt_content = f"""I want you to act as a SQL terminal in front of an database.
+    
+def _build_ai_messages(model_config: Dict, schema_text: str, question: str) -> List[Dict]:
+    """
+    根据模型类型构建对应的 Prompt 策略
+    解决“函数过长”问题，将 Prompt 逻辑抽离
+    """
+    if model_config["type"] == "local_finetune":
+        # 策略 A: 微调模型 (严格格式)
+        prompt_content = f"""I want you to act as a SQL terminal in front of an database.
 Here is the schema:
 {schema_text}
 
@@ -144,112 +118,161 @@ I want you to answer the following question.
 
 ### Response:
 """
-
-    # 修改此处：添加 "stop" 参数
-    payload = {
-        "model": AI_MODEL,
-        "messages": [
+        return [
             {"role": "system", "content": "You are a SQL expert."},
-            {"role": "user", "content": user_prompt_content}
-        ],
+            {"role": "user", "content": prompt_content}
+        ]
+    else:
+        # 策略 B: 通用大模型 (思维链与规则引导)
+        system_prompt = f"""You are a generic SQL expert. 
+Your task is to generate valid SQL queries based on the provided database schema and user question.
+
+[Database Schema]
+{schema_text}
+
+[Important Rules]
+1. The user asks in **Chinese**, but the table/column names are in **English**. You MUST map them semantically.
+2. Respond **ONLY** with the SQL code. Do NOT wrap it in markdown code blocks.
+3. Do NOT provide explanations.
+4. If the logic involves 'JOIN', ensure column names are disambiguated.
+5. Pay strict attention to column names in the schema. Do not hallucinate IDs.
+"""
+        return [
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": question}
+        ]
+
+async def _verify_session_ownership(db: AsyncSession, session_id: int, user_id: int) -> int:
+    """
+    验证会话所有权，防止越权访问 (IDOR)
+    返回: project_id
+    """
+    # 联表查询：Session -> Project，检查 Project.user_id 是否匹配
+    stmt = (
+        select(SessionModel)
+        .options(selectinload(SessionModel.project)) # 预加载 Project 避免 N+1
+        .where(SessionModel.session_id == session_id)
+    )
+    result = await db.execute(stmt)
+    session = result.scalar_one_or_none()
+
+    if not session:
+        raise HTTPException(status_code=404, detail="Session not found")
+    
+    if not session.project:
+        raise HTTPException(status_code=404, detail="Project not found for this session")
+
+    # 【关键安全检查】
+    if session.project.user_id != user_id:
+        log.warning(f"Security Alert: User {user_id} tried to access session {session_id} belonging to user {session.project.user_id}")
+        raise HTTPException(status_code=403, detail="Permission denied: You do not own this session")
+
+    return session.project_id
+
+# =========================================================
+# 3. 核心业务逻辑
+# =========================================================
+
+async def call_ai_agent(schema_text: str, question: str, model_key: str = None) -> str:
+    """
+    调用 AI 接口生成 SQL
+    """
+    # 1. 确定配置
+    if not model_key or model_key not in MODEL_REGISTRY:
+        model_key = DEFAULT_MODEL
+    
+    config = MODEL_REGISTRY[model_key]
+    log.info(f"Using AI Model: {config['name']} ({config['model_id']})")
+
+    # 2. 构建 Prompt
+    messages = _build_ai_messages(config, schema_text, question)
+
+    # 3. 构建请求 Payload
+    payload = {
+        "model": config["model_id"],
+        "messages": messages,
         "temperature": 0.1,
-        "stream": False,
-        "stop": [";", "<|im_end|>"]  # <--- 新增：遇到分号或结束符立即停止
+        "stream": False
     }
+    
+    if config["type"] == "general_llm":
+        payload["max_tokens"] = 1024
 
     headers = {
-        "Authorization": f"Bearer {AI_API_KEY}",
+        "Authorization": f"Bearer {config['api_key']}",
         "Content-Type": "application/json"
     }
 
+    # 4. 执行网络请求
     try:
-        log.info(f"Payload sending to AI: {payload}")
-
-        # 建议：如果还是超时，可以尝试将 timeout 从 60 改为 120
         async with httpx.AsyncClient(timeout=60) as client:
-            resp = await client.post(AI_SERVICE_URL, json=payload, headers=headers)
+            resp = await client.post(config["api_url"], json=payload, headers=headers)
 
         resp.raise_for_status()
         raw = resp.json()
-
-        # =======================================================
-        # 新增：打印 AI 返回的完整原始数据
-        # =======================================================
-        log.info(f"【AI Debug】Raw Response: {json.dumps(raw, ensure_ascii=False)}")
-
+        
+        # 解析响应
         content = ""
         if "choices" in raw and len(raw["choices"]) > 0:
             content = raw["choices"][0]["message"]["content"]
-
-        # 清理内容
-        clean_sql = content.strip()
-        if clean_sql.startswith("```sql"):
-            clean_sql = clean_sql.replace("```sql", "").replace("```", "")
-
-        return clean_sql.strip()
+        
+        # 清理结果
+        clean_sql = content.strip().replace("```sql", "").replace("```", "").strip()
+        return clean_sql
 
     except Exception as e:
-        log.error(f"AI Connection Error: {e}")
-        return f"-- Error calling AI: {str(e)}"
+        log.error(f"AI Call Error ({model_key}): {e}")
+        # 这里返回错误字符串是可以的，让用户知道 AI 挂了，而不是整个页面崩溃
+        return f"-- AI Service Error: {str(e)}"
 
 
-# -----------------------
-#   主流程
-# -----------------------
-async def process_chat(db: AsyncSession, session_id: int, user_input: str, user_id: int):
-    # 1. 存用户消息
-    user_msg = await crud_message.create_message(
-        db, session_id, user_input, role="user"
-    )
+async def process_chat(
+    db: AsyncSession, 
+    session_id: int, 
+    user_input: str, 
+    user_id: int, 
+    selected_model: str = None
+) -> ChatResponse:
+    """
+    处理用户聊天请求的主流程
+    """
+    # 1. 安全检查：确认会话属于当前用户，并获取 project_id
+    project_id = await _verify_session_ownership(db, session_id, user_id)
 
-    # 2. 获取上下文
-    project_id = await get_project_id_by_session(db, session_id)
+    # 2. 存用户消息 (先存库，保证有记录)
+    await crud_message.create_message(db, session_id, user_input, role="user")
 
-    # 获取转换成文本格式的 Schema (Change: 使用新函数)
-    schema_text = await get_project_schema_text(db, project_id)
+    # 3. 获取 Schema 上下文
+    project = await crud_project.get(db, project_id)
+    if not project or not project.schema_definition:
+        schema_text = "No schema defined."
+    else:
+        schema_text = _format_schema_to_text(project.schema_definition)
+    
+    # 4. 调用 AI 生成 SQL
+    sql_text = await call_ai_agent(schema_text, user_input, model_key=selected_model)
 
-    # 3. 模型生成 SQL
-    sql_text = await call_ai_agent(schema_text, user_input)
-
-    if sql_text.startswith("-- Error calling AI:"):
-        return ChatResponse(
-            message_id=user_msg.message_id,
-            content=sql_text,
-            message_type=MessageType.ASSISTANT,
-            sql_text=sql_text,
-            sql_type="",
-            requires_confirmation=False,
-            data=None
-        )
-
-    # 4. SQL 类型判断
+    # 5. 简单解析 SQL 类型
     sql_type = "UNKNOWN"
     try:
         if sql_text and not sql_text.startswith("--"):
             parsed = sqlparse.parse(sql_text)
-            if parsed:
+            if parsed: 
                 sql_type = parsed[0].get_type().upper()
-    except Exception as e:
-        log.warning(f"SQL Parse warning: {e}")
+    except Exception:
+        pass
 
-    # 5. 执行 SQL
-    sql_result = await sql_execute_in_mysql(db, project_id, sql_text, sql_type)
-    log.info(f"SQL Result: {sql_result}")
-
-    # 6. 创建 AI 回复消息
+    # 6. 存 AI 回复消息
     reply_content = f"已生成查询语句：\n{sql_text}"
+    ai_message = await crud_message.create_message(db, session_id, reply_content, role="assistant")
 
-    ai_message = await crud_message.create_message(
-        db, session_id, reply_content, role="assistant"
-    )
-
-    # 6. 返回结果
+    # 7. 构造响应
     return ChatResponse(
         message_id=ai_message.message_id,
-        content=reply_content,
+        content=reply_content, 
         message_type=MessageType.ASSISTANT,
         sql_text=sql_text,
         sql_type=sql_type,
         requires_confirmation=sql_type in ["INSERT", "UPDATE", "DELETE", "DROP", "ALTER"],
-        data=sql_result
+        data=None
     )

@@ -1,3 +1,9 @@
+"""
+聊天服务（测试变体）。
+
+用于调试/验证 chat-to-SQL 流程，连接可配置的 AI 端点并返回基础解析结果。
+"""
+
 import json
 import httpx
 import sqlparse
@@ -25,6 +31,19 @@ AI_API_KEY = "sk-YQjmNgkBJqRTsZCsr7r0zkHoLb6G0exL9u8gEkJTf5oZQXmE"
 # 获取 Session → Project
 # -----------------------
 async def get_project_id_by_session(db: AsyncSession, session_id: int) -> int:
+    """
+    根据会话 ID 获取项目 ID。
+
+    Args:
+        db (AsyncSession): 数据库会话。
+        session_id (int): 会话 ID。
+
+    Returns:
+        int: 项目 ID。
+
+    Raises:
+        HTTPException: 当会话不存在时。
+    """
     result = await db.execute(
         select(SessionModel).where(SessionModel.session_id == session_id)
     )
@@ -39,7 +58,17 @@ async def get_project_id_by_session(db: AsyncSession, session_id: int) -> int:
 # -----------------------
 # 获取 Schema
 # -----------------------
-async def get_project_schema(db, project_id):
+async def get_project_schema(db: AsyncSession, project_id: int) -> str:
+    """
+    获取项目 Schema 的 JSON 文本。
+
+    Args:
+        db (AsyncSession): 数据库会话。
+        project_id (int): 项目 ID。
+
+    Returns:
+        str: Schema 的 JSON 字符串或占位文本。
+    """
     project = await crud_project.get(db, project_id)
 
     if not project or not project.schema_definition:
@@ -52,7 +81,17 @@ async def get_project_schema(db, project_id):
 # -----------------------
 # 获取术语库
 # -----------------------
-async def get_domain_knowledge(db, project_id):
+async def get_domain_knowledge(db: AsyncSession, project_id: int) -> str:
+    """
+    获取项目的术语库并格式化为提示文本。
+
+    Args:
+        db (AsyncSession): 数据库会话。
+        project_id (int): 项目 ID。
+
+    Returns:
+        str: 术语库提示文本，可能为空。
+    """
     items = await crud_knowledge.get_by_project(db, project_id)
 
     if not items:
@@ -68,7 +107,22 @@ async def get_domain_knowledge(db, project_id):
 # -----------------------
 # 调用 Claude Agent
 # -----------------------
-async def call_ai_agent(schema, glossary, question):
+async def call_ai_agent(
+    schema: str,
+    glossary: str,
+    question: str,
+) -> dict:
+    """
+    调用外部 AI 服务，要求返回包含 `sql` 字段的 JSON。
+
+    Args:
+        schema (str): Schema 文本。
+        glossary (str): 术语库文本。
+        question (str): 用户问题。
+
+    Returns:
+        dict: 解析后的 JSON，至少包含 `sql` 键。
+    """
     system_prompt = f"""
 你是 SQL 专家，请根据 Schema 与 业务术语生成 SQL。
 
@@ -134,7 +188,24 @@ async def call_ai_agent(schema, glossary, question):
 # -----------------------
 #   主流程（修改版）
 # -----------------------
-async def process_chat(db: AsyncSession, session_id: int, user_input: str, user_id: int):
+async def process_chat(
+    db: AsyncSession,
+    session_id: int,
+    user_input: str,
+    user_id: int,
+) -> ChatResponse:
+    """
+    主流程：存储消息、调用 AI、识别 SQL 类型并返回响应。
+
+    Args:
+        db (AsyncSession): 数据库会话。
+        session_id (int): 会话 ID。
+        user_input (str): 用户输入文本。
+        user_id (int): 用户 ID。
+
+    Returns:
+        ChatResponse: 包含 SQL 文本与类型的响应。
+    """
 
     # 1. 存用户消息
     user_msg = await crud_message.create_message(

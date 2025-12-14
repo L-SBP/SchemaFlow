@@ -1,4 +1,9 @@
-# backend/app/service/knowledge_service.py
+"""
+术语服务。
+
+管理项目的领域术语，包括增删改查、导入/导出与分页；负责权限校验、数据校验
+与错误处理。
+"""
 import os
 import pandas as pd
 from typing import List, Optional, Any
@@ -23,12 +28,30 @@ if not os.path.exists(EXPORT_DIR):
     os.makedirs(EXPORT_DIR)
 
 # ----------------------------------------------------------------------
-# 3.4.1 创建术语
+# 术语创建
 # ----------------------------------------------------------------------
 async def create_knowledge_service(
-        db: Session, project_id: int, user_id: int, data: schemas.KnowledgeCreate
+    db: Session, 
+    project_id: int, 
+    user_id: int, 
+    data: schemas.KnowledgeCreate
 ) -> schemas.KnowledgeResponse:
-    """创建新术语，需检查项目权限和术语唯一性"""
+    """
+    创建新术语，并检查权限与唯一性。
+
+    Args:
+        db (Session): 数据库会话。
+        project_id (int): 项目 ID。
+        user_id (int): 用户 ID。
+        data (schemas.KnowledgeCreate): 术语创建数据。
+
+    Returns:
+        schemas.KnowledgeResponse: 创建后的术语信息。
+
+    Raises:
+        ItemNotFoundException: 项目不存在或无权限。
+        ValidationException: 术语已存在。
+    """
     # 1. 检查项目权限
     project = await crud_project.get(db, project_id)
     if not project or project.user_id != user_id:
@@ -43,15 +66,32 @@ async def create_knowledge_service(
     return schemas.KnowledgeResponse.model_validate(new_term)
 
 # ----------------------------------------------------------------------
-# [新增] 更新术语
+# 术语更新
 # ----------------------------------------------------------------------
 async def update_knowledge_service(
-        db: Session,
-        project_id: int,
-        knowledge_id: int,
-        user_id: int,
-        update_data: schemas.KnowledgeUpdate  # 建议使用 Update 模型，而不是 Create
+    db: Session,
+    project_id: int,
+    knowledge_id: int,
+    user_id: int,
+    update_data: schemas.KnowledgeUpdate  # 建议使用 Update 模型，而不是 Create
 ) -> schemas.KnowledgeResponse:
+    """
+    更新术语内容，验证项目归属与权限。
+
+    Args:
+        db (Session): 数据库会话。
+        project_id (int): 项目 ID。
+        knowledge_id (int): 术语 ID。
+        user_id (int): 用户 ID。
+        update_data (schemas.KnowledgeUpdate): 更新数据。
+
+    Returns:
+        schemas.KnowledgeResponse: 更新后的术语信息。
+
+    Raises:
+        ItemNotFoundException: 术语不存在或不属于该项目。
+        OperationNotPermittedException: 无权限。
+    """
     # 1. 查数据
     db_obj = await crud_knowledge.get(db, knowledge_id)
     if not db_obj:
@@ -73,11 +113,29 @@ async def update_knowledge_service(
 
 
 # ----------------------------------------------------------------------
-# [新增] 批量删除
+# 批量删除术语
 # ----------------------------------------------------------------------
 async def batch_delete_knowledge_service(
-        db: Session, project_id: int, user_id: int, knowledge_ids: List[int]
+    db: Session, 
+    project_id: int, 
+    user_id: int, 
+    knowledge_ids: List[int]
 ) -> int:
+    """
+    批量删除术语。
+
+    Args:
+        db (Session): 数据库会话。
+        project_id (int): 项目 ID。
+        user_id (int): 用户 ID。
+        knowledge_ids (List[int]): 待删除术语 ID 列表。
+
+    Returns:
+        int: 删除成功的数量。
+
+    Raises:
+        OperationNotPermittedException: 无权限。
+    """
     # 1. 权限检查
     project = await crud_project.get(db, project_id)
     if not project or project.user_id != user_id:
@@ -89,12 +147,33 @@ async def batch_delete_knowledge_service(
 
 
 # ----------------------------------------------------------------------
-# 3.4.2 获取术语列表
+# 术语列表（分页）
 # ----------------------------------------------------------------------
 async def get_knowledge_list_service(
-        db: Session, project_id: int, user_id: int, page: int, page_size: int, search: Optional[str]
+    db: Session, 
+    project_id: int, 
+    user_id: int, 
+    page: int, 
+    page_size: int, 
+    search: Optional[str]
 ) -> schemas.PaginatedKnowledgeList:
-    """获取术语列表 (分页)"""
+    """
+    获取术语列表（分页）。
+
+    Args:
+        db (Session): 数据库会话。
+        project_id (int): 项目 ID。
+        user_id (int): 用户 ID。
+        page (int): 页码。
+        page_size (int): 每页数量。
+        search (Optional[str]): 搜索关键字。
+
+    Returns:
+        schemas.PaginatedKnowledgeList: 分页结果。
+
+    Raises:
+        ItemNotFoundException: 项目不存在。
+    """
     # 1. 检查项目权限
     project = await crud_project.get(db, project_id)
     if not project or project.user_id != user_id:
@@ -110,13 +189,29 @@ async def get_knowledge_list_service(
 
 
 # ----------------------------------------------------------------------
-# 3.4.3 批量导入术语
+# 批量导入术语
 # ----------------------------------------------------------------------
 async def import_knowledge_service(
-        db: Session, project_id: int, user_id: int, file: UploadFile
+    db: Session, 
+    project_id: int, 
+    user_id: int, 
+    file: UploadFile
 ) -> schemas.ImportResponse:
     """
-    解析 EXCEL/CSV 文件并批量导入。
+    解析 Excel/CSV 文件并批量导入术语。
+
+    Args:
+        db (Session): 数据库会话。
+        project_id (int): 项目 ID。
+        user_id (int): 用户 ID。
+        file (UploadFile): 上传文件。
+
+    Returns:
+        schemas.ImportResponse: 导入结果统计。
+
+    Raises:
+        ItemNotFoundException: 项目不存在。
+        ValidationException: 文件类型或内容解析失败。
     """
     # 1. 权限检查
     project = await crud_project.get(db, project_id)
@@ -201,12 +296,27 @@ async def import_knowledge_service(
     )
 
 # ----------------------------------------------------------------------
-# 3.4.4 导出术语
+# 术语导出
 # ----------------------------------------------------------------------
 async def export_knowledge_service(
-        db: Session, project_id: int, user_id: int
+    db: Session, 
+    project_id: int, 
+    user_id: int
 ) -> schemas.ExportResponse:
-    """生成 Excel 文件并返回 URL"""
+    """
+    导出术语为 Excel 文件并返回下载 URL。
+
+    Args:
+        db (Session): 数据库会话。
+        project_id (int): 项目 ID。
+        user_id (int): 用户 ID。
+
+    Returns:
+        schemas.ExportResponse: 包含下载链接与过期时间。
+
+    Raises:
+        ItemNotFoundException: 项目不存在。
+    """
     # 1. 权限检查
     project = await crud_project.get(db, project_id)
     if not project or project.user_id != user_id:

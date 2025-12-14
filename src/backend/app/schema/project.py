@@ -6,28 +6,37 @@ from datetime import datetime
 from enum import Enum
 
 
-# --- 1. 枚举定义 (严格匹配文档) ---
-
+# --- 1. 枚举定义 ---
 class ProjectStatusEnum(str, Enum):
-    """3.2. 项目状态：initializing, active, deleted"""
-    INITIALIZING = "initializing"
-    ACTIVE = "active"  # <--- 修正：文档要求是 active
+    INITIALIZING = "initializing"          # 正在生成或等待确认
+    PENDING_CONFIRMATION = "pending_confirmation" # (新增建议) 生成完毕，等待用户确认
+    ACTIVE = "active"                      # 已部署
     DELETED = "deleted"
 
 
 class CreationStageEnum(str, Enum):
     """3.2.2. 创建进度阶段"""
     INITIALIZING = "initializing"
-    GENERATING_SCHEMA = "generating_schema"
-    GENERATING_DDL = "generating_ddl"
-    EXECUTING_DDL = "executing_ddl"
-    COMPLETED = "completed"
+    GENERATING_SCHEMA = "generating_schema"  # 正在生成 Schema
+    SCHEMA_GENERATED = "schema_generated"  # Schema 生成完毕，等待用户确认
+    GENERATING_DDL = "generating_ddl"  # 正在生成 DDL
+    DDL_GENERATED = "ddl_generated"  # DDL 生成完毕，等待用户部署
+    EXECUTING_DDL = "executing_ddl"  # 正在部署
+    COMPLETED = "completed"  # 完成
 
 
 # --- 2. 请求 DTOs ---
 
 class ProjectCreate(BaseModel):
-    """3.2.1 创建项目请求"""
+    """
+    创建项目请求体。
+
+    Attributes:
+        project_name (str): 项目名称。
+        db_type (Literal): 数据库类型（mysql、postgresql、sqlite）。
+        description (str): 项目描述。
+        ai_model (Literal): 用于生成Schema的AI模型。
+    """
     project_name: str = Field(..., min_length=1, max_length=50, description="项目名称")
     db_type: Literal['mysql', 'postgresql', 'sqlite'] = Field(..., description="数据库类型")
     description: str = Field(..., max_length=1000, description="项目描述")
@@ -35,7 +44,14 @@ class ProjectCreate(BaseModel):
 
 
 class ProjectUpdate(BaseModel):
-    """3.2.4 更新项目请求 (PATCH)"""
+    """
+    更新项目请求体（PATCH）。
+
+    Attributes:
+        project_name (Optional[str]): 项目名称。
+        description (Optional[str]): 项目描述。
+        schema_definition (Optional[Dict[str, Any]]): 前端修改后的DDL和Schema结构。
+    """
     project_name: Optional[str] = Field(None, min_length=1, max_length=50)
     description: Optional[str] = Field(None, max_length=500)
     # =========================================================
@@ -44,6 +60,35 @@ class ProjectUpdate(BaseModel):
     schema_definition: Optional[Dict[str, Any]] = Field(
         None,
         description="前端修改后的DDL和Schema结构 {'ddl': '...', 'schema': '...'}"
+    )
+    ddl_statement: Optional[str] = None
+
+
+class GenerateDDLRequest(BaseModel):
+    """
+    用户确认 Schema 后，请求生成 DDL 的参数。
+    """
+    confirmed_schema: str = Field(..., description="用户确认或修改后的 Schema 内容")
+    # 如果用户在确认 Schema 阶段同时也微调了需求，可以传此参数更新项目描述，否则使用原描述
+    requirements: Optional[str] = Field(None, description="可选：修正后的需求描述")
+
+
+# --- ：部署请求 DTO ---
+class ProjectDeployRequest(BaseModel):
+    """
+    用户确认并提交部署的请求体。
+
+    Attributes:
+        confirmed_ddl (str): 用户确认后的最终 DDL 语句。
+        confirmed_schema (Optional[str]): 对应的 Schema 描述。
+        use_smart_parse (bool): 是否使用后端的方言转换和拓扑排序。
+    """
+    confirmed_ddl: str = Field(..., description="用户确认后的最终 DDL 语句")
+    confirmed_schema: Optional[str] = Field(None, description="对应的 Schema 描述")
+    # --- 预留接口：控制是否使用后端的高级解析功能 ---
+    use_smart_parse: bool = Field(
+        False,
+        description="是否使用后端的方言转换和拓扑排序。默认为True。未来如果AI生成的DDL足够完美，可设为False直接执行。"
     )
 
 
@@ -55,7 +100,15 @@ class DeleteConfirmationRequest(BaseModel):
 # --- 3. 响应 DTOs ---
 
 class ProjectAsyncResponse(BaseModel):
-    """3.2.1 异步创建响应 (202 Accepted)"""
+    """
+    异步创建项目的响应体 (202 Accepted)。
+
+    Attributes:
+        project_id (int): 项目 ID。
+        project_name (str): 项目名称。
+        project_status (ProjectStatusEnum): 项目状态。
+        message (str): 响应消息。
+    """
     project_id: int
     project_name: str
     # 使用 alias="status" 匹配前端期望的 {"status": "..."}
@@ -66,7 +119,17 @@ class ProjectAsyncResponse(BaseModel):
 
 
 class ProjectListOne(BaseModel):
-    """3.2.3 列表单项"""
+    """
+    项目列表单项。
+
+    Attributes:
+        project_id (int): 项目 ID。
+        project_name (str): 项目名称。
+        description (Optional[str]): 项目描述。
+        project_status (ProjectStatusEnum): 项目状态。
+        updated_at (datetime): 更新时间。
+        db_type (str): 数据库类型。
+    """
     project_id: int
     project_name: str
     description: Optional[str] = None
@@ -77,7 +140,15 @@ class ProjectListOne(BaseModel):
 
 
 class PaginatedProjectList(BaseModel):
-    """3.2.3 分页列表包装器"""
+    """
+    项目分页列表包装器。
+
+    Attributes:
+        total (int): 项目总数。
+        page (int): 当前页码。
+        page_size (int): 每页数量。
+        items (List[ProjectListOne]): 项目列表。
+    """
     total: int
     page: int
     page_size: int
@@ -87,7 +158,15 @@ class PaginatedProjectList(BaseModel):
 
 
 class ProjectDetailOut(ProjectListOne):
-    """详情 DTO 内部结构"""
+    """
+    项目详情 DTO。
+
+    Attributes:
+        created_at (datetime): 创建时间。
+        creation_stage (Optional[CreationStageEnum]): 创建进度阶段。
+        progress_percentage (Optional[int]): 创建进度百分比。
+        schema_definition (Optional[Dict[str, Any]]): AI生成的包含 'schema' 和 'ddl' 的JSON对象。
+    """
     created_at: datetime
     creation_stage: Optional[CreationStageEnum] = CreationStageEnum.INITIALIZING
     progress_percentage: Optional[int] = 0
@@ -99,18 +178,30 @@ class ProjectDetailOut(ProjectListOne):
         None,
         description="AI生成的包含 'schema' 和 'ddl' 的JSON对象"
     )
+    ddl_statement: Optional[str] = Field(None, description="DDL 语句文本")
 
     model_config = ConfigDict(from_attributes=True)
 
 
 class ProjectResponse(BaseModel):
-    """3.2.2 / 3.2.4 单个项目包装器 {"data": ...}"""
+    """
+    单个项目包装器。
+
+    Attributes:
+        data (ProjectDetailOut): 项目详情数据。
+    """
     data: ProjectDetailOut
 
     model_config = ConfigDict(from_attributes=True)
 
 
 class ConfirmationTokenResponse(BaseModel):
-    """3.2.5 删除令牌响应"""
+    """
+    删除令牌响应体。
+
+    Attributes:
+        confirmation_token (str): 删除令牌。
+        expires_at (datetime): 令牌过期时间。
+    """
     confirmation_token: str
     expires_at: datetime

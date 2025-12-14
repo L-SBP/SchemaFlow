@@ -1,4 +1,9 @@
-# backend/app/service/report_service.py
+"""
+报表服务。
+
+基于缓存查询结果与 AI 语句提供报表的创建、读取、更新、删除与导出；并提供
+历史查询数据以构建图表。
+"""
 
 from typing import List, Dict, Any
 from sqlalchemy.ext.asyncio import AsyncSession as Session
@@ -13,13 +18,58 @@ from models.ai_generated_statement import AIGeneratedStatement
 from models.project import Project
 # 注意：Message 和 Session 我们将在函数内部导入，或者你可以尝试在这里导入
 # 如果报错循环依赖，请保持函数内导入
+async def _verify_project_ownership(
+    db: Session,
+    project_id: int,
+    user_id: int,
+):
+    project = await db.get(Project, project_id)
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+
+    if project.user_id != user_id:
+        raise HTTPException(status_code=403, detail="Permission denied")
+
+    return project
+
+async def _verify_report_ownership(
+    db: Session,
+    report_id: int,
+    user_id: int,
+) -> AnalysisReport:
+    report = await db.get(AnalysisReport, report_id)
+    if not report:
+        raise HTTPException(status_code=404, detail="Report not found")
+
+    project = await db.get(Project, report.project_id)
+    if not project or project.user_id != user_id:
+        raise HTTPException(status_code=403, detail="Permission denied")
+
+    return report
 
 # --------------------------
-# 1. 获取报表列表 (Read)
+# 报表列表
 # --------------------------
-async def get_report_list(db: Session, project_id: int) -> List[schemas.Report]:
+
+
+async def get_report_list(
+    db: Session,
+    project_id: int,
+    user_id: int,
+)-> List[schemas.Report]:
+    await _verify_project_ownership(db, project_id, user_id)
     """
-    查询 AnalysisReport 表，并join QueryResult 获取数据
+    获取项目的报表列表并关联数据源与语句。
+
+    Args:
+        db (Session): 数据库会话。
+        project_id (int): 项目 ID。
+
+    Returns:
+        List[schemas.Report]: 报表列表。
+
+    Raises:
+        HTTPException: 项目不存在时返回 404。
     """
     # [修复问题1]：先检查项目是否存在
     project = await db.get(Project, project_id)
@@ -64,12 +114,27 @@ async def get_report_list(db: Session, project_id: int) -> List[schemas.Report]:
 
 
 # --------------------------
-# 2. 获取历史查询记录 (Source for creating reports)
+# 历史查询记录
 # --------------------------
-async def get_history_queries_service(db: Session, project_id: int) -> List[schemas.HistoryQuery]:
+async def get_history_queries_service(
+    db: Session,
+    project_id: int,
+    user_id: int,
+) -> List[schemas.HistoryQuery]:
+    await _verify_project_ownership(db, project_id, user_id)
+
     """
-    获取历史查询结果。
-    修正逻辑：关联 Message 表，返回用户原始的自然语言问题。
+    获取项目历史查询记录，返回用户原始提问与结果。
+
+    Args:
+        db (Session): 数据库会话。
+        project_id (int): 项目 ID。
+
+    Returns:
+        List[schemas.HistoryQuery]: 历史查询记录列表。
+
+    Raises:
+        HTTPException: 项目不存在时返回 404。
     """
     # [修复问题1]：先检查项目是否存在
     project = await db.get(Project, project_id)
@@ -110,12 +175,31 @@ async def get_history_queries_service(db: Session, project_id: int) -> List[sche
 
 
 # --------------------------
-# 3. 创建报表 (Create - 真正入库)
+# 创建报表
 # --------------------------
-async def create_report_service(db: Session, project_id: int, payload: schemas.ReportCreate):
+async def create_report_service(
+    db: Session,
+    project_id: int,
+    user_id: int,
+    payload: schemas.ReportCreate,
+) -> schemas.Report:
+    """
+    创建报表记录并返回标准响应。
+
+    Args:
+        db (Session): 数据库会话。
+        project_id (int): 项目 ID。
+        payload (schemas.ReportCreate): 报表创建参数。
+
+    Returns:
+        schemas.Report: 创建后的报表。
+
+    Raises:
+        HTTPException: 项目或数据源不存在。
+    """
     # 1. 校验项目
-    project_exists = await db.get(Project, project_id)
-    if not project_exists:
+    project = await _verify_project_ownership(db, project_id, user_id)
+    if not project:
         raise HTTPException(status_code=404, detail="Project not found")
     
     # 2. 校验数据源 (Query Result) 是否存在
@@ -154,24 +238,52 @@ async def create_report_service(db: Session, project_id: int, payload: schemas.R
 
 
 # --------------------------
-# 4. 删除报表 (Delete)
+# 删除报表
 # --------------------------
-async def delete_report_service(db: Session, report_id: int) -> bool:
-    stmt = delete(AnalysisReport).where(AnalysisReport.report_id == report_id)
-    result = await db.execute(stmt)
+async def delete_report_service(db: Session, report_id: int, user_id: int) -> bool:
+    """
+    删除指定报表。
+
+    Args:
+        db (Session): 数据库会话。
+        report_id (int): 报表 ID。
+
+    Returns:
+        bool: 是否删除成功。
+    """
+    report = await _verify_report_ownership(db, report_id, user_id)
+
+    await db.delete(report)
     await db.commit()
-    
-    if result.rowcount == 0:
-        return False
     return True
 
 
 # --------------------------
-# 5. 修改报表 (Update)
+# 更新报表
 # --------------------------
-async def update_report_service(db: Session, report_id: int, payload: schemas.ReportUpdate):
+async def update_report_service(
+    db: Session,
+    report_id: int,
+    user_id: int,
+    payload: schemas.ReportUpdate,
+) -> schemas.Report:
+    """
+    更新报表基础属性与图表配置。
+
+    Args:
+        db (Session): 数据库会话。
+        report_id (int): 报表 ID。
+        payload (schemas.ReportUpdate): 更新参数。
+
+    Returns:
+        schemas.Report: 更新后的报表。
+
+    Raises:
+        HTTPException: 报表不存在。
+    """
     # 1. 检查是否存在
-    report_obj = await db.get(AnalysisReport, report_id)
+    report_obj = await _verify_report_ownership(db, report_id, user_id)
+
     if not report_obj:
         raise HTTPException(status_code=404, detail="Report not found")
 
@@ -212,9 +324,27 @@ async def update_report_service(db: Session, report_id: int, payload: schemas.Re
 
 
 # --------------------------
-# 6. 导出报表 (Export)
+# 导出报表
 # --------------------------
-async def export_report_service(db: Session, report_id: int, format: str):
+async def export_report_service(
+    db: Session,
+    report_id: int,
+    format: str,
+) -> dict:
+    """
+    导出报表，返回下载链接与过期时间。
+
+    Args:
+        db (Session): 数据库会话。
+        report_id (int): 报表 ID。
+        format (str): 导出格式，如 `png` 或 `csv`。
+
+    Returns:
+        dict: 包含 `download_url` 和 `expires_at` 的字典。
+
+    Raises:
+        HTTPException: 报表不存在。
+    """
     # 检查 report 是否存在
     report_obj = await db.get(AnalysisReport, report_id)
     if not report_obj:

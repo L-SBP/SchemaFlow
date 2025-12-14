@@ -1,109 +1,120 @@
+# backend/app/api/v1/endpoints/chat.py
+
 from fastapi import APIRouter, Depends, HTTPException, Path
 from sqlalchemy.ext.asyncio import AsyncSession
-from typing import List
+from typing import List, Any
 
-# 1. 导入数据库和安全依赖
-from core.deps import get_db
-from api.v1 import deps  # 用于获取当前登录用户
+# 1. 导入核心工具
+from core.log import log
 
 # 2. 导入 Service 和 CRUD
 from service.chat_service import process_chat
 from crud.crud_message import crud_message
-from models.user_account import UserAccount
 
 # 3. 导入 Schema
 from schema.chat import ChatResponse, ChatRequest, MessageType
+from schema.user import UserMe  # 【重要】导入 UserMe Schema，因为鉴权返回的是这个
+
+# 4. 导入依赖 (使用项目现有的统一依赖)
+# get_db 通常在 core.deps 或 api.v1.deps 都有，这里统一从 api.v1.deps 拿
+from api.v1.deps import get_current_active_user, get_db
 
 router = APIRouter()
+
+# --- 辅助函数：将数据库消息模型转换为 API 响应模型 ---
+def _format_history_response(raw_messages: List[Any]) -> List[ChatResponse]:
+    """
+    格式化消息历史，提取 SQL 信息
+    """
+    clean_history = []
+    for msg in raw_messages:
+        sql_text = None
+        sql_type = "UNKNOWN"
+        requires_confirmation = False
+        
+        # 处理 AI 生成的 SQL 语句
+        if msg.ai_statement:
+            # 兼容列表或单对象，取第一个核心 SQL
+            stmt = msg.ai_statement[0] if isinstance(msg.ai_statement, list) and len(msg.ai_statement) > 0 else msg.ai_statement
+            
+            if stmt and hasattr(stmt, 'sql_text'):
+                sql_text = stmt.sql_text
+                sql_type = stmt.statement_type
+                # 判断是否需要确认
+                requires_confirmation = sql_type in ["INSERT", "UPDATE", "DELETE", "DROP", "ALTER"]
+
+        # 确定消息类型
+        message_type = MessageType.USER
+        if hasattr(msg, 'message_type') and msg.message_type == "assistant":
+            message_type = MessageType.ASSISTANT
+
+        # 构造响应对象
+        response_item = ChatResponse(
+            message_id=msg.message_id if hasattr(msg, 'message_id') else msg.id,
+            content=msg.content,
+            message_type=message_type,
+            sql_text=sql_text,
+            sql_type=sql_type,
+            requires_confirmation=requires_confirmation,
+            data=None 
+        )
+        clean_history.append(response_item)
+    return clean_history
+
 
 # --- 核心接口：发送自然语言消息 ---
 @router.post("/sessions/{session_id}/messages", response_model=ChatResponse)
 async def send_message(
     session_id: int = Path(..., description="会话ID"),
     chat_request: ChatRequest = None,
-    db: AsyncSession = Depends(get_db)
+    db: AsyncSession = Depends(get_db),
+    # 【核心修改】：使用 get_current_active_user
+    # 注意：这里的类型注解是 UserMe (Pydantic Schema)，不是 UserAccount (ORM)
+    current_user: UserMe = Depends(get_current_active_user)
 ):
+    """
+    发送消息给 AI，并获取 SQL 生成结果
+    """
     try:
-        # 2. 我们假装是 1 号用户在操作
-        # (只要你的数据库里有 project 和 session 数据就行，user_id 此时只是个数字)
-        mock_user_id = 1 
+        # UserMe Schema 里也有 user_id 字段，可以直接用
+        user_id = current_user.user_id
         
+        log.info(f"User {user_id} sending message in session {session_id}")
+
         response = await process_chat(
             db=db, 
             session_id=session_id, 
             user_input=chat_request.content,
-            user_id=mock_user_id # 把原来的 current_user.user_id 换成这个
+            user_id=user_id,             # 传入真实用户ID
+            selected_model=chat_request.model 
         )
         return response
         
     except Exception as e:
-        print(f"Chat Error: {e}")
-        import traceback
-        traceback.print_exc()
-        raise HTTPException(status_code=500, detail=str(e))
+        log.error(f"Chat Error: {str(e)}", exc_info=True)
+        raise HTTPException(status_code=500, detail="Internal Server Error processing chat")
 
-# --- 辅助接口：获取历史消息 (升级版) ---
+
+# --- 辅助接口：获取历史消息 ---
 @router.get("/sessions/{session_id}/messages", response_model=List[ChatResponse])
 async def get_history(
     session_id: int,
-    db: AsyncSession = Depends(get_db)
+    db: AsyncSession = Depends(get_db),
+    # 【核心修改】：统一鉴权，防止越权查看
+    current_user: UserMe = Depends(get_current_active_user)
 ):
     """
-    获取会话历史消息，并格式化为前端统一的结构
+    获取会话历史消息
     """
     try:
-        # 1. 查数据库 (包含了关联的 AI Statement)
+        # TODO: 在 Service 层建议增加检查：session_id 是否属于 current_user.user_id
+        
+        # 1. 查数据库
         raw_messages = await crud_message.get_recent_messages(db, session_id, limit=50)
         
-        # 2. 数据转换 (Model -> Schema)
-        clean_history = []
-        for msg in raw_messages:
-            # 提取 SQL 信息 (如果有的话)
-            sql_text = None
-            sql_type = "UNKNOWN"
-            requires_confirmation = False
-            
-            # 检查是否有关联的 AI 生成语句
-            if msg.ai_statement:
-                # 我们取第一条 SQL (假设一次对话生成一个核心 SQL)
-                # 兼容列表或单对象的情况
-                stmt = msg.ai_statement[0] if isinstance(msg.ai_statement, list) and len(msg.ai_statement) > 0 else msg.ai_statement
-                
-                # 双重保险，防止空对象
-                if stmt and hasattr(stmt, 'sql_text'):
-                    sql_text = stmt.sql_text
-                    sql_type = stmt.statement_type
-                    # 根据 SQL 类型判断是否需要确认
-                    requires_confirmation = sql_type in ["INSERT", "UPDATE", "DELETE", "DROP", "ALTER"]
-
-            # 3. 确定消息类型 - 使用正确的字段名 message_type
-            # 根据数据库字段 message_type 来判断角色
-            if hasattr(msg, 'message_type'):
-                if msg.message_type == "user":
-                    message_type = MessageType.USER
-                else:
-                    message_type = MessageType.ASSISTANT
-            else:
-                # 如果没有 message_type 字段，使用默认值
-                message_type = MessageType.USER
-
-            # 4. 构造统一的响应结构
-            response_item = ChatResponse(
-                message_id=msg.message_id if hasattr(msg, 'message_id') else msg.id,
-                content=msg.content,  # 消息内容（用户提问或AI回复）
-                message_type=message_type,  # 区分用户消息和AI消息
-                sql_text=sql_text,         # 成功回显 SQL！
-                sql_type=sql_type,
-                requires_confirmation=requires_confirmation,
-                data=None # 历史记录暂时不带查询结果数据，避免传输太慢
-            )
-            clean_history.append(response_item)
-            
-        return clean_history
+        # 2. 调用辅助函数转换数据
+        return _format_history_response(raw_messages)
         
     except Exception as e:
-        print(f"History Error: {e}")
-        # 打印详细错误栈，方便调试
-        import traceback
-        traceback.print_exc()
-        raise HTTPException(status_code=500, detail=str(e))
+        log.error(f"History Error: {str(e)}", exc_info=True)
+        raise HTTPException(status_code=500, detail="Failed to retrieve history")

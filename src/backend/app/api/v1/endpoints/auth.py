@@ -3,18 +3,53 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from typing import Any
 from schema.unified_response import NoContentResponse, UnifiedSuccessResponse, LoginData
 from schema.auth import UserSendCode, UserRegister, UserLogin
-
+from fastapi.security import OAuth2PasswordRequestForm
+from schema.token import Token # 记得导入这个
 from api.v1.deps import get_db
 from core import exceptions
 from service import email_service
 from service.user_service import service_register_user, service_login, create_login_record, \
-    check_email_exists, service_save_token_in_redis, service_logout,service_check_user_exists
-from core.auth import create_access_token, oauth2_scheme
-
+    check_email_exists, service_save_token_in_redis, service_logout,service_check_user_exists,service_save_token_in_redis
+from core.auth import create_access_token
+# 【修改点】：从 core.deps 导入 oauth2_scheme
+from core.deps import get_db, oauth2_scheme
 from core.log import log
 
 # 👇 修改点1：将 auth_router 改为 router，保持与其他模块一致
 router = APIRouter()
+
+# ============================================================
+# 【新增】专门给 Swagger UI Authorize 按钮使用的登录接口
+# ============================================================
+@router.post("/swagger_login", response_model=Token)
+async def swagger_login(
+    db: AsyncSession = Depends(get_db),
+    form_data: OAuth2PasswordRequestForm = Depends()
+):
+    """
+    专门兼容 OAuth2 表单格式的登录接口
+    """
+    # 1. 验证用户
+    user = await service_login(db, form_data.username, form_data.password)
+    if not user:
+        raise HTTPException(status_code=400, detail="Incorrect username or password")
+    
+    if user.status != 'normal':
+         raise HTTPException(status_code=400, detail="User is inactive")
+
+    # 2. 生成 Token
+    access_token = create_access_token(data={"sub": str(user.user_id)})
+    
+    # 3. 【新增关键步骤】将 Token 存入 Redis 白名单
+    # 如果不存，api/v1/deps.py 会因为查不到记录而报 Token revoked
+    if not await service_save_token_in_redis(access_token):
+        raise HTTPException(status_code=500, detail="Failed to save token session")
+    
+    # 4. 返回 Token
+    return {
+        "access_token": access_token,
+        "token_type": "bearer"
+    }
 
 # 👇 修改点2：所有的装饰器 @auth_router.xxx 都改为 @router.xxx
 @router.post("/register/send-code", response_model=NoContentResponse)

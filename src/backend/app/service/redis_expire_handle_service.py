@@ -1,16 +1,29 @@
+"""
+Redis 过期事件处理。
+
+于无请求上下文下处理 Token 过期，构造会话并调用登出逻辑。
+"""
+
 from sqlalchemy.ext.asyncio import AsyncSession
 from core.database import PsqlHelper
 from service.user_service import service_logout
 from core.config import config
 from core.log import log
 
-async def service_handle_expire_token(token: str):
+async def service_handle_expire_token(token: str) -> None:
     """
-    Handle expired token without request context.
-    Creates a database session directly since this is triggered by Redis expiration events.
-    
+    处理过期的 Token（无请求上下文）。
+
+    直接创建数据库会话以响应 Redis 过期事件，并触发登出逻辑。
+
     Args:
-        token (str): The expired token to handle
+        token (str): 过期的 Token。
+
+    Returns:
+        None: 无返回值。
+
+    Raises:
+        Exception: 登出或资源清理过程中出现的异常会被记录并吞并。
     """
     log.info(f"Handling expired token: {token}")
     

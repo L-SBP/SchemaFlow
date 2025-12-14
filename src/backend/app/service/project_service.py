@@ -1,4 +1,9 @@
-# backend/app/service/project_service.py
+"""
+项目服务。
+
+负责项目生命周期：生成 Schema、生成 DDL、部署、元数据更新、列表与详情、删除
+等；集成 AI 生成器、数据库助手与 CRUD 层。
+"""
 
 from typing import Optional, Dict, Any
 from sqlalchemy.ext.asyncio import AsyncSession as Session
@@ -18,10 +23,8 @@ from core.sql_sort import sort_ddl_by_dependency
 from crud.crud_project import crud_project
 from crud.crud_database_instance import crud_database_instance
 from crud.crud_user_account import crud_user_account
-from mysql.mysql_converter import MySQLConverter
 from mysql.mysql_execute import execute_sql_root
 from mysql.mysql_converter import MySQLConverter
-from mysql.mysql_execute import execute_sql_root
 from schema import project as schemas
 from core.exceptions import ItemNotFoundException, DatabaseOperationFailedException, OperationNotPermittedException, \
     ValidationException
@@ -37,11 +40,19 @@ from sqlalchemy.engine import URL
 from pypinyin import lazy_pinyin, Style  # <--- 1. 新增导入
 
 # ==========================================
-# 新增：Schema 生成工具函数 (集成之前的逻辑)
+# Schema 生成工具函数
 # ==========================================
 class SchemaGenerator:
+    """
+    项目 Schema 生成工具类。
+
+    Methods:
+        _parse_html_schema_only(html_content: str) -> str: 解析 HTML 获取 Schema。
+        _request_ddl_remote(...): 远程调用 DDL 生成接口。
+        run_generation(...): 执行 Schema 和 DDL 生成流程。
+    """
     BASE_HOST = "http://43.154.73.48:5000"
-    DDL_API_URL = "https://schema2ddl.strangeloop.fun/generate/ddl"  # 新增 DDL 生成接口
+    DDL_API_URL = "https://schema2ddl.strangeloop.fun/generate/ddl"
     @staticmethod
     def _parse_html_schema_only(html_content: str) -> str:
         """
@@ -69,69 +80,25 @@ class SchemaGenerator:
         return "\n\n".join(schema_text)
 
     @classmethod
-    def _request_ddl_remote(cls, schema_text: str, requirements: str, db_type: str, model: str = "gpt4") -> str:
+    def generate_schema(cls, requirements: str, db_name: str, db_type: str, ai_model: str = "gpt4") -> str:
         """
-        步骤 2: 调用远程接口生成 DDL
+        仅生成 Schema (Logical Design)
         """
-        payload = {
-            "database_requirment": requirements,
-            "schema": schema_text,
-            "target_db_type": db_type,
-            "model": model  # 暂定为 gpt4
-        }
-
-        try:
-            # 设置超时时间
-            resp = requests.post(cls.DDL_API_URL, json=payload, timeout=120)
-
-            if resp.status_code == 200:
-                res_json = resp.json()
-
-                # =========================================================
-                # 修改：根据新的 JSON 结构解析
-                # 结构示例: {'validations': '...', 'ddl_statements': 'CREATE TABLE...'}
-                # =========================================================
-                ddl = res_json.get("ddl_statements", "")
-
-                if not ddl:
-                    print(f"[SchemaGen] Warning: 'ddl_statements' not found in response: {res_json}")
-
-                return ddl
-            else:
-                print(f"[SchemaGen] DDL API failed: {resp.status_code} - {resp.text}")
-                return ""
-        except Exception as e:
-            print(f"[SchemaGen] DDL API Exception: {e}")
-            return ""
-
-    @classmethod
-    def run_generation(cls, requirements: str, db_name: str, db_type: str, ai_model: str = "gpt4"):
-        """
-        执行两步生成：
-        1. Gradio -> 获取 Schema
-        2. DDL API -> 获取 DDL
-        """
-        # --- 步骤 1: 获取 Schema (使用用户选择的 ai_model) ---
         session_hash = ''.join(random.choices(string.ascii_lowercase + string.digits, k=11))
-
-        # Gradio Inputs: [Model, DB Name, Requirements, DBMS]
         inputs = [ai_model, db_name, requirements, db_type]
         headers = {"Content-Type": "application/json"}
-
         schema_res = ""
 
         try:
-            # 1.1 提交任务
             resp = requests.post(
                 f"{cls.BASE_HOST}/gradio_api/queue/join",
                 json={"data": inputs, "session_hash": session_hash, "fn_index": 0},
                 headers=headers, timeout=10
             )
             if resp.status_code != 200:
-                print(f"[SchemaGen] Step 1 Submission failed: {resp.text}")
-                return None, None
+                log.error(f"[SchemaGen] Step 1 Submission failed: {resp.text}")
+                return ""
 
-            # 1.2 监听结果
             resp = requests.get(
                 f"{cls.BASE_HOST}/gradio_api/queue/data?session_hash={session_hash}",
                 headers=headers, stream=True, timeout=120
@@ -146,31 +113,52 @@ class SchemaGenerator:
                             if msg.get('msg') == 'process_completed':
                                 output_data = msg.get('output', {}).get('data', [])
                                 if output_data:
-                                    # 解析 HTML 获取 Schema
                                     schema_res = cls._parse_html_schema_only(output_data[0])
                         except:
                             continue
+            return schema_res
         except Exception as e:
-            print(f"[SchemaGen] Step 1 Error: {e}")
-            return None, None
+            log.error(f"[SchemaGen] Step 1 Error: {e}")
+            return ""
 
-        if not schema_res:
-            print("[SchemaGen] Failed to retrieve schema from Step 1.")
-            return None, None
-
-        # --- 步骤 2: 获取 DDL (使用获得的 Schema + 暂定的 gpt4) ---
-        print(f"[SchemaGen] Step 1 success. Schema length: {len(schema_res)}. Starting Step 2...")
-
-        # 注意：第二个请求的 model 暂定为 gpt4
-        ddl_res = cls._request_ddl_remote(schema_res, requirements, db_type, model="gpt4")
-
-        return schema_res, ddl_res
+    @classmethod
+    def generate_ddl(cls, schema_text: str, requirements: str, db_type: str, model: str = "gpt4") -> str:
+        """
+        根据 Schema 和需求生成 DDL
+        """
+        payload = {
+            "database_requirment": requirements,
+            "schema": schema_text,
+            "target_db_type": db_type,
+            "model": model
+        }
+        try:
+            resp = requests.post(cls.DDL_API_URL, json=payload, timeout=120)
+            if resp.status_code == 200:
+                res_json = resp.json()
+                return res_json.get("ddl_statements", "")
+            else:
+                log.error(f"[SchemaGen] DDL API failed: {resp.status_code} - {resp.text}")
+                return ""
+        except Exception as e:
+            log.error(f"[SchemaGen] DDL API Exception: {e}")
+            return ""
 
 
 # ==========================================
-# 新增：生成有意义的数据库名称
+# 数据库名称生成
 # ==========================================
 def generate_meaningful_db_name(project_name: str, user_id: int) -> str:
+    """
+    根据项目名称和用户 ID 生成符合数据库命名规范的唯一数据库名。
+
+    Args:
+        project_name (str): 项目名称。
+        user_id (int): 用户 ID。
+
+    Returns:
+        str: 生成的数据库名称。
+    """
     """
     将项目名称转换为符合数据库命名规范的字符串 (拼音/英文 + 下划线)
     例如: "电商管理平台" -> "dianshang_guanli_pingtai_1_x82a"
@@ -199,129 +187,555 @@ def generate_meaningful_db_name(project_name: str, user_id: int) -> str:
     return f"{clean_str}_{user_id}_{short_random}"
 
 
-# ==========================================
-# 后台任务处理函数
-# ==========================================
-async def bg_generate_schema_task(project_id: int, requirements: str, db_name: str, db_type: str, ai_model: str):
+# ==============================================================================
+# 后台任务：生成 Schema
+# ==============================================================================
+async def bg_generate_schema_task(
+    project_id: int, 
+    requirements: str, 
+    db_name: str, 
+    db_type: str, 
+    ai_model: str
+):
     """
-    后台任务：调用生成器，创建数据库，更新状态
-    """
-    log.info(f"[Task] Starting generation for Project {project_id} (DB: {db_type}, Model: {ai_model})...")
+    后台任务：调用 SchemaGenerator 生成 Schema
+    该任务不会直接执行建表，仅生成 Schema。
+    Args:
+        project_id (int): 项目 ID。
+        requirements (str): 项目需求描述。
+        db_name (str): 生成的数据库名称。
+        db_type (str): 数据库类型（如 mysql）。
+        ai_model (str): 使用的 AI 模型。
 
-    # 1. 执行生成
+    Returns:
+        None
+
+
+    """
+    log.info(f"[Task] Starting SCHEMA GENERATION ONLY for Project {project_id}...")
+
+    # 1. 执行 AI 生成
+    log.info(f"[Task] Starting SCHEMA GENERATION for Project {project_id}...")
     loop = asyncio.get_event_loop()
-    schema_res, ddl_res = await loop.run_in_executor(
-        None, SchemaGenerator.run_generation, requirements, db_name, db_type, ai_model
+
+    # 调用生成 Schema
+    schema_res = await loop.run_in_executor(
+        None, SchemaGenerator.generate_schema, requirements, db_name, db_type, ai_model
     )
 
-    if not schema_res or not ddl_res:
-        log.error(f"[Task] Generation failed for Project {project_id}")
-        # 建议在此更新项目状态为 failed
-        return
+    # 2. 存入 PostgreSQL 的 project.schema_definition 字段
+    # 使用独立的 Session，因为这是后台任务
+    temp_engine = PsqlHelper._get_async_engine(config.db)
+    async with PsqlHelper.get_session(temp_engine) as session:
+        async with session.begin():
+            project = await crud_project.get(session, project_id)
+            if project:
+                current_def = project.schema_definition or {}
+                if schema_res:
+                    # 存入 Schema，不再存入 DDL
+                    current_def['schema'] = schema_res
+                    current_def['generated_db_name'] = db_name
 
-    log.info(f"[{ai_model}] Generated Schema Content:\n{schema_res}")
-    log.info(f"[{ai_model}] Generated DDL Content:\n{ddl_res}")
+                    project.schema_definition = current_def
+                    project.creation_stage = schemas.CreationStageEnum.SCHEMA_GENERATED.value
+                else:
+                    log.error(f"[Task] Schema generation failed for Project {project_id}.")
+                    # 这里可以设置一个 failed 状态，或者保持原样让用户重试
 
-    db_created = False
+                project.schema_definition = current_def
+                session.add(project)
+    await temp_engine.dispose()
+
+
+# ==============================================================================
+# 后台任务：生成 DDL
+# ==============================================================================
+async def bg_generate_ddl_task(
+    project_id: int, 
+    schema_text: str, 
+    requirements: str, 
+    db_type: str, 
+    db_name: str
+):
+    log.info(f"[Task] Starting DDL GENERATION for Project {project_id}...")
+    loop = asyncio.get_event_loop()
+
+    # 调用生成 DDL
+    ddl_res = await loop.run_in_executor(
+        None, SchemaGenerator.generate_ddl, schema_text, requirements, db_type
+    )
+
+    temp_engine = PsqlHelper._get_async_engine(config.db)
+    async with PsqlHelper.get_session(temp_engine) as session:
+        async with session.begin():
+            project = await crud_project.get(session, project_id)
+            if project:
+                current_def = project.schema_definition or {}
+                if ddl_res:
+                    log.info(f"Generated DDL length: {len(ddl_res)}")
+                    # 拼接完整 DDL
+                    full_ddl_preview = f"CREATE DATABASE IF NOT EXISTS `{db_name}`;\nUSE `{db_name}`;\n\n{ddl_res}"
+
+                    # [修改点] 存入新的独立字段 ddl_statement
+                    project.ddl_statement = full_ddl_preview
+
+                    project.creation_stage = schemas.CreationStageEnum.DDL_GENERATED.value
+                    project.project_status = schemas.ProjectStatusEnum.PENDING_CONFIRMATION.value
+                else:
+                    log.error(f"[Task] DDL generation failed for Project {project_id}.")
+
+                project.schema_definition = current_def
+                session.add(project)
+    await temp_engine.dispose()
+
+
+# ==============================================================================
+# 创建项目：异步执行ddl语句
+# ==============================================================================
+async def create_project_service(
+    db: Session,
+    project_in: schemas.ProjectCreate,
+    user_id: int,
+    background_tasks: BackgroundTasks
+) -> schemas.ProjectAsyncResponse:
+    """
+    创建项目并异步生成 Schema/DDL。
+
+    Args:
+        db (Session): 数据库会话。
+        project_in (schemas.ProjectCreate): 项目创建参数。
+        user_id (int): 用户 ID。
+        background_tasks (BackgroundTasks): 后台任务对象。
+
+    Returns:
+        schemas.ProjectAsyncResponse: 项目异步创建响应。
+
+    Raises:
+        ItemNotFoundException: 用户不存在。
+        OperationNotPermittedException: 超出配额。
+    """
+    # ... (前面的配额检查代码保持不变) ...
+
+    # 检查用户额度
+    user = await crud_user_account.get(db, user_id)
+    if not user:
+        raise ItemNotFoundException("User not found")
+    if user.used_databases >= user.max_databases:
+        raise OperationNotPermittedException("Quota exceeded.")
+
+    project_data = project_in.model_dump()
+    # 弹出db_type等属性，因为后端数据库没有这个属性
+    db_type = project_data.pop('db_type')
+    ai_model = project_data.pop('ai_model', 'gpt4')
+    requirements_text = project_data.get('description', '')
+    project_name = project_data.get('project_name', 'project')
+
+    # 生成 DB Name，但不创建物理库
+    temp_db_name = generate_meaningful_db_name(project_name, user_id)
+
+    # 1. 创建 DatabaseInstance (占位)
+    new_instance = await crud_database_instance.create(
+        db,
+        db_type=db_type,
+        db_host="127.0.0.1", # TODO:部署到服务器上时，需要将网址和端口视情况更改
+        db_port=3306,
+        db_name=temp_db_name,  # 此时物理库还未创建
+        db_username=f"test_{user_id}",
+        db_password="User_secure_2025",
+        status="inactive"  # 还没真正激活
+    )
+
+    # 2. 创建 Project，初始阶段设为 GENERATING_SCHEMA
+    project_data['user_id'] = user_id
+    project_data['instance_id'] = new_instance.instance_id
+    project_data['project_status'] = 'initializing'
+
+    # [关键修复] 设置初始阶段为 GENERATING_SCHEMA，并使用 .value
+    project_data['creation_stage'] = schemas.CreationStageEnum.GENERATING_SCHEMA.value
+
+    db_obj = await crud_project.create(db, **project_data)
+
+    # 3. 调度“只生成”任务
+    background_tasks.add_task(
+        bg_generate_schema_task,  # <--- 替换为新任务
+        project_id=db_obj.project_id,
+        requirements=requirements_text,
+        db_name=temp_db_name,
+        db_type=db_type,
+        ai_model=ai_model
+    )
+
+    # 更新配额 (虽然还没最终建库，但占用了生成资源，先预扣)
+    await crud_user_account.update(db, user, used_databases=user.used_databases + 1)
+
+    return schemas.ProjectAsyncResponse.model_validate(db_obj)
+
+
+# ==============================================================================
+# 请求生成 DDL
+# ==============================================================================
+async def request_ddl_generation_service(
+    db: Session,
+    project_id: int,
+    user_id: int,
+    data: schemas.GenerateDDLRequest,
+    background_tasks: BackgroundTasks
+) -> schemas.ProjectAsyncResponse:
+    """
+    用户确认 Schema，后端触发 DDL 生成任务。
+    """
+    project = await crud_project.get(db, project_id)
+    if not project or project.user_id != user_id:
+        raise ItemNotFoundException("Project not found")
+
+    # 允许从 Schema Generated 状态或者 Initializing 状态继续
+    # 如果用户修改了需求描述，更新它
+    if data.requirements:
+        project.description = data.requirements
+
+    # 更新当前 Schema 到数据库 (用户可能修改了 Schema)
+    current_def = project.schema_definition or {}
+    current_def['schema'] = data.confirmed_schema
+
+    # [修复] 更新状态为 GENERATING_DDL (.value)
+    project.schema_definition = current_def
+    project.creation_stage = schemas.CreationStageEnum.GENERATING_DDL.value
+
+    db.add(project)
+    await db.commit()
+    await db.refresh(project)
+
+    # 获取关联信息
+    instance = await crud_database_instance.get(db, project.instance_id)
+
+    # 触发后台任务：生成 DDL
+    background_tasks.add_task(
+        bg_generate_ddl_task,
+        project_id=project.project_id,
+        schema_text=data.confirmed_schema,
+        requirements=project.description,  # 使用(可能更新过的)需求
+        db_type=instance.db_type,
+        db_name=instance.db_name
+    )
+
+    return schemas.ProjectAsyncResponse(
+        project_id=project.project_id,
+        project_name=project.project_name,
+        status=project.project_status,
+        message="Schema已确认，正在生成DDL..."
+    )
+
+
+
+
+
+# ==============================================================================
+# 部署执行
+# ==============================================================================
+async def deploy_project_service(
+    db: Session,
+    project_id: int,
+    user_id: int,
+    deploy_data: schemas.ProjectDeployRequest
+) -> schemas.ProjectResponse:
+    """
+    执行项目部署，接收用户确认的 DDL 并建库建表。
+
+    Args:
+        db (Session): 数据库会话。
+        project_id (int): 项目 ID。
+        user_id (int): 用户 ID。
+        deploy_data (schemas.ProjectDeployRequest): 部署请求参数。
+
+    Returns:
+        schemas.ProjectResponse: 项目部署后的响应。
+
+    Raises:
+        ItemNotFoundException: 项目不存在或无权限。
+        ValidationException: DDL 预处理失败。
+        DatabaseOperationFailedException: 部署执行失败。
+    """
+    """
+    接收用户确认的 DDL，执行建库和建表操作，将项目状态改为 Active。
+    支持通过 use_smart_parse 参数控制是否启用方言转换和拓扑排序。
+    """
+    # 1. 校验项目
+    project = await crud_project.get(db, project_id)
+    if not project or project.user_id != user_id:
+        raise ItemNotFoundException("Project not found")
+
+    # [修复] 更新状态为 EXECUTING_DDL (.value)
+    project.creation_stage = schemas.CreationStageEnum.EXECUTING_DDL.value
+    db.add(project)
+    await db.commit()
+
+
+    # 获取关联的 Instance 信息
+    instance = await crud_database_instance.get(db, project.instance_id)
+    db_name = instance.db_name
+    db_type = instance.db_type  # e.g. 'mysql'
+
+    # 优先使用前端传回的 confirmed_ddl，或者使用数据库存的 ddl_statement
+    final_ddl = deploy_data.confirmed_ddl or project.ddl_statement
+
+    # 2. 准备执行语句列表
+    execution_statements = []
 
     try:
-        # =================================================================
-        # [修复] 获取 Root Engine 并使用同一个 Connection 执行所有操作
-        # 避免连接池重置导致 USE database 失效
-        # =================================================================
+        # =============================================================
+        # 预留接口逻辑：根据 use_smart_parse 决定处理方式
+        # =============================================================
+        if deploy_data.use_smart_parse:
+            log.info(f"[Deploy] Smart Parse ENABLED for Project {project_id}. Running cleanup & sort.")
+
+            # 步骤 A: 清洗 DDL (去除 -- 注释，防止干扰解析器)
+            lines = final_ddl.splitlines()
+            cleaned_lines = [line for line in lines if not line.strip().startswith('--')]
+            cleaned_ddl = "\n".join(cleaned_lines)
+
+            # 步骤 B: 调用方言转换和拓扑排序
+            # sort_ddl_by_dependency 内部使用了 sqlglot，会自动处理方言转换并按依赖排序
+            try:
+                execution_statements = sort_ddl_by_dependency(cleaned_ddl, dialect=db_type)
+            except Exception as sort_err:
+                log.error(f"[Deploy] Smart Parse failed: {sort_err}")
+                raise ValidationException(f"SQL解析或排序失败: {str(sort_err)}。请检查DDL语法。")
+
+        else:
+            log.info(f"[Deploy] Smart Parse DISABLED for Project {project_id}. Running raw execution.")
+            # 简单分割，不做任何排序和转换 (适用于未来 DDL 已经完美的情况)
+            execution_statements = [s.strip() for s in final_ddl.split(';') if s.strip()]
+
+    except Exception as e:
+        # 恢复状态以便重试
+        project.creation_stage = schemas.CreationStageEnum.DDL_GENERATED
+        db.add(project)
+        await db.commit()
+        raise ValidationException(f"DDL Pre-processing failed: {str(e)}")
+
+    # 3. 执行物理建库操作
+    log.info(f"[Deploy] Starting deployment for Project {project_id}, DB: {db_name}")
+
+    try:
         root_engine = await MysqlHelper.get_root_engine()
 
         async with root_engine.connect() as conn:
-            # 2.1 创建数据库
-            log.info(f"[{db_type}] Creating Database: {db_name}")
-            await conn.execute(text(f"CREATE DATABASE IF NOT EXISTS `{db_name}`;"))
-            db_created = True
+            # 3.1 重置数据库 (Drop & Create) - 确保环境干净
+            log.info(f"[{db_type}] Resetting Database: {db_name}")
+            await conn.execute(text(f"DROP DATABASE IF EXISTS `{db_name}`;"))
+            await conn.execute(text(f"CREATE DATABASE `{db_name}`;"))
 
-            # 2.2 切换数据库上下文 (USE)
-            log.info(f"[{db_type}] Switching context to: {db_name}")
+            # 3.2 切换上下文
             await conn.execute(text(f"USE `{db_name}`;"))
 
-            # 2.3 执行表创建 DDL
-            sorted_statements = sort_ddl_by_dependency(ddl_res, dialect=db_type)
-
-            for stmt in sorted_statements:
+            # 3.3 执行语句
+            for stmt in execution_statements:
                 if not stmt.strip():
                     continue
-                # 过滤掉 CREATE DATABASE
+
+                # 过滤掉 CREATE DATABASE (因为我们已经在 3.1 手动执行了)
                 if re.search(r'CREATE\s+DATABASE', stmt, re.IGNORECASE):
                     continue
 
-                log.info(f"[{db_type}] Executing: {stmt[:50]}...")
+                # 过滤掉 USE 语句 (避免上下文切换冲突)
+                if re.match(r'^\s*USE\s+', stmt, re.IGNORECASE):
+                    continue
+
+                log.info(f"[{db_type}] Executing: {stmt[:60]}...")
                 await conn.execute(text(stmt))
 
-            # 提交事务
             await conn.commit()
 
-        log.info(f"[{db_type}] Schema created successfully for {db_name}")
 
-        # 3. 拼接完整 DDL 用于保存
-        full_ddl_for_storage = f"CREATE DATABASE IF NOT EXISTS `{db_name}`;\nUSE `{db_name}`;\n\n{ddl_res}"
+        # 部署成功，准备更新数据
+        update_data = {
+            "project_status": "active",
+            "creation_stage": schemas.CreationStageEnum.COMPLETED.value,
+            "ddl_statement": final_ddl  # 确保 DDL 被保存
+        }
 
-        # 4. 更新元数据 (PostgreSQL)
-        async with PsqlHelper.get_session(PsqlHelper._get_async_engine(config.db)) as session:
-            async with session.begin():
-                project = await crud_project.get(session, project_id)
-                instance = await crud_database_instance.get(session, project.instance_id)
+        # 如果前端传回了新的 Schema，也一并更新
+        if deploy_data.confirmed_schema:
+            current_def = project.schema_definition or {}
+            current_def['schema'] = deploy_data.confirmed_schema
+            update_data["schema_definition"] = current_def
 
-                instance.db_name = db_name
-                instance.status = "active"
+        # 执行更新
+        await crud_project.update(db, project_id, **update_data)
 
-                # 获取连接信息用于生成 URL (虽然这里没真正连接，但用于日志或返回)
-                db_username = instance.db_username
-                db_password = instance.db_password
-                instance_host = instance.db_host
-                instance_port = instance.db_port
+        # 更新 Instance 状态
+        await crud_database_instance.update(db, instance, status='active')
 
-                schema_definition_json = {
-                    "schema": schema_res,
-                    "ddl": full_ddl_for_storage
-                }
+        log.info(f"[Deploy] Project {project_id} deployed successfully.")
 
-                project.schema_definition = schema_definition_json
-                project.project_status = 'active'
-
-                session.add(instance)
-                session.add(project)
-
-        log.info(f"[PostgreSQL] Schema metadata updated for project {project_id}")
-
-        # 可选：生成连接字符串记录日志 (修复了 URL 导入)
-        # mysql_url = URL.create(
-        #     drivername=config.mysql.driver,
-        #     username=db_username,
-        #     password=db_password,
-        #     host=instance_host,
-        #     port=instance_port,
-        #     database=db_name
-        # )
-        # log.info(f"Connection URL generated: {mysql_url}")
+        # 重新获取最新数据返回
+        refreshed_project = await crud_project.get(db, project_id)
+        return schemas.ProjectResponse(data=schemas.ProjectDetailOut.model_validate(refreshed_project))
 
     except Exception as e:
-        log.error(f"[Task] Fatal error during schema creation: {str(e)}", exc_info=True)
+        log.error(f"[Deploy] Database Execution Error: {e}", exc_info=True)
+        # 部署失败，回退状态到 DDL_GENERATED 允许用户修改 DDL 重试
+        # 需要重新获取 session 中的对象，或者使用 update 方法
+        await crud_project.update(db, project_id, creation_stage=schemas.CreationStageEnum.DDL_GENERATED)
+        raise DatabaseOperationFailedException(f"Deployment failed: {str(e)}")
 
-        # 错误清理
-        if db_created:
-            try:
-                cleanup_engine = await MysqlHelper.get_root_engine()
-                async with cleanup_engine.connect() as conn:
-                    await conn.execute(text(f"DROP DATABASE IF EXISTS `{db_name}`;"))
-                    await conn.commit()
-                log.info(f"[Cleanup] Dropped database {db_name} due to error")
-            except Exception as cleanup_error:
-                log.error(f"[Cleanup] Failed to drop database: {str(cleanup_error)}", exc_info=True)
 
-    finally:
-        temp_engine = PsqlHelper._get_async_engine(config.db)
-        await temp_engine.dispose()
+
+# --- 项目列表 ---
+async def get_projects_list_service(
+    db: Session, 
+    user_id: int, 
+    search: Optional[str], 
+    page: int, 
+    page_size: int
+) -> schemas.PaginatedProjectList:
+    """
+    获取指定用户的项目列表，支持分页和搜索。
+
+    Args:
+        db (Session): 数据库会话。
+        user_id (int): 用户 ID。
+        search (Optional[str]): 搜索关键字。
+        page (int): 页码。
+        page_size (int): 每页数量。
+
+    Returns:
+        schemas.PaginatedProjectList: 分页后的项目列表。
+    """
+    skip = (page - 1) * page_size
+    total = await crud_project.get_total_count_by_user(db, user_id, search)
+    items = await crud_project.get_by_user(db, user_id, skip, page_size, search)
+
+    return schemas.PaginatedProjectList(
+        total=total, page=page, page_size=page_size,
+        items=[schemas.ProjectListOne.model_validate(i) for i in items]
+    )
+
+
+# ----------------------------------------------------------------------
+# 项目详情
+# ----------------------------------------------------------------------
+async def get_project_detail_service(
+    db: Session,
+    project_id: int,
+    user_id: int
+) -> schemas.ProjectResponse:
+    """
+    获取项目详情，校验用户权限。
+
+    Args:
+        db (Session): 数据库会话。
+        project_id (int): 项目 ID。
+        user_id (int): 用户 ID。
+
+    Returns:
+        schemas.ProjectResponse: 项目详情响应。
+
+    Raises:
+        ItemNotFoundException: 项目不存在或无权限。
+    """
+    """
+    Service: 获取项目详情，并检查用户权限。
+    """
+    db_obj = await crud_project.get(db, project_id)
+
+    if not db_obj or db_obj.user_id != user_id:
+        raise ItemNotFoundException("Project not found or access denied.")
+
+    # <--- 修正点 2：使用 ProjectResponse 包装
+    return schemas.ProjectResponse(data=schemas.ProjectDetailOut.model_validate(db_obj))
+
+
+# ==============================================================================
+# 更新项目信息（无 AI）
+# ==============================================================================
+async def update_project_info_service(
+    db: Session,
+    project_id: int,
+    user_id: int,
+    update_data: Dict[str, Any]
+) -> schemas.ProjectResponse:
+    """
+    更新项目基本信息（名称或描述），不涉及 AI 生成或 DDL 执行。
+
+    Args:
+        db (Session): 数据库会话。
+        project_id (int): 项目 ID。
+        user_id (int): 用户 ID。
+        update_data (Dict[str, Any]): 更新字段。
+
+    Returns:
+        schemas.ProjectResponse: 更新后的项目详情响应。
+
+    Raises:
+        ItemNotFoundException: 项目不存在或无权限。
+        OperationNotPermittedException: 项目已删除无法更新。
+    """
+    """
+    修改名字或描述。
+    注意：此函数完全不涉及 AI 生成或 DDL 执行，
+    因此满足 '更改项目名字时候，不需要重新调用生成schema和ddl' 的需求。
+    """
+    db_obj = await crud_project.get(db, project_id)
+
+    if not db_obj or db_obj.user_id != user_id:
+        raise ItemNotFoundException("Project not found or access denied.")
+
+    if db_obj.project_status == 'deleted':
+        raise OperationNotPermittedException("Cannot update a deleted project.")
+
+    # 仅执行普通的 CRUD update
+    updated_obj = await crud_project.update(db, project_id, **update_data)
+
+    return schemas.ProjectResponse(data=schemas.ProjectDetailOut.model_validate(updated_obj))
+
+
+
+# --- 生成删除确认 Token ---
+async def confirm_delete_project_service(
+    db: Session, 
+    project_id: int, 
+    user_id: int, 
+    confirmation_text: str
+) -> schemas.ConfirmationTokenResponse:
+    """
+    生成项目删除确认 Token。
+
+    Args:
+        db (Session): 数据库会话。
+        project_id (int): 项目 ID。
+        user_id (int): 用户 ID。
+        confirmation_text (str): 确认文本，必须为 'DELETE'。
+
+    Returns:
+        schemas.ConfirmationTokenResponse: 包含确认 Token 及过期时间。
+
+    Raises:
+        ValidationException: 确认文本错误。
+        ItemNotFoundException: 项目不存在或无权限。
+    """
+    if confirmation_text != "DELETE":
+        raise ValidationException("Confirmation text must be 'DELETE'.")
+
+    # 检查权限
+    db_obj = await crud_project.get(db, project_id)
+    if not db_obj or db_obj.user_id != user_id:
+        raise ItemNotFoundException("Project not found.")
+
+    # 生成 Token
+    payload = {"sub": str(user_id), "project_id": project_id}
+    token = create_access_token(payload)
+    expires_at = datetime.now(timezone.utc) + timedelta(seconds=config.jwt.token_expire_time_seconds)
+
+    return schemas.ConfirmationTokenResponse(confirmation_token=token, expires_at=expires_at)
 
 
 # --- 辅助函数 ---
-async def _verify_delete_token(token: str, user_id: int, project_id: int) -> bool:
+async def _verify_delete_token(
+    token: str,
+    user_id: int,
+    project_id: int,
+) -> bool:
     try:
         # 直接使用 jwt.decode 获取完整 payload，而不是用 auth.decode_jwt_token
         payload = jwt.decode(
@@ -347,167 +761,29 @@ async def _verify_delete_token(token: str, user_id: int, project_id: int) -> boo
         return False
 
 
-# --- 1. 创建项目 ---
-async def create_project_service(
-        db: Session,
-        project_in: schemas.ProjectCreate,
-        user_id: int,
-        background_tasks: BackgroundTasks
-) -> schemas.ProjectAsyncResponse:
-    """创建项目：先创建 DB 实例，再创建项目记录，最后调度异步任务"""
-    try:
-        # [新增逻辑 1] 检查用户额度
-        user = await crud_user_account.get(db, user_id)
-        if not user:
-            raise ItemNotFoundException("User not found")
-
-        # 检查是否超过最大数据库数量限制
-        if user.used_databases >= user.max_databases:
-            raise OperationNotPermittedException(
-                f"Quota exceeded. You have used {user.used_databases}/{user.max_databases} databases."
-            )
-        project_data = project_in.model_dump()
-        db_type = project_data.pop('db_type')
-
-        # ==============================================================================
-        # TODO: 后续考虑在项目中增加选用的模型这个字段
-        # 修改：提取 ai_model，并在存入数据库前移除 (Project表中无此字段)
-        # 默认值为 'gpt4'
-        # ==============================================================================
-        ai_model = project_data.pop('ai_model', 'gpt4')
-
-        requirements_text = project_data.get('description', '')
-        project_name = project_data.get('project_name', 'project')
-
-        # 生成友好的 DB Name
-        temp_db_name = generate_meaningful_db_name(project_name, user_id)
-
-        # 1. 创建 DatabaseInstance
-        new_instance = await crud_database_instance.create(
-            db,
-            db_type=db_type,
-            db_host="127.0.0.1",
-            db_port=3306,
-            db_name="pending_init",
-            db_username=f"test_{user_id}",
-            db_password="User_secure_2025",
-            status="inactive"
-        )
-
-        # 2. 创建 Project
-        project_data['user_id'] = user_id
-        project_data['instance_id'] = new_instance.instance_id
-        project_data['project_status'] = 'initializing'
-
-        db_obj = await crud_project.create(db, **project_data)
-
-        # [新增逻辑 2] 增加用户已用额度
-        await crud_user_account.update(
-            db,
-            user,
-            used_databases=user.used_databases + 1
-        )
-
-        # 3. 调度异步任务
-        # 核心修复：这里不再传递 db 参数
-        background_tasks.add_task(
-            bg_generate_schema_task,
-            project_id=db_obj.project_id,
-            requirements=requirements_text,
-            db_name=temp_db_name,
-            db_type=db_type,
-            ai_model = ai_model
-        )
-
-        return schemas.ProjectAsyncResponse.model_validate(db_obj)
-    except Exception as e:
-        raise DatabaseOperationFailedException(f"Create failed: {e}")
-
-
-# --- 2. 获取列表 ---
-async def get_projects_list_service(
-        db: Session, user_id: int, search: Optional[str], page: int, page_size: int
-) -> schemas.PaginatedProjectList:
-    skip = (page - 1) * page_size
-    total = await crud_project.get_total_count_by_user(db, user_id, search)
-    items = await crud_project.get_by_user(db, user_id, skip, page_size, search)
-
-    return schemas.PaginatedProjectList(
-        total=total, page=page, page_size=page_size,
-        items=[schemas.ProjectListOne.model_validate(i) for i in items]
-    )
-
-
-# ----------------------------------------------------------------------
-# 3. GET Project Detail
-# ----------------------------------------------------------------------
-async def get_project_detail_service(
-        db: Session,
-        project_id: int,
-        user_id: int
-) -> schemas.ProjectResponse:  # <--- 修正点 1：这里原来是 ProjectDetailResponse
-    """
-    Service: 获取项目详情，并检查用户权限。
-    """
-    db_obj = await crud_project.get(db, project_id)
-
-    if not db_obj or db_obj.user_id != user_id:
-        raise ItemNotFoundException("Project not found or access denied.")
-
-    # <--- 修正点 2：使用 ProjectResponse 包装
-    return schemas.ProjectResponse(data=schemas.ProjectDetailOut.model_validate(db_obj))
-
-
-# ----------------------------------------------------------------------
-# 4. PATCH Update Project
-# ----------------------------------------------------------------------
-async def update_project_info_service(
-        db: Session,
-        project_id: int,
-        user_id: int,
-        update_data: Dict[str, Any]
-) -> schemas.ProjectResponse:  # <--- 修正点 3：这里原来是 ProjectDetailResponse
-    """
-    Service: 更新项目信息，检查权限和状态。
-    """
-    db_obj = await crud_project.get(db, project_id)
-
-    if not db_obj or db_obj.user_id != user_id:
-        raise ItemNotFoundException("Project not found or access denied.")
-
-    if db_obj.project_status == 'deleted':
-        raise OperationNotPermittedException("Cannot update a deleted project.")
-
-    updated_obj = await crud_project.update(db, project_id, **update_data)
-
-    # <--- 修正点 4：使用 ProjectResponse 包装
-    return schemas.ProjectResponse(data=schemas.ProjectDetailOut.model_validate(updated_obj))
-
-
-# --- 5. 确认删除 (生成Token) ---
-async def confirm_delete_project_service(
-        db: Session, project_id: int, user_id: int, confirmation_text: str
-) -> schemas.ConfirmationTokenResponse:
-    if confirmation_text != "DELETE":
-        raise ValidationException("Confirmation text must be 'DELETE'.")
-
-    # 检查权限
-    db_obj = await crud_project.get(db, project_id)
-    if not db_obj or db_obj.user_id != user_id:
-        raise ItemNotFoundException("Project not found.")
-
-    # 生成 Token
-    payload = {"sub": str(user_id), "project_id": project_id}
-    token = create_access_token(payload)
-    expires_at = datetime.now(timezone.utc) + timedelta(seconds=config.jwt.token_expire_time_seconds)
-
-    return schemas.ConfirmationTokenResponse(confirmation_token=token, expires_at=expires_at)
-
-
-# --- 6. 最终删除 ---
+# --- 删除项目 ---
 async def delete_project_service(
-        db: Session, project_id: int, user_id: int, confirmation_token: str
+    db: Session, 
+    project_id: int, 
+    user_id: int, 
+    confirmation_token: str
 ) -> bool:
+    """
+    执行项目删除操作，校验 Token 并释放用户额度。
+
+    Args:
+        db (Session): 数据库会话。
+        project_id (int): 项目 ID。
+        user_id (int): 用户 ID。
+        confirmation_token (str): 删除确认 Token。
+
+    Returns:
+        bool: 删除操作是否成功。
+
+    Raises:
+        OperationNotPermittedException: Token 校验失败或项目已删除。
+        ItemNotFoundException: 项目不存在。
+    """
     if not await _verify_delete_token(confirmation_token, user_id, project_id):
         raise OperationNotPermittedException("Invalid token.")
 
