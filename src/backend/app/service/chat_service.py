@@ -22,11 +22,15 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from core.config import settings
 from core.log import log
+from crud.crud_database_instance import crud_database_instance
 from crud.crud_message import crud_message
 from crud.crud_project import crud_project
+from models import DatabaseInstance
 from models.session import Session as SessionModel
 from models.project import Project as ProjectModel
+from mysql.mysql_execute import execute_dql_user, execute_dml_user
 from schema.chat import ChatResponse, MessageType
+from service.mysql_service import execute_sql_with_user_check
 
 # =========================================================
 # 1. 模型配置注册表
@@ -322,7 +326,16 @@ async def process_chat(
     reply_content = f"已生成查询语句：\n{sql_text}"
     ai_message = await crud_message.create_message(db, session_id, reply_content, role="assistant")
 
-    # 7. 构造响应
+    data = []
+    # 7. 尝试执行 SQL
+    try:
+        database_instance = await crud_database_instance.get(db, project.instance_id)
+
+        data = await execute_sql_with_user_check(sql_text, sql_type, database_instance)
+    except Exception as e:
+        log.info(f"SQL Execution Error: {str(e)}", exc_info=True)
+
+    # 8. 构造响应
     return ChatResponse(
         message_id=ai_message.message_id,
         content=reply_content, 
@@ -330,5 +343,5 @@ async def process_chat(
         sql_text=sql_text,
         sql_type=sql_type,
         requires_confirmation=sql_type in ["INSERT", "UPDATE", "DELETE", "DROP", "ALTER"],
-        data=None
+        data=data
     )
