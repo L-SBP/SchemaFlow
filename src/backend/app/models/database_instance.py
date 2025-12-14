@@ -1,3 +1,11 @@
+"""
+数据库实例模型。
+
+本模块定义了用于存储物理数据库实例元信息的 ORM 模型。
+"""
+
+# backend/app/models/database_instance.py
+
 from sqlalchemy import Column, Integer, String, Text, DateTime, CheckConstraint, Index, URL
 from sqlalchemy.sql import func
 from core.database import Base
@@ -5,6 +13,23 @@ from core.config import config
 
 
 class DatabaseInstance(Base):
+    """
+    物理数据库实例元信息表 ORM 模型。
+
+    存储数据库连接凭证和状态。
+
+    Attributes:
+        instance_id (int): 实例ID。
+        db_type (str): 数据库类型。
+        db_host (str): 数据库主机地址。
+        db_port (int): 端口。
+        db_name (str): 数据库名。
+        db_username (str): 用户名。
+        db_password (str): 密码（加密存储）。
+        status (str): 实例状态。
+        created_at (datetime): 创建时间。
+        last_used_at (datetime): 最后使用时间。
+    """
     __tablename__ = 'database_instance'
 
     __table_args__ = (

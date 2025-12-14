@@ -1,3 +1,11 @@
+"""
+邮件工具模块。
+
+提供邮件内容生成、验证码生成、邮件发送及验证功能。
+"""
+
+# backend/app/core/email_utils.py
+
 import random
 from email.header import Header
 from email.mime.text import MIMEText
@@ -9,12 +17,26 @@ from core.log import log
 from redis.redis import get_redis
 
 def _generate_code(length: int = 6) -> str:
-    """生成一个6位数的随机验证码"""
+    """
+    生成指定长度的随机数字验证码。
+
+    Args:
+        length (int): 验证码长度，默认6位。
+
+    Returns:
+        str: 随机生成的数字字符串。
+    """
     return "".join([str(random.randint(0, 9)) for _ in range(length)])
 
 def make_email_content(verify_code: str):
     """
-    生成邮件内容
+    生成包含验证码的 HTML 邮件内容。
+
+    Args:
+        verify_code (str): 验证码。
+
+    Returns:
+        str: HTML 格式的邮件内容字符串。
     """
     email_content = f"""
         <html>
@@ -31,7 +53,16 @@ def make_email_content(verify_code: str):
 
 async def send_verify_email(to_email: str, subject: str = "【auto_db_deployment】邮箱验证码"):
     """
-    异步向指定邮箱发送验证码
+    异步向指定邮箱发送验证码。
+
+    生成验证码，发送邮件，并将验证码存储到 Redis 中。
+
+    Args:
+        to_email (str): 接收者邮箱地址。
+        subject (str): 邮件主题。
+
+    Returns:
+        bool: 发送成功返回 True，失败返回 False。
     """
     verify_code = _generate_code()
     log.info(f"Generated verification code {verify_code} for {to_email}")
@@ -78,7 +109,16 @@ async def send_verify_email(to_email: str, subject: str = "【auto_db_deployment
 
 async def verify_code(to_email: str, code: str) -> bool:
     """
-    验证邮箱和验证码
+    验证邮箱和验证码是否匹配。
+
+    从 Redis 中获取存储的验证码进行比对。
+
+    Args:
+        to_email (str): 邮箱地址。
+        code (str): 待验证的验证码。
+
+    Returns:
+        bool: 验证成功返回 True，失败或过期返回 False。
     """
     try:
         redis = get_redis()

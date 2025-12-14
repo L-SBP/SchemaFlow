@@ -1,3 +1,11 @@
+"""
+配置管理模块。
+
+负责加载和管理应用程序的配置，支持不同环境（dev/prod）的 YAML 配置文件加载。
+"""
+
+# backend/app/core/config.py
+
 import yaml
 from functools import lru_cache
 
@@ -8,11 +16,14 @@ from core.log import log
 @lru_cache()
 def get_config(config_file="config.yaml", env=None) -> BaseConfig:
     """
-    获取对应的环境变量
+    获取对应的环境变量配置。
 
-    :param config_file: 环境配置文件
-    :param env: 获取的环境
-    :return: 不同环境对应的配置类对象
+    Args:
+        config_file (str): 配置文件名称，默认为 "config.yaml"。
+        env (str, optional): 指定环境（如 "dev", "prod"）。如果未提供，将尝试从配置文件中读取。
+
+    Returns:
+        BaseConfig: 对应环境的配置对象实例。
     """
     # 获取项目根目录
     project_root = Profile.get_project_root()

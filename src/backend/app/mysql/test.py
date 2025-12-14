@@ -1,3 +1,11 @@
+"""
+MySQL 连接测试脚本。
+
+用于验证 asyncio 和 aiomysql 在不同环境下的连接兼容性（仅供开发测试）。
+"""
+
+# backend/app/mysql/test.py
+
 # import asyncio
 # import sys
 # import aiomysql

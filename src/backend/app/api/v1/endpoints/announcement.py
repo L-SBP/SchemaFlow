@@ -1,3 +1,9 @@
+"""
+公告 API 端点。
+
+提供已发布公告的列表查询和详情获取接口，供登录用户使用。
+"""
+
 from typing import Any
 from fastapi import APIRouter, Depends, Query, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -29,6 +35,15 @@ async def read_announcements(
 ):
     """
     获取已发布的系统公告（仅限登录用户）。
+
+    Args:
+        db (AsyncSession): 数据库会话。
+        current_user (UserMe): 当前登录用户。
+        page (int): 页码。
+        page_size (int): 每页数量。
+
+    Returns:
+        AnnouncementListResponse: 公告列表响应。
     """
     total, items = await crud_announcement.get_list(
         db=db,
@@ -60,6 +75,17 @@ async def get_announcement_detail(
 ):
     """
     获取公告详情（仅限已发布公告）。
+
+    Args:
+        announcement_id (int): 公告 ID。
+        db (AsyncSession): 数据库会话。
+        current_user (UserMe): 当前登录用户。
+
+    Returns:
+        AnnouncementDetailResponse: 公告详情。
+
+    Raises:
+        HTTPException: 公告不存在(404)或未发布(403)。
     """
     announcement = await crud_announcement.get(db, announcement_id)
 

@@ -1,8 +1,34 @@
+"""
+用户账户模型。
+
+本模块定义了用于存储用户基本信息和状态的 ORM 模型。
+"""
+
+# backend/app/models/user_account.py
+
 from sqlalchemy import Column, Integer, String, Boolean, DateTime, Text, CheckConstraint, Index
 from sqlalchemy.sql import func
 from core.database import Base
 
 class UserAccount(Base):
+    """
+    用户账户表 ORM 模型。
+
+    存储所有注册用户的基本信息。
+
+    Attributes:
+        user_id (int): 用户唯一ID。
+        username (str): 用户名。
+        email (str): 注册邮箱。
+        password_hash (str): 加密后的密码。
+        status (str): 账户状态：normal/suspended/banned。
+        used_databases (int): 已使用的数据库项目数。
+        avatar_url (str): 头像图片URL。
+        is_admin (bool): 是否为管理员。
+        max_databases (int): 允许创建的最大数据库项目数。
+        last_login_at (datetime): 最后登录时间。
+        created_at (datetime): 注册时间。
+    """
     __tablename__ = 'user_account'
 
     __table_args__ = (

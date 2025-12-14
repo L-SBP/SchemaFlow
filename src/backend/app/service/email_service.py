@@ -3,6 +3,9 @@
 
 发送并验证邮箱验证码，用于邮箱更新与注册流程；依赖核心邮件工具与异常定义。
 """
+
+# backend/app/service/email_service.py
+
 from datetime import datetime
 
 from core.log import log

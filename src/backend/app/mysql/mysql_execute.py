@@ -1,3 +1,11 @@
+"""
+MySQL 执行器。
+
+提供 Root 和普通用户的 SQL 执行接口，包含 DDL、DML 和 DQL 操作，并集成安全校验。
+"""
+
+# backend/app/mysql/mysql_execute.py
+
 from sqlalchemy import text
 
 from core.log import log
@@ -14,9 +22,16 @@ mysql_converter = MySQLConverter()
 
 async def execute_sql_root(sql: str):
     """
-    root用户执行sql，用于创建数据库，查询MySQL用户
-    :param sql: DDL
-    :return:
+    Root 用户执行 SQL (DDL)。
+
+    使用 Root 权限执行 SQL 语句，主要用于创建数据库、创建用户等管理操作。
+    执行前会进行 SQL 转换 (SQLite -> MySQL) 和安全检查。
+
+    Args:
+        sql (str): 待执行的 SQL 语句 (可能是 SQLite 格式)。
+
+    Raises:
+        SQLSecurityException: 如果 SQL 包含被禁止的操作。
     """
     # 将SQL转换为MySQL方言
     try:
@@ -34,9 +49,15 @@ async def execute_sql_root(sql: str):
 
 async def execute_dql_root(dql: str):
     """
-    root用户执行dql
-    :param dql: dql
-    :return:
+    Root 用户执行 DQL (查询)。
+
+    使用 Root 权限执行查询语句，返回字典列表格式的结果。
+
+    Args:
+        dql (str): 待执行的查询语句。
+
+    Returns:
+        list[dict]: 查询结果列表，每项为一个字典。
     """
     # 将SQL转换为MySQL方言
     mysql_dql = None
@@ -54,10 +75,16 @@ async def execute_dql_root(dql: str):
 
 async def execute_dql_user(dql: str, database_instance: DatabaseInstance):
     """
-    普通用户执行dql
-    :param dql: dql
-    :param database_instance: 数据库实例
-    :return:
+    普通用户执行 DQL (查询)。
+
+    使用指定数据库实例的普通用户权限执行查询。会自动转换 SQL 方言并进行安全检查。
+
+    Args:
+        dql (str): 待执行的查询语句。
+        database_instance (DatabaseInstance): 目标数据库实例对象。
+
+    Returns:
+        list[dict]: 查询结果列表。
     """
     # 将SQL转换为MySQL方言
     try:
@@ -77,10 +104,17 @@ async def execute_dql_user(dql: str, database_instance: DatabaseInstance):
 
 async def execute_dml_user(dml: str, database_instance: DatabaseInstance):
     """
-    普通用户执行dml
-    :param dml: dml
-    :param database_instance: 数据库实例
-    :return:
+    普通用户执行 DML (增删改)。
+
+    使用指定数据库实例的普通用户权限执行数据变更操作。
+    执行后会自动提交事务。
+
+    Args:
+        dml (str): 待执行的 DML 语句 (INSERT/UPDATE/DELETE)。
+        database_instance (DatabaseInstance): 目标数据库实例对象。
+
+    Returns:
+        dict: 包含受影响行数 (rowcount) 和最后插入ID (lastrowid) 的字典。
     """
     # 将SQL转换为MySQL方言
     try:

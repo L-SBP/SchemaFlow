@@ -1,3 +1,9 @@
+"""
+管理端数据 CRUD。
+
+本模块提供管理端数据的 CRUD 操作，包括用户管理、系统统计和违规日志。
+""" 
+
 # backend/app/crud/crud_admin_data.py
 
 from typing import List, Literal, Tuple, Dict, Any, Optional
@@ -17,6 +23,11 @@ from models.ai_generated_statement import AIGeneratedStatement
 
 
 class CRUDAdminData:
+    """
+    管理员数据操作类。
+
+    提供管理员专属的复杂查询功能，包括用户统计、系统统计、违规日志查询等。
+    """
 
     # ------------------------------------------------------------------
     # 4.1.1. 获取用户列表 (带统计数据)
@@ -31,7 +42,22 @@ class CRUDAdminData:
     ) -> Tuple[List[Dict[str, Any]], int]:
         """
         获取用户列表，包含项目统计和额度。
+
         实现逻辑：查询 UserAccount 表，并 Left Join Project 表计算 count。
+
+        Args:
+            db (AsyncSession): 数据库会话。
+            page (int): 页码。
+            page_size (int): 每页数量。
+            search (Optional[str]): 搜索关键字（用户名或邮箱）。
+            status (Literal["normal", "banned", "all"]): 用户状态筛选。
+
+        Returns:
+            Tuple[List[Dict[str, Any]], int]: (用户列表, 总记录数)。
+            用户列表中的每个字典包含用户基本信息和 'project_count'。
+
+        Raises:
+            DatabaseOperationFailedException: 数据库查询失败时抛出。
         """
         try:
             # 1. 构建基础查询：选择用户列 + 项目计数
@@ -97,7 +123,20 @@ class CRUDAdminData:
     # ------------------------------------------------------------------
     @staticmethod
     async def get_admin_list(db: AsyncSession, page: int, page_size: int) -> Tuple[List[UserAccount], int]:
-        """获取所有管理员列表"""
+        """
+        获取所有管理员列表。
+
+        Args:
+            db (AsyncSession): 数据库会话。
+            page (int): 页码。
+            page_size (int): 每页数量。
+
+        Returns:
+            Tuple[List[UserAccount], int]: (管理员列表, 总记录数)。
+
+        Raises:
+            DatabaseOperationFailedException: 数据库查询失败时抛出。
+        """
         try:
             # 1. 筛选条件
             query = select(UserAccount).where(UserAccount.is_admin == True)
@@ -120,7 +159,20 @@ class CRUDAdminData:
     # ------------------------------------------------------------------
     @staticmethod
     async def get_system_stats(db: AsyncSession) -> Dict[str, Any]:
-        """获取系统统计看板数据 (真实数据库聚合)"""
+        """
+        获取系统统计看板数据 (真实数据库聚合)。
+
+        统计今日活跃用户、项目总数、今日查询数、今日高风险操作等指标。
+
+        Args:
+            db (AsyncSession): 数据库会话。
+
+        Returns:
+            Dict[str, Any]: 包含各项统计数据的字典。
+
+        Raises:
+            DatabaseOperationFailedException: 数据库查询失败时抛出。
+        """
         try:
             today = datetime.now().date()
 
@@ -166,7 +218,7 @@ class CRUDAdminData:
             raise DatabaseOperationFailedException("fetch system stats") from e
 
     # ------------------------------------------------------------------
-    # 4.4.2. 获取违规日志 (复用之前修复的代码)
+    # 4.4.2. 获取违规日志 
     # ------------------------------------------------------------------
     @staticmethod
     async def get_violation_logs(
@@ -177,7 +229,20 @@ class CRUDAdminData:
             resolution_status: Optional[str] = None
     ) -> Tuple[List[Dict[str, Any]], int]:
         """
-        获取违规记录列表 (支持分页、筛选，并关联用户名)
+        获取违规记录列表 (支持分页、筛选，并关联用户名)。
+
+        Args:
+            db (AsyncSession): 数据库会话。
+            page (int): 页码。
+            page_size (int): 每页数量。
+            risk_level (Optional[str]): 风险等级筛选。
+            resolution_status (Optional[str]): 处理状态筛选。
+
+        Returns:
+            Tuple[List[Dict[str, Any]], int]: (违规记录列表, 总记录数)。
+
+        Raises:
+            DatabaseOperationFailedException: 数据库查询失败时抛出。
         """
         try:
             # 1. 构建基础查询：关联 UserAccount 表以获取 username

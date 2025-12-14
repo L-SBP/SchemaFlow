@@ -1,3 +1,5 @@
+# backend/app/main.py
+
 # 文件路径: app/main.py (覆盖全部内容)
 import uvicorn
 from core.config import config

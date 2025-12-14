@@ -1,3 +1,8 @@
+"""
+报表 API 端点。
+
+提供报表的增删改查、导出及历史查询记录获取功能。
+"""
 from fastapi import APIRouter, Depends, Query, Path, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 from typing import List
@@ -20,6 +25,14 @@ async def read_reports(
 ):
     """
     获取指定项目下的所有保存的报表配置（仅限当前用户的项目）。
+
+    Args:
+        projectId (int): 项目ID。
+        db (AsyncSession): 数据库会话。
+        user (UserMe): 当前登录用户。
+
+    Returns:
+        List[Report]: 报表列表。
     """
     return await report_service.get_report_list(
         db=db,
@@ -39,6 +52,14 @@ async def read_history(
 ):
     """
     获取历史查询结果，用于作为创建新报表的数据源（仅限当前用户的项目）。
+
+    Args:
+        projectId (int): 项目ID。
+        db (AsyncSession): 数据库会话。
+        user (UserMe): 当前登录用户。
+
+    Returns:
+        List[HistoryQuery]: 历史查询记录列表。
     """
     return await report_service.get_history_queries_service(
         db=db,
@@ -63,6 +84,15 @@ async def create_report(
 ):
     """
     在指定项目下创建报表（仅限当前用户的项目）。
+
+    Args:
+        body (ReportCreate): 报表创建请求体。
+        project_id (int): 项目ID。
+        db (AsyncSession): 数据库会话。
+        user (UserMe): 当前登录用户。
+
+    Returns:
+        Report: 创建后的报表信息。
     """
     return await report_service.create_report_service(
         db=db,
@@ -87,6 +117,14 @@ async def delete_report(
 ):
     """
     删除指定报表（仅限当前用户）。
+
+    Args:
+        report_id (int): 报表ID。
+        db (AsyncSession): 数据库会话。
+        user (UserMe): 当前登录用户。
+
+    Returns:
+        bool: 删除成功返回True。
     """
     return await report_service.delete_report_service(
         db=db,
@@ -111,6 +149,15 @@ async def update_report(
 ):
     """
     修改报表配置（仅限当前用户）。
+
+    Args:
+        body (ReportUpdate): 报表更新请求体。
+        report_id (int): 报表ID。
+        db (AsyncSession): 数据库会话。
+        user (UserMe): 当前登录用户。
+
+    Returns:
+        Report: 更新后的报表信息。
     """
     return await report_service.update_report_service(
         db=db,
@@ -136,6 +183,15 @@ async def export_report(
 ):
     """
     导出报表（仅限当前用户）。
+
+    Args:
+        report_id (int): 报表ID。
+        format (str): 导出格式(png, jpeg, pdf)。
+        db (AsyncSession): 数据库会话。
+        user (UserMe): 当前登录用户。
+
+    Returns:
+        dict: 包含导出文件信息的字典。
     """
     return await report_service.export_report_service(
         db=db,

@@ -1,9 +1,40 @@
+"""
+操作日志模型。
+
+本模块定义了用于记录系统操作审计日志的 ORM 模型。
+"""
+
+# backend/app/models/operation_log.py
+
 from sqlalchemy import Column, Integer, Text, String, Boolean, CheckConstraint, DateTime, ForeignKey, Index
 from sqlalchemy.sql import func
 
 from core.database import Base
 
 class OperationLog(Base):
+    """
+    操作审计日志表 ORM 模型。
+
+    记录所有数据变更操作。
+
+    Attributes:
+        log_id (int): 日志ID。
+        user_id (int): 操作用户ID。
+        project_id (int): 所属项目ID。
+        session_id (int): 所属会话ID。
+        message_id (int): 触发操作的消息ID。
+        statement_id (int): 关联的SQL语句ID。
+        operation_type (str): 操作类型。
+        target_table (str): 目标表名。
+        sql_statement (str): 完整SQL语句。
+        natural_language_intent (str): 用户原始指令。
+        status (str): 执行状态。
+        error_message (str): 错误信息（若失败）。
+        affected_rows (int): 影响行数。
+        confirmed_by_user (bool): 是否经用户确认。
+        executed_at (datetime): 执行时间。
+        execution_duration_ms (int): 执行耗时（毫秒）。
+    """
     __tablename__ = 'operation_log'
 
     __table_args__ = (

@@ -1,3 +1,11 @@
+"""
+用户登录历史 CRUD。
+
+本模块提供用于追踪用户登录历史的 CRUD 操作。
+"""
+
+# backend/app/crud/crud_user_login_history.py
+
 from typing import Optional, List, Tuple
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func, desc
@@ -15,7 +23,17 @@ class CRUDLoginHistory:
             db: AsyncSession, user_id: int
     ) -> UserLoginHistory | None:
         """
-        纯数据查询：获取用户最新的「登录成功且未登出」的记录
+        获取用户最新的「登录成功且未登出」的记录。
+
+        Args:
+            db (AsyncSession): 数据库会话。
+            user_id (int): 用户 ID。
+
+        Returns:
+            UserLoginHistory | None: 最新未登出的登录记录，若无则返回 None。
+
+        Raises:
+            DatabaseOperationFailedException: 查询失败时抛出。
         """
         try:
             query = (
@@ -49,18 +67,25 @@ class CRUDLoginHistory:
             login_time: datetime | None = None
     ) -> UserLoginHistory:
         """
-        纯数据操作：创建登录记录（登录接口专用）
-        对齐表的必填字段（user_id、ip_address、login_status）
-        
-        :param db: 数据库会话
-        :param user_id: 用户ID
-        :param ip_address: IP地址
-        :param login_status: 登录状态
-        :param user_agent: 用户代理信息
-        :param failure_reason: 失败原因
-        :param device_info: 设备信息
-        :param login_time: 登录时间
-        :return: 用户登录历史记录对象
+        创建登录记录（登录接口专用）。
+
+        对齐表的必填字段（user_id、ip_address、login_status）。
+
+        Args:
+            db (AsyncSession): 数据库会话。
+            user_id (Optional[int]): 用户ID。
+            ip_address (str): IP地址。
+            login_status (str): 登录状态。
+            user_agent (str | None): 用户代理信息。
+            failure_reason (str | None): 失败原因。
+            device_info (dict | None): 设备信息。
+            login_time (datetime | None): 登录时间。
+
+        Returns:
+            UserLoginHistory: 用户登录历史记录对象。
+
+        Raises:
+            DatabaseOperationFailedException: 创建失败时抛出。
         """
         try:
             db_obj = UserLoginHistory(
@@ -88,11 +113,15 @@ class CRUDLoginHistory:
         logout_time: datetime = datetime.now(timezone.utc)
     ) -> None:
         """
-        纯数据更新：更新登录记录的登出信息（登出时间、会话时长、登录状态）
-        
-        :param db: 数据库会话
-        :param login_history: 要更新的登录记录对象
-        :param logout_time: 登出时间
+        更新登录记录的登出信息（登出时间、会话时长、登录状态）。
+
+        Args:
+            db (AsyncSession): 数据库会话。
+            login_history (UserLoginHistory): 要更新的登录记录对象。
+            logout_time (datetime): 登出时间。
+
+        Raises:
+            DatabaseOperationFailedException: 更新失败时抛出。
         """
         try:
             # 只做数据赋值，不做业务判断（业务判断在Service层）
@@ -114,7 +143,19 @@ class CRUDLoginHistory:
             limit: int = 10
     ) -> Tuple[List[UserLoginHistory], int]:
         """
-        获取用户的登录历史列表（支持分页），返回 (记录列表, 总数)
+        获取用户的登录历史列表（支持分页）。
+
+        Args:
+            db (AsyncSession): 数据库会话。
+            user_id (int): 用户 ID。
+            skip (int): 跳过的记录数。
+            limit (int): 返回的最大记录数。
+
+        Returns:
+            Tuple[List[UserLoginHistory], int]: (记录列表, 总数)。
+
+        Raises:
+            DatabaseOperationFailedException: 查询失败时抛出。
         """
         try:
             # 1. 查询总数

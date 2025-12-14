@@ -1,4 +1,4 @@
-# src/backend/app/api/v1/deps.py
+# backend/app/api/v1/deps.py
 
 from fastapi import Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession

@@ -1,3 +1,11 @@
+"""
+SQL DDL 排序工具模块。
+
+提供基于依赖关系的 DDL 语句排序功能，解决外键约束导致的执行顺序问题。
+"""
+
+# backend/app/core/sql_sort.py
+
 import sqlglot
 import sqlglot.expressions as exp
 from collections import deque
@@ -6,12 +14,20 @@ from typing import List, Set, Dict, Tuple, Optional
 
 def sort_ddl_by_dependency(ddl_text: str, dialect: str = "mysql") -> List[str]:
     """
-    自动化排序 DDL 语句，支持 MySQL、PostgreSQL、SQLite
-    适配 sqlglot 24.0.0 版本
-    :param ddl_text: 原始 DDL 字符串
-    :param dialect: 数据库方言，可选：mysql/postgresql/sqlite
-    :return: 排序后的语句列表
-    :raises ValueError: 当检测到循环依赖或重复创建实体时
+    自动化排序 DDL 语句，支持 MySQL、PostgreSQL、SQLite。
+
+    解析 DDL 语句，分析表之间的依赖关系（如外键），并进行拓扑排序。
+    适配 sqlglot 24.0.0 版本。
+
+    Args:
+        ddl_text (str): 原始 DDL 字符串，包含多条语句。
+        dialect (str): 数据库方言，可选：mysql/postgresql/sqlite。
+
+    Returns:
+        List[str]: 排序后的 DDL 语句列表。
+
+    Raises:
+        ValueError: 当检测到循环依赖、重复创建实体或 SQL 解析失败时抛出。
     """
     if not ddl_text.strip():
         return []

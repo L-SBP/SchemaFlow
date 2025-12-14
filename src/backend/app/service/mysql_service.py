@@ -5,6 +5,8 @@ MySQL 用户配置服务。
 `mysql_native_password`；同时初始化用户引擎。
 """
 
+# backend/app/service/mysql_service.py
+
 from sqlalchemy import URL
 
 from core.config import config

@@ -4,6 +4,9 @@
 管理项目的领域术语，包括增删改查、导入/导出与分页；负责权限校验、数据校验
 与错误处理。
 """
+
+# backend/app/service/knowledge_service.py
+
 import os
 import pandas as pd
 from typing import List, Optional, Any

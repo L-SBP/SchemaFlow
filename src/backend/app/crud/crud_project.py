@@ -1,3 +1,9 @@
+"""
+项目 CRUD。
+
+本模块提供项目管理的 CRUD 操作。
+"""
+
 # backend/app/crud/crud_project.py
 
 from typing import Optional, List
@@ -37,7 +43,7 @@ class CRUDProject:
     async def get(db: AsyncSession, project_id: int) -> Optional[Project]:
         """获取单个项目"""
         try:
-            # 修改查询：同时查 Project 和 DatabaseInstance.db_type
+            #同时查 Project 和 DatabaseInstance.db_type
             query = select(Project, DatabaseInstance.db_type) \
                 .join(DatabaseInstance, Project.instance_id == DatabaseInstance.instance_id) \
                 .where(Project.project_id == project_id)
@@ -77,7 +83,7 @@ class CRUDProject:
             DatabaseOperationFailedException: 查询失败时抛出。
         """
         try:
-            # 修改查询：Join DatabaseInstance
+            # Join DatabaseInstance
             query = select(Project, DatabaseInstance.db_type).join(
                 DatabaseInstance, Project.instance_id == DatabaseInstance.instance_id
             ).where(

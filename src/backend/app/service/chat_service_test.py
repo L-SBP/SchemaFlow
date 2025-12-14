@@ -4,6 +4,8 @@
 用于调试/验证 chat-to-SQL 流程，连接可配置的 AI 端点并返回基础解析结果。
 """
 
+# backend/app/service/chat_service_test.py
+
 import json
 import httpx
 import sqlparse

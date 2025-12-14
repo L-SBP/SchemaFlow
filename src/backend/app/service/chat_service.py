@@ -1,7 +1,20 @@
+"""
+聊天服务。
+
+处理与 AI 模型的聊天交互，负责 SQL 生成任务。
+包含：
+- 模型注册与配置管理
+- 提示词工程 (Prompt Engineering)
+- 会话所有权校验
+- AI 响应的解析与格式化
+"""
+
+# backend/app/service/chat_service.py
+
 import json
 import httpx
 import sqlparse
-from typing import List, Dict, Optional,Any   
+from typing import List, Dict, Optional, Any   
 from fastapi import HTTPException, status
 from sqlalchemy.future import select
 from sqlalchemy.orm import selectinload
@@ -33,21 +46,21 @@ MODEL_REGISTRY = {
         "name": "XiYan-SQL (QwenCoder-32B)",
         "api_url": "https://api-inference.modelscope.cn/v1/chat/completions",
         "model_id": "XGenerationLab/XiYanSQL-QwenCoder-32B-2504",
-        "api_key": settings.ai.modelscope_api_key, # <--- 修正：从配置读取
+        "api_key": settings.ai.modelscope_api_key, # <--- 从配置读取
         "type": "general_llm"
     },
     "qwen-coder-32b": {
         "name": "Qwen2.5-Coder-32B",
         "api_url": "https://api-inference.modelscope.cn/v1/chat/completions",
         "model_id": "Qwen/Qwen2.5-Coder-32B-Instruct",
-        "api_key": settings.ai.modelscope_api_key, # <--- 修正：从配置读取
+        "api_key": settings.ai.modelscope_api_key, # <--- 从配置读取
         "type": "general_llm"
     },
     "deepseek-v3": {
         "name": "DeepSeek V3.1",
         "api_url": "https://api-inference.modelscope.cn/v1/chat/completions",
         "model_id": "deepseek-ai/DeepSeek-V3.1",
-        "api_key": settings.ai.modelscope_api_key, # <--- 修正：从配置读取
+        "api_key": settings.ai.modelscope_api_key, # <--- 从配置读取
         "type": "general_llm"
     }
 }
@@ -58,12 +71,18 @@ DEFAULT_MODEL = "my-finetuned-sql"
 # 2. 辅助函数 (逻辑拆分)
 # =========================================================
 
-# src/backend/app/service/chat_service.py
 
 def _format_schema_to_text(schema_data: Any) -> str:
     """
-    将 Schema JSON 转换为模型易读的文本格式
-    兼容 List 和 Dict 两种结构
+    将 Schema JSON 转换为模型易读的文本格式。
+    
+    兼容 List 和 Dict 两种结构。
+
+    Args:
+        schema_data (Any): 原始 Schema 数据 (List or Dict)。
+
+    Returns:
+        str: 格式化后的 Schema 文本描述。
     """
     if not schema_data:
         return ""
@@ -72,7 +91,7 @@ def _format_schema_to_text(schema_data: Any) -> str:
         if isinstance(schema_data, str):
             schema_data = json.loads(schema_data)
         
-        # 2. 【关键修复】如果是字典且包含 'tables' 键，提取出列表
+        # 2. 如果是字典且包含 'tables' 键，提取出列表
         if isinstance(schema_data, dict) and "tables" in schema_data:
             schema_data = schema_data["tables"]
 
@@ -104,11 +123,20 @@ def _format_schema_to_text(schema_data: Any) -> str:
     
 def _build_ai_messages(model_config: Dict, schema_text: str, question: str) -> List[Dict]:
     """
-    根据模型类型构建对应的 Prompt 策略
-    解决“函数过长”问题，将 Prompt 逻辑抽离
+    根据模型类型构建对应的 Prompt 策略。
+    
+    解决“函数过长”问题，将 Prompt 逻辑抽离。
+
+    Args:
+        model_config (Dict): 模型配置字典。
+        schema_text (str): Schema 文本描述。
+        question (str): 用户问题。
+
+    Returns:
+        List[Dict]: 构建好的消息列表 (role/content)。
     """
     if model_config["type"] == "local_finetune":
-        # 策略 A: 微调模型 (严格格式)
+        # 微调模型 (严格格式)
         prompt_content = f"""I want you to act as a SQL terminal in front of an database.
 Here is the schema:
 {schema_text}
@@ -123,7 +151,7 @@ I want you to answer the following question.
             {"role": "user", "content": prompt_content}
         ]
     else:
-        # 策略 B: 通用大模型 (思维链与规则引导)
+        # 通用大模型 (思维链与规则引导)
         system_prompt = f"""You are a generic SQL expert. 
 Your task is to generate valid SQL queries based on the provided database schema and user question.
 
@@ -144,8 +172,18 @@ Your task is to generate valid SQL queries based on the provided database schema
 
 async def _verify_session_ownership(db: AsyncSession, session_id: int, user_id: int) -> int:
     """
-    验证会话所有权，防止越权访问 (IDOR)
-    返回: project_id
+    验证会话所有权，防止越权访问 (IDOR)。
+
+    Args:
+        db (AsyncSession): 数据库会话。
+        session_id (int): 会话 ID。
+        user_id (int): 用户 ID。
+
+    Returns:
+        int: 关联的项目 ID (project_id)。
+
+    Raises:
+        HTTPException: 会话不存在、项目不存在或无权限时抛出。
     """
     # 联表查询：Session -> Project，检查 Project.user_id 是否匹配
     stmt = (
@@ -175,7 +213,15 @@ async def _verify_session_ownership(db: AsyncSession, session_id: int, user_id: 
 
 async def call_ai_agent(schema_text: str, question: str, model_key: str = None) -> str:
     """
-    调用 AI 接口生成 SQL
+    调用 AI 接口生成 SQL。
+
+    Args:
+        schema_text (str): 数据库 Schema 描述。
+        question (str): 用户问题。
+        model_key (str, optional): 模型标识 Key。
+
+    Returns:
+        str: 生成的 SQL 语句。
     """
     # 1. 确定配置
     if not model_key or model_key not in MODEL_REGISTRY:
@@ -234,7 +280,17 @@ async def process_chat(
     selected_model: str = None
 ) -> ChatResponse:
     """
-    处理用户聊天请求的主流程
+    处理用户聊天请求的主流程。
+
+    Args:
+        db (AsyncSession): 数据库会话。
+        session_id (int): 会话 ID。
+        user_input (str): 用户输入。
+        user_id (int): 用户 ID。
+        selected_model (str, optional): 选择的模型。
+
+    Returns:
+        ChatResponse: 聊天响应对象。
     """
     # 1. 安全检查：确认会话属于当前用户，并获取 project_id
     project_id = await _verify_session_ownership(db, session_id, user_id)

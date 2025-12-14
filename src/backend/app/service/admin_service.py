@@ -5,6 +5,8 @@
 管理端响应。
 """
 
+# backend/app/service/admin_service.py
+
 from typing import List, Optional, Literal, Dict, Any
 from sqlalchemy.ext.asyncio import AsyncSession
 from datetime import datetime  # 确保导入 datetime

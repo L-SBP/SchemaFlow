@@ -1,3 +1,9 @@
+"""
+项目管理 Schema。
+
+本模块定义了项目的创建、配置更新、数据库连接信息及状态流转相关的模型。
+"""
+
 # backend/app/schema/project.py
 
 from pydantic import BaseModel, Field, ConfigDict
@@ -55,7 +61,7 @@ class ProjectUpdate(BaseModel):
     project_name: Optional[str] = Field(None, min_length=1, max_length=50)
     description: Optional[str] = Field(None, max_length=500)
     # =========================================================
-    # 新增：允许前端回传修改后的 Schema/DDL 进行保存
+    # 允许前端回传修改后的 Schema/DDL 进行保存
     # =========================================================
     schema_definition: Optional[Dict[str, Any]] = Field(
         None,
@@ -172,7 +178,7 @@ class ProjectDetailOut(ProjectListOne):
     progress_percentage: Optional[int] = 0
     # 可以添加 analysis_result, ddl_result 等字段
     # =========================================================
-    # 新增：将数据库中的 JSONB 字段返回给前端
+    # 将数据库中的 JSONB 字段返回给前端
     # =========================================================
     schema_definition: Optional[Dict[str, Any]] = Field(
         None,
