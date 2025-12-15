@@ -15,6 +15,7 @@ from crud.crud_session import crud_session
 from crud.crud_project import crud_project
 from schema.session import SessionCreate, SessionUpdate, SessionResponse
 from schema.user import UserMe
+from core.log import log
 
 
 class SessionService:
@@ -45,8 +46,11 @@ class SessionService:
         Raises:
             HTTPException: 权限不足时抛出 403。
         """
+        log.info("检查项目")
         project = await crud_project.get(db=db, project_id=project_id)
+        log.info("检查项目2")
         if not project or project.user_id != user.user_id:
+            log.info("检查项目3")
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="Project access forbidden"
@@ -148,12 +152,13 @@ class SessionService:
         Returns:
             SessionResponse: 创建后的会话。
         """
+        log.info("创建会话2")
         await SessionService._check_project_owner(
             db=db,
             project_id=session_in.project_id,
             user=user
         )
-
+        log.info("创建会话3")
         return await crud_session.create(
             db=db,
             **session_in.dict()

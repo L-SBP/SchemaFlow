@@ -14,6 +14,7 @@ from sqlalchemy.exc import SQLAlchemyError
 
 from models.session import Session
 from core.exceptions import DatabaseOperationFailedException
+from core.log import log
 
 
 class CRUDSession:
@@ -33,6 +34,7 @@ class CRUDSession:
             DatabaseOperationFailedException: 创建失败时抛出。
         """
         try:
+            log.info("create session")
             db_obj = Session(**kwargs)
             db.add(db_obj)
             await db.commit()

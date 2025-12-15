@@ -12,6 +12,7 @@ from api.v1 import deps
 from service.session_service import session_service
 from schema.session import SessionCreate, SessionUpdate, SessionResponse
 from schema.user import UserMe
+from core.log import log
 
 router = APIRouter()
 
@@ -48,9 +49,9 @@ async def read_sessions(
 
 @router.post("/", response_model=SessionResponse, summary="创建新会话")
 async def create_session(
+    session_in: SessionCreate,
     db: AsyncSession = Depends(deps.get_db),
     current_user: UserMe = Depends(deps.get_current_active_user),
-    session_in: SessionCreate = Depends(),
 ):
     """
     在指定项目下创建新的会话。
@@ -63,6 +64,7 @@ async def create_session(
     Returns:
         SessionResponse: 创建后的会话信息。
     """
+    log.info("创建会话")
     return await session_service.create_session(
         db=db,
         user=current_user,
