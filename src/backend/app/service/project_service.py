@@ -212,7 +212,24 @@ Given the following Entity Sets and Relationship Sets, please generate a complet
             content = response.choices[0].message.content
             content = content.replace("```mermaid", "").replace("```", "").strip()
 
-            return content
+            # 4. 拼接主题 (新增)
+            theme_config = {
+                "theme": "base",
+                "themeVariables": {
+                    "primaryColor": "#ffffff",
+                    "primaryTextColor": "#000000",
+                    "primaryBorderColor": "#3370ff",
+                    "lineColor": "#3370ff",
+                    "tertiaryColor": "#e6f7ff",
+                    "tertiaryBorderColor": "#3370ff",
+                    "tertiaryTextColor": "#000000",
+                    "mainBkg": "#ffffff",
+                    "edgeLabelBackground": "#fff"
+                }
+            }
+            init_directive = f"%%{{init: {json.dumps(theme_config)} }}%%\n"
+
+            return init_directive + content
 
         except Exception as e:
             log.error(f"[ERGen] Error generating mermaid code: {e}")
