@@ -6,7 +6,6 @@
 
 # backend/app/service/email_service.py
 
-from datetime import datetime
 
 from core.log import log
 from core.email_utils import send_verify_email, verify_code

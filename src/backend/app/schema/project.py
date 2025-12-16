@@ -185,7 +185,7 @@ class ProjectDetailOut(ProjectListOne):
         description="AI生成的包含 'schema' 和 'ddl' 的JSON对象"
     )
     ddl_statement: Optional[str] = Field(None, description="DDL 语句文本")
-
+    er_diagram_code: Optional[str] = Field(None, description="Mermaid ER图代码")
     model_config = ConfigDict(from_attributes=True)
 
 

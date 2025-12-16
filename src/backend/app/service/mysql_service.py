@@ -4,11 +4,9 @@ MySQL 用户配置服务。
 为项目创建 MySQL 用户、授予权限，并优先使用 `sha256_password`，必要时回退
 `mysql_native_password`；同时初始化用户引擎。
 """
-
-from sqlalchemy import URL, text
-from typing import Optional, Tuple
-import re
 # backend/app/service/mysql_service.py
+from sqlalchemy import  text
+from typing import Optional
 
 from sqlalchemy import URL
 

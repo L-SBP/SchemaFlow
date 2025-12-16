@@ -7,39 +7,37 @@
 
 # backend/app/service/project_service.py
 
-from typing import Optional, Dict, Any
-from sqlalchemy.ext.asyncio import AsyncSession as Session
-from datetime import datetime, timedelta, timezone
-from jose import jwt, JWTError
-from fastapi import BackgroundTasks  # <--- 新增导入
+
 import requests
 import json
 import random
 import string
 import asyncio
+import os
 from bs4 import BeautifulSoup
 
-from core.sql_dialect_converter import SQLDialectConverter
+from typing import Optional, Dict, Any
+from sqlalchemy.ext.asyncio import AsyncSession as Session
+from datetime import datetime, timedelta, timezone
+from jose import jwt, JWTError
+from fastapi import BackgroundTasks
 from core.sql_sort import sort_ddl_by_dependency
 # 隐式绝对导入
 from crud.crud_project import crud_project
 from crud.crud_database_instance import crud_database_instance
 from crud.crud_user_account import crud_user_account
-from mysql.mysql_execute import execute_sql_root
-from mysql.mysql_converter import MySQLConverter
 from schema import project as schemas
 from core.exceptions import ItemNotFoundException, DatabaseOperationFailedException, OperationNotPermittedException, \
     ValidationException
-from core.auth import decode_jwt_token, create_access_token
+from core.auth import  create_access_token
 from core.config import config
 from core.database import PsqlHelper
 from mysql.mysql_database import MysqlHelper
 from core.log import log
 import re
-from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy import text
-from sqlalchemy.engine import URL
-from pypinyin import lazy_pinyin, Style  # <--- 1. 新增导入
+from pypinyin import lazy_pinyin, Style
+from openai import OpenAI
 
 # ==========================================
 # Schema 生成工具函数
@@ -124,7 +122,7 @@ class SchemaGenerator:
             return ""
 
     @classmethod
-    def generate_ddl(cls, schema_text: str, requirements: str, db_type: str, model: str = "gpt4") -> str:
+    def generate_ddl(cls, schema_text: str, requirements: str, db_type: str, ai_model: str = "gpt4") -> str:
         """
         根据 Schema 和需求生成 DDL
         """
@@ -132,7 +130,7 @@ class SchemaGenerator:
             "database_requirment": requirements,
             "schema": schema_text,
             "target_db_type": db_type,
-            "model": model
+            "model": ai_model
         }
         try:
             resp = requests.post(cls.DDL_API_URL, json=payload, timeout=120)
@@ -145,6 +143,81 @@ class SchemaGenerator:
         except Exception as e:
             log.error(f"[SchemaGen] DDL API Exception: {e}")
             return ""
+
+
+class ERDiagramGenerator:
+    """
+    ER 图生成工具类
+    """
+
+    @staticmethod
+    def generate_mermaid_code(schema_text: str, ai_model: str = "gpt4") -> str:
+        # 1. API Key 配置
+        # TODO:后续不能写死
+        api_key = "sk-VwmLWgJlhLpNCyrP5IcTfvsBZp9VfhQqXfqcz7LH35xn5lhn"
+        base_url = "https://ai.nengyongai.cn/v1"
+
+        if not api_key:
+            log.warning("[ERGen] No API Key found.")
+            return ""
+
+        # 2. 模型映射 (新增)
+        model_mapping = {
+            'gpt4': 'gpt-4o-2024-08-06',
+            'chatgpt': 'gpt-3.5-turbo',
+            'qwen': 'Qwen/Qwen3-32B',
+            'deepseek': 'deepseek-v3-241226'
+        }
+        real_model = model_mapping.get(ai_model, 'gpt-4o-2024-08-06')
+
+        try:
+            client = OpenAI(api_key=api_key, base_url=base_url)
+
+            # 3. 使用新的 Prompt (更新)
+            prompt = """You are a professional database designer.
+
+Given the following Entity Sets and Relationship Sets, please generate a complete and accurate Mermaid ER diagram code using `erDiagram` syntax. Follow these strict rules:
+
+1. Use `PK` and `FK` to mark primary and foreign keys in the entity or relationship tables.
+2. Use `||--o{`, `||--||`, `o{--o{` etc. to represent correct cardinality:
+   - `||--o{` means one-to-many
+   - `||--||` means one-to-one
+   - `o{--o{` means many-to-many
+3. For relationship sets, if needed, create a separate entity-like table to store relationship attributes and foreign keys.
+4. Do not include any extra explanation or markdown syntax like ```mermaid. Just return the raw ER diagram code.
+5. Use appropriate attribute types like `int`, `string`, `date`, `float`, etc., based on the names.
+6. **Attribute Order (CRITICAL)**: 
+   - You MUST follow the format: `Type Name Key`.
+   - The Key (PK/FK) must ALWAYS be at the **end** of the line.
+   - **Correct**: `string StudentID PK`
+   - **WRONG**: `string PK StudentID` (Never put PK/FK before the name)
+
+7. **Composite Keys (CRITICAL)**: 
+   - If an attribute is **BOTH** a Primary Key and a Foreign Key, you MUST separate them with a **COMMA**.
+   - **Correct**: `string course_id PK, FK`
+   - **WRONG**: `string course_id PK FK` (Missing comma causes error)
+    """
+
+            response = client.chat.completions.create(
+                model=real_model,
+                messages=[
+                    {
+                        "role": "user",
+                        "content": prompt + "\n\nRequirement:\n" + schema_text
+                    }
+                ],
+                temperature=0.1
+            )
+
+            content = response.choices[0].message.content
+            content = content.replace("```mermaid", "").replace("```", "").strip()
+
+            return content
+
+        except Exception as e:
+            log.error(f"[ERGen] Error generating mermaid code: {e}")
+            return ""
+
 
 
 # ==========================================
@@ -225,7 +298,15 @@ async def bg_generate_schema_task(
         None, SchemaGenerator.generate_schema, requirements, db_name, db_type, ai_model
     )
 
-    # 2. 存入 PostgreSQL 的 project.schema_definition 字段
+    # 2. 生成 ER 图代码
+    er_code = ""
+    if schema_res:
+        log.info(f"[Task] Generating ER Diagram for Project {project_id}...")
+        er_code = await loop.run_in_executor(
+            None, ERDiagramGenerator.generate_mermaid_code, schema_res, ai_model
+        )
+
+    # 3. 存入 PostgreSQL 的 project.schema_definition 字段
     # 使用独立的 Session，因为这是后台任务
     temp_engine = PsqlHelper._get_async_engine(config.db)
     async with PsqlHelper.get_session(temp_engine) as session:
@@ -239,6 +320,8 @@ async def bg_generate_schema_task(
                     current_def['generated_db_name'] = db_name
 
                     project.schema_definition = current_def
+                    # 保存 ER 代码
+                    project.er_diagram_code = er_code
                     project.creation_stage = schemas.CreationStageEnum.SCHEMA_GENERATED.value
                 else:
                     log.error(f"[Task] Schema generation failed for Project {project_id}.")
@@ -257,15 +340,21 @@ async def bg_generate_ddl_task(
     schema_text: str, 
     requirements: str, 
     db_type: str, 
-    db_name: str
+    db_name: str,
+    ai_model:str = "gpt4"
 ):
     log.info(f"[Task] Starting DDL GENERATION for Project {project_id}...")
     loop = asyncio.get_event_loop()
 
     # 调用生成 DDL
-    ddl_res = await loop.run_in_executor(
-        None, SchemaGenerator.generate_ddl, schema_text, requirements, db_type
+    ddl_future =  loop.run_in_executor(
+        None, SchemaGenerator.generate_ddl, schema_text, requirements, db_type, ai_model
     )
+    er_future = loop.run_in_executor(
+        None, ERDiagramGenerator.generate_mermaid_code, schema_text, ai_model
+    )
+    ddl_res = await ddl_future
+    er_code = await er_future
 
     temp_engine = PsqlHelper._get_async_engine(config.db)
     async with PsqlHelper.get_session(temp_engine) as session:
@@ -273,12 +362,17 @@ async def bg_generate_ddl_task(
             project = await crud_project.get(session, project_id)
             if project:
                 current_def = project.schema_definition or {}
+                # 更新 Mermaid 代码 ---
+                if er_code:
+                    log.info(f"[Task] ER Diagram updated for Project {project_id}")
+                    project.er_diagram_code = er_code
+                # ----------------------------------
                 if ddl_res:
                     log.info(f"Generated DDL length: {len(ddl_res)}")
                     # 拼接完整 DDL
                     full_ddl_preview = f"CREATE DATABASE IF NOT EXISTS `{db_name}`;\nUSE `{db_name}`;\n\n{ddl_res}"
 
-                    # [修改点] 存入新的独立字段 ddl_statement
+                    # 存入新的独立字段 ddl_statement
                     project.ddl_statement = full_ddl_preview
 
                     project.creation_stage = schemas.CreationStageEnum.DDL_GENERATED.value
@@ -417,14 +511,15 @@ async def request_ddl_generation_service(
         schema_text=data.confirmed_schema,
         requirements=project.description,  # 使用(可能更新过的)需求
         db_type=instance.db_type,
-        db_name=instance.db_name
+        db_name=instance.db_name,
+        ai_model="gpt4"
     )
 
     return schemas.ProjectAsyncResponse(
         project_id=project.project_id,
         project_name=project.project_name,
         status=project.project_status,
-        message="Schema已确认，正在生成DDL..."
+        message="Schema已确认，正在生成DDL并更新ER图..."
     )
 
 
@@ -807,3 +902,48 @@ async def delete_project_service(
             used_databases=user.used_databases - 1
         )
     return True
+
+
+# ==============================================================================
+# [新增] 重新生成 Schema 的 ER 图
+# ==============================================================================
+async def regenerate_project_er_service(
+        db: Session,
+        project_id: int,
+        user_id: int,
+        schema_text: str,
+        ai_model: str = "gpt4"
+) -> schemas.ProjectResponse:
+    """
+    更新项目的 Schema 定义，并重新生成 Mermaid ER 代码。
+    """
+    # 1. 校验
+    project = await crud_project.get(db, project_id)
+    if not project or project.user_id != user_id:
+        raise ItemNotFoundException("Project not found")
+
+    # 2. 调用 AI 生成 (在线程池中运行同步代码)
+    log.info(f"[RegenER] Regenerating ER for Project {project_id}...")
+    loop = asyncio.get_event_loop()
+    er_code = await loop.run_in_executor(
+        None,
+        ERDiagramGenerator.generate_mermaid_code,
+        schema_text,
+        ai_model
+    )
+
+    # 3. 更新数据库
+    current_def = project.schema_definition or {}
+    current_def['schema'] = schema_text  # 更新 Schema
+
+    project.schema_definition = current_def
+    project.er_diagram_code = er_code  # 更新 Mermaid 代码
+
+    # 可选：重置状态，提示用户 DDL 可能过期
+    # project.creation_stage = schemas.CreationStageEnum.SCHEMA_GENERATED.value
+
+    db.add(project)
+    await db.commit()
+    await db.refresh(project)
+
+    return schemas.ProjectResponse(data=schemas.ProjectDetailOut.model_validate(project))

@@ -6,7 +6,6 @@ Redis 过期事件处理。
 
 # backend/app/service/redis_expire_handle_service.py
 
-from sqlalchemy.ext.asyncio import AsyncSession
 from core.database import PsqlHelper
 from service.user_service import service_logout
 from core.config import config
