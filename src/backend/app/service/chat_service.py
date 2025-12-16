@@ -15,8 +15,8 @@
 import json
 import httpx
 import sqlparse
-from typing import List, Dict, Optional, Any   
-from fastapi import HTTPException, status
+from typing import List, Dict, Any
+from fastapi import HTTPException
 from sqlalchemy.future import select
 from sqlalchemy.orm import selectinload
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -26,10 +26,7 @@ from core.log import log
 from crud.crud_database_instance import crud_database_instance
 from crud.crud_message import crud_message
 from crud.crud_project import crud_project
-from models import DatabaseInstance
 from models.session import Session as SessionModel
-from models.project import Project as ProjectModel
-from mysql.mysql_execute import execute_dql_user, execute_dml_user
 from schema.chat import ChatResponse, MessageType
 from service.mysql_service import execute_sql_with_user_check
 

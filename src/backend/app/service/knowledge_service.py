@@ -9,21 +9,19 @@
 
 import os
 import pandas as pd
-from typing import List, Optional, Any
+from typing import List, Optional
 from fastapi import UploadFile
 from sqlalchemy.ext.asyncio import AsyncSession as Session
 from datetime import datetime, timedelta, timezone
-import csv
 import io
 
 # 隐式绝对导入
 from crud.crud_knowledge import crud_knowledge
 from crud.crud_project import crud_project  # 用于检查项目权限
 from schema import knowledge as schemas
-from core.exceptions import ItemNotFoundException, ValidationException, DatabaseOperationFailedException, \
+from core.exceptions import ItemNotFoundException, ValidationException, \
     OperationNotPermittedException
 from core.config import config # 用于获取base_url
-from schema.knowledge import KnowledgeCreate
 
 # 导出目录（确保存在）
 EXPORT_DIR = "static/exports"

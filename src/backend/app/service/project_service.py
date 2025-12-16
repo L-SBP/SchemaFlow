@@ -11,7 +11,7 @@ from typing import Optional, Dict, Any
 from sqlalchemy.ext.asyncio import AsyncSession as Session
 from datetime import datetime, timedelta, timezone
 from jose import jwt, JWTError
-from fastapi import BackgroundTasks  # <--- 新增导入
+from fastapi import BackgroundTasks
 import requests
 import json
 import random
@@ -19,27 +19,22 @@ import string
 import asyncio
 from bs4 import BeautifulSoup
 
-from core.sql_dialect_converter import SQLDialectConverter
 from core.sql_sort import sort_ddl_by_dependency
 # 隐式绝对导入
 from crud.crud_project import crud_project
 from crud.crud_database_instance import crud_database_instance
 from crud.crud_user_account import crud_user_account
-from mysql.mysql_execute import execute_sql_root
-from mysql.mysql_converter import MySQLConverter
 from schema import project as schemas
 from core.exceptions import ItemNotFoundException, DatabaseOperationFailedException, OperationNotPermittedException, \
     ValidationException
-from core.auth import decode_jwt_token, create_access_token
+from core.auth import  create_access_token
 from core.config import config
 from core.database import PsqlHelper
 from mysql.mysql_database import MysqlHelper
 from core.log import log
 import re
-from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy import text
-from sqlalchemy.engine import URL
-from pypinyin import lazy_pinyin, Style  # <--- 1. 新增导入
+from pypinyin import lazy_pinyin, Style
 
 # ==========================================
 # Schema 生成工具函数
