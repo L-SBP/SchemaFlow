@@ -30,21 +30,22 @@ from models.session import Session as SessionModel
 from schema.chat import ChatResponse, MessageType
 from service.mysql_service import execute_sql_with_user_check
 
+# 【关键融合 1】必须导入这些模型类，否则确认接口无法运行
+from models.message import Message as MessageModel 
+from models.project import Project as ProjectModel
+
 # =========================================================
-# 1. 模型配置注册表
+# 1. 模型配置注册表 (保留同学的更新)
 # =========================================================
 
 MODEL_REGISTRY = {
     "my-finetuned-sql": {
         "name": "My Fine-Tuned SQL Model",
-        # 1. 填入云服务器地址 (保留 /v1/chat/completions)
         "api_url": "http://1.92.127.206:8080/v1/chat/completions", 
         "model_id": "codellama/CodeLlama-13b-Instruct-hf",
-        # 2. 填入真实密钥
         "api_key": "sk-2025texttosql", 
         "type": "local_finetune"
     },
-
     "xiyan-sql": {
         "name": "XiYan-SQL (QwenCoder-32B)",
         "api_url": "https://api-inference.modelscope.cn/v1/chat/completions",
@@ -71,8 +72,9 @@ MODEL_REGISTRY = {
 DEFAULT_MODEL = "my-finetuned-sql"
 
 # =========================================================
-# 2. 辅助函数
+# 2. 辅助函数 (保留同学优化的 Prompt 策略)
 # =========================================================
+
 def _build_ai_messages(model_config: Dict, schema_text: str, question: str) -> List[Dict]:
     """构建高可读性、结构化的 Prompt 策略"""
     
@@ -86,6 +88,7 @@ Your ONLY task is to generate valid SQL queries based on the provided database s
 3. Use the exact table and column names from the schema.
 4. If the question cannot be answered with the schema, return SELECT 'ERROR: Cannot answer';
 5. Always use single quotes ('value') for string literals. NEVER use double quotes ("value").
+
 IMPORTANT: 
 - For string literals, YOU MUST USE SINGLE QUOTES (').
 - DO NOT use double quotes (") or quotes(`).
@@ -94,16 +97,12 @@ Examples:
 Correct: SELECT * FROM users WHERE name = 'John';
 Wrong:   SELECT * FROM users WHERE name = "John";
 """
-
-    context_block = f"""
-[Database DDL]
-{schema_text}
-"""
+    context_block = f"""[Database DDL]
+{schema_text}"""
 
     if model_config["type"] == "local_finetune":
         # 微调模型通常对 User 消息中的上下文反应更好
         prompt_content = f"""{base_system_instruction}
-
 {context_block}
 
 ### User Question
@@ -164,7 +163,6 @@ async def call_ai_agent(ddl_text: str, question: str, model_key: str = None) -> 
         "temperature": 0.1,
         "stream": False,
         "max_tokens": 512,
-        # 【新增】告诉模型看到这些符号就闭嘴
         "stop": ["<|im_end|>", "<|im_start|>", "User:", "Assistant:"]
     }
 
@@ -175,8 +173,7 @@ async def call_ai_agent(ddl_text: str, question: str, model_key: str = None) -> 
 
     try:
         async with httpx.AsyncClient(timeout=300.0) as client:
-            # 【关键修复】使用 json.dumps(..., ensure_ascii=False)
-            # 这强制将 Payload 序列化为 UTF-8 字符 (如 "张三") 而不是 Unicode 转义 (如 "\u5f20\u4e09")
+            # 【保留同学的 UTF-8 修复】这很重要，防止中文乱码
             resp = await client.post(
                 config["api_url"], 
                 content=json.dumps(payload, ensure_ascii=False).encode("utf-8"), 
@@ -190,24 +187,17 @@ async def call_ai_agent(ddl_text: str, question: str, model_key: str = None) -> 
         if "choices" in raw and len(raw["choices"]) > 0:
             content = raw["choices"][0]["message"]["content"]
         
-        # =====================================================
-        # 【关键修复】清洗数据，截断废话
-        # =====================================================
-        # 1. 如果模型输出了停止符，只取前面的部分
+        # 清洗数据
         if "<|im_end|>" in content:
             content = content.split("<|im_end|>")[0]
         if "<|im_start|>" in content:
             content = content.split("<|im_start|>")[0]
             
-        # 2. 有时候模型会把 SQL 写在 Markdown 块里，先去 Markdown
         clean_sql = content.strip().replace("```sql", "").replace("```", "").strip()
         
-        # 3. 如果还是有多行，且第一行就是完整的 SQL (以分号结尾)，就只取第一行
-        # 防止它在 SQL 后面通过换行继续自言自语
         if ";\n" in clean_sql:
              clean_sql = clean_sql.split(";\n")[0] + ";"
         elif clean_sql.count(";") > 1:
-             # 如果有多条 SQL，只取第一条
              clean_sql = clean_sql.split(";")[0] + ";"
              
         return clean_sql
@@ -217,7 +207,7 @@ async def call_ai_agent(ddl_text: str, question: str, model_key: str = None) -> 
         return f"-- AI Service Error: {str(e)}"
 
 # =========================================================
-# 3. 核心业务逻辑 (含模型记忆)
+# 3. 核心业务逻辑 (融合版：含模型记忆 + 安全刹车)
 # =========================================================
 
 async def process_chat(
@@ -233,7 +223,7 @@ async def process_chat(
     # 1. 验证会话权限
     project_id = await _verify_session_ownership(db, session_id, user_id)
 
-    # 2. 获取 Session 对象以处理模型记忆逻辑
+    # 2. 获取 Session 对象
     stmt = select(SessionModel).where(SessionModel.session_id == session_id)
     result = await db.execute(stmt)
     session_obj = result.scalar_one_or_none()
@@ -242,52 +232,42 @@ async def process_chat(
          raise HTTPException(status_code=404, detail="Session lost")
 
     # =========================================================
-    # 【核心逻辑优化】模型选择优先级策略
+    # 模型选择优先级策略
     # =========================================================
-    final_model_key = DEFAULT_MODEL # 兜底
-
+    final_model_key = DEFAULT_MODEL
     if selected_model:
-        # A. 如果用户本次明确指定了模型 -> 使用它，并更新到数据库（记忆）
         final_model_key = selected_model
         if session_obj.current_model != selected_model:
             session_obj.current_model = selected_model
             db.add(session_obj)
-            await db.commit() # 保存记忆
+            await db.commit()
             log.info(f"Session {session_id} model switched to: {selected_model}")
-
     elif session_obj.current_model:
-        # B. 如果用户没指定，但数据库里有记忆 -> 使用记忆的模型
         final_model_key = session_obj.current_model
         log.info(f"Session {session_id} using stored model: {final_model_key}")
-        
     else:
-        # C. 既没指定也没记忆 -> 使用系统默认，并保存到数据库作为初始记忆
-        final_model_key = DEFAULT_MODEL
         session_obj.current_model = DEFAULT_MODEL
         db.add(session_obj)
         await db.commit()
-    # =========================================================
 
     # 3. 存用户消息
     await crud_message.create_message(db, session_id, user_input, role="user")
 
     # 4. 获取 DDL 上下文
-    # 直接读取 project.ddl_statement，不再使用 schema_definition 进行转换
+    # 【符合需求】直接读取 project.ddl_statement，解决表名大小写敏感问题
     project = await crud_project.get(db, project_id)
-
     ddl_text = ""
     if project and project.ddl_statement:
         ddl_text = project.ddl_statement
         log.info(f"Using DDL for project {project_id} (Length: {len(ddl_text)})")
     else:
-        # 虽然假设 ddl_statement 一定不为空，但为了稳健性保留一个 Warning
         log.warning(f"Project {project_id} has empty ddl_statement!")
         ddl_text = "-- Error: No DDL found for this project."
-    
-    # 5. 调用 AI 生成 SQL (使用记忆或指定的模型)
+
+    # 5. 调用 AI 生成 SQL
     sql_text = await call_ai_agent(ddl_text, user_input, model_key=final_model_key)
 
-    # 6. 简单解析 SQL 类型
+    # 6. 解析 SQL 类型
     sql_type = "UNKNOWN"
     try:
         if sql_text and not sql_text.startswith("--"):
@@ -297,28 +277,44 @@ async def process_chat(
     except Exception:
         pass
 
+    # 【关键融合 2】判断是否需要确认
+    requires_confirm = sql_type in ["INSERT", "UPDATE", "DELETE", "DROP", "ALTER", "TRUNCATE"]
+
     # 7. 存 AI 回复消息
     reply_content = f"已生成查询语句：\n{sql_text}"
     ai_message = await crud_message.create_message(db, session_id, reply_content, role="assistant")
 
-    # 8. 尝试执行 SQL
-    data = []
-    try:
-        database_instance = await crud_database_instance.get(db, project.instance_id)
-        # result 可能是一个列表(SELECT) 或 一个字典(INSERT/UPDATE)
-        raw_result = await execute_sql_with_user_check(sql_text, sql_type, database_instance)
+    # 【关键融合 3】如果需要确认，必须把状态写回数据库！
+    # 同学的代码里漏了这一步，导致确认时会报 400
+    if requires_confirm:
+        ai_message.requires_confirmation = True
+        db.add(ai_message)
+        await db.commit()
+        await db.refresh(ai_message)
 
-        # 【核心修复】统一数据格式为 List[Dict]
-        if isinstance(raw_result, dict):
-            # 如果是 DML 返回的字典，包裹成列表
-            data = [raw_result]
-        elif isinstance(raw_result, list):
-            # 如果是 DQL 返回的列表，直接使用
-            data = raw_result
-        else:
-            data = []
-    except Exception as e:
-        log.info(f"SQL Execution Error (Safe to ignore if SQL is invalid): {str(e)}")
+    # 8. 尝试执行 SQL (带刹车)
+    data = []
+    
+    # 【关键融合 4】只有不需要确认的操作，才立即执行
+    # 同学的代码里直接执行了，这很危险
+    if not requires_confirm:
+        try:
+            database_instance = await crud_database_instance.get(db, project.instance_id)
+            # result 可能是一个列表(SELECT) 或 一个字典(INSERT/UPDATE)
+            raw_result = await execute_sql_with_user_check(sql_text, sql_type, database_instance)
+            
+            # 【同学的优化】统一数据格式为 List[Dict]
+            if isinstance(raw_result, dict):
+                data = [raw_result]
+            elif isinstance(raw_result, list):
+                data = raw_result
+            else:
+                data = []
+        except Exception as e:
+            log.info(f"SQL Execution Error (Safe to ignore if SQL is invalid): {str(e)}")
+    else:
+        # 如果需要确认，跳过执行
+        log.info(f"SQL requires confirmation ({sql_type}), skipping immediate execution.")
 
     # 9. 构造响应
     return ChatResponse(
@@ -327,6 +323,102 @@ async def process_chat(
         message_type=MessageType.ASSISTANT,
         sql_text=sql_text,
         sql_type=sql_type,
-        requires_confirmation=sql_type in ["INSERT", "UPDATE", "DELETE", "DROP", "ALTER"],
+        requires_confirmation=requires_confirm,
         data=data
+    )
+
+# =========================================================
+# 4. 执行确认逻辑 (同学代码里缺失，这里必须补上)
+# =========================================================
+
+async def confirm_and_execute_sql(
+    db: AsyncSession,
+    message_id: int,
+    user_id: int
+) -> ChatResponse:
+    """
+    用户确认执行某条消息中的 SQL (通常是增删改操作)。
+    【修复版】使用分步查询法，解决 AttributeError。
+    """
+    # 1. 第一步：查消息本身
+    stmt = select(MessageModel).where(MessageModel.message_id == message_id)
+    result = await db.execute(stmt)
+    message = result.scalar_one_or_none()
+
+    if not message:
+        raise HTTPException(status_code=404, detail="Message not found")
+
+    # 2. 第二步：查所属 Session
+    stmt_session = select(SessionModel).where(SessionModel.session_id == message.session_id)
+    result_session = await db.execute(stmt_session)
+    session_obj = result_session.scalar_one_or_none()
+    
+    if not session_obj:
+        raise HTTPException(status_code=404, detail="Session not found")
+
+    # 3. 第三步：查所属 Project
+    stmt_project = select(ProjectModel).where(ProjectModel.project_id == session_obj.project_id)
+    result_project = await db.execute(stmt_project)
+    project = result_project.scalar_one_or_none()
+
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+
+    # --- 校验逻辑 ---
+    if project.user_id != user_id:
+        raise HTTPException(status_code=403, detail="Access denied")
+
+    if not message.requires_confirmation:
+        raise HTTPException(status_code=400, detail="This message does not require confirmation")
+
+    if message.user_confirmed:
+        raise HTTPException(status_code=400, detail="This operation has already been confirmed/executed")
+
+    # 4. 提取 SQL 语句
+    content = message.content
+    sql_text = ""
+    
+    if "：\n" in content:
+        sql_text = content.split("：\n")[-1].strip()
+    else:
+        sql_text = content.strip()
+
+    sql_text = sql_text.replace("```sql", "").replace("```", "").strip()
+
+    # 5. 执行 SQL (DML)
+    execute_res = []
+    try:
+        database_instance = await crud_database_instance.get(db, project.instance_id)
+        
+        # 真正执行
+        result = await execute_sql_with_user_check(sql_text, "UPDATE", database_instance)
+        
+        # 📦 统一包装成列表
+        if isinstance(result, dict):
+            execute_res = [result]
+        elif isinstance(result, list):
+            execute_res = result
+        else:
+            execute_res = []
+        
+        # 更新消息状态
+        message.user_confirmed = True
+        db.add(message)
+        await db.commit()
+
+        log.info(f"User {user_id} confirmed execution of message {message_id}")
+
+    except Exception as e:
+        log.error(f"Execution failed: {e}")
+        raise HTTPException(status_code=500, detail=f"Execution failed: {str(e)}")
+
+    # 6. 返回结果
+    return ChatResponse(
+        message_id=message.message_id,
+        content=message.content,
+        message_type=MessageType.ASSISTANT,
+        sql_text=sql_text,
+        sql_type="DML_EXECUTED",
+        requires_confirmation=False,
+        data=execute_res
     )
