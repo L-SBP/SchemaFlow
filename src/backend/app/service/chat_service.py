@@ -73,51 +73,6 @@ DEFAULT_MODEL = "my-finetuned-sql"
 # =========================================================
 # 2. 辅助函数
 # =========================================================
-
-def _format_schema_to_text(schema_data: Any) -> str:
-    """将 Schema JSON 转换为模型易读的文本格式 (兼容 List/Dict)"""
-    if not schema_data:
-        return ""
-    try:
-        # 0. 如果是字符串，先尝试解析为 JSON 对象
-        if isinstance(schema_data, str):
-            try:
-                schema_data = json.loads(schema_data)
-            except json.JSONDecodeError:
-                return schema_data
-        
-        # 1. 【关键修复】优先处理 DDL 字段
-        # 数据库常存为 {"ddl": "CREATE...", "schema": "..."}
-        # 必须提取 ddl 并还原 \n 转义符，否则模型会看到 Python 字典字符串
-        if isinstance(schema_data, dict) and "ddl" in schema_data:
-            return str(schema_data["ddl"]).replace("\\n", "\n")
-
-        # 2. 处理 tables 列表结构
-        if isinstance(schema_data, dict) and "tables" in schema_data:
-            schema_data = schema_data["tables"]
-
-        lines = []
-        if isinstance(schema_data, list):
-            for table in schema_data:
-                if isinstance(table, dict):
-                    t_name = table.get("table_name", "unknown")
-                    cols = table.get("columns", [])
-                else:
-                    continue
-
-                if isinstance(cols, str): 
-                    cols = [cols]
-                col_str = ", ".join(str(c) for c in cols)
-                lines.append(f"Table: {t_name}, columns = [{col_str}]")
-            return "\n".join(lines)
-        
-        # 3. 兜底策略
-        return str(schema_data)
-
-    except Exception as e:
-        log.error(f"Schema format error: {e}")
-        return str(schema_data)
-    
 def _build_ai_messages(model_config: Dict, schema_text: str, question: str) -> List[Dict]:
     """构建高可读性、结构化的 Prompt 策略"""
     
@@ -130,10 +85,18 @@ Your ONLY task is to generate valid SQL queries based on the provided database s
 2. If the user asks in Chinese, map it semantically to the English schema.
 3. Use the exact table and column names from the schema.
 4. If the question cannot be answered with the schema, return SELECT 'ERROR: Cannot answer';
+5. Always use single quotes ('value') for string literals. NEVER use double quotes ("value").
+IMPORTANT: 
+- For string literals, YOU MUST USE SINGLE QUOTES (').
+- DO NOT use double quotes (") or quotes(`).
+
+Examples:
+Correct: SELECT * FROM users WHERE name = 'John';
+Wrong:   SELECT * FROM users WHERE name = "John";
 """
 
     context_block = f"""
-[Database Schema]
+[Database DDL]
 {schema_text}
 """
 
@@ -182,7 +145,7 @@ async def _verify_session_ownership(db: AsyncSession, session_id: int, user_id: 
 
     return session.project_id
 
-async def call_ai_agent(schema_text: str, question: str, model_key: str = None) -> str:
+async def call_ai_agent(ddl_text: str, question: str, model_key: str = None) -> str:
     """调用 AI 接口生成 SQL"""
     
     # 1. 确定配置
@@ -192,7 +155,7 @@ async def call_ai_agent(schema_text: str, question: str, model_key: str = None) 
     config = MODEL_REGISTRY[model_key]
     log.info(f"Using AI Model: {config['name']} ({config['model_id']})")
 
-    messages = _build_ai_messages(config, schema_text, question)
+    messages = _build_ai_messages(config, ddl_text, question)
 
     # 2. 构建 Payload
     payload = {
@@ -308,15 +271,21 @@ async def process_chat(
     # 3. 存用户消息
     await crud_message.create_message(db, session_id, user_input, role="user")
 
-    # 4. 获取 Schema 上下文
+    # 4. 获取 DDL 上下文
+    # 直接读取 project.ddl_statement，不再使用 schema_definition 进行转换
     project = await crud_project.get(db, project_id)
-    if not project or not project.schema_definition:
-        schema_text = "No schema defined."
+
+    ddl_text = ""
+    if project and project.ddl_statement:
+        ddl_text = project.ddl_statement
+        log.info(f"Using DDL for project {project_id} (Length: {len(ddl_text)})")
     else:
-        schema_text = _format_schema_to_text(project.schema_definition)
+        # 虽然假设 ddl_statement 一定不为空，但为了稳健性保留一个 Warning
+        log.warning(f"Project {project_id} has empty ddl_statement!")
+        ddl_text = "-- Error: No DDL found for this project."
     
     # 5. 调用 AI 生成 SQL (使用记忆或指定的模型)
-    sql_text = await call_ai_agent(schema_text, user_input, model_key=final_model_key)
+    sql_text = await call_ai_agent(ddl_text, user_input, model_key=final_model_key)
 
     # 6. 简单解析 SQL 类型
     sql_type = "UNKNOWN"
@@ -336,8 +305,18 @@ async def process_chat(
     data = []
     try:
         database_instance = await crud_database_instance.get(db, project.instance_id)
-        # 注意：这里调用的是 execute_sql_with_user_check，它会检查 SQL 是否安全
-        data = await execute_sql_with_user_check(sql_text, sql_type, database_instance)
+        # result 可能是一个列表(SELECT) 或 一个字典(INSERT/UPDATE)
+        raw_result = await execute_sql_with_user_check(sql_text, sql_type, database_instance)
+
+        # 【核心修复】统一数据格式为 List[Dict]
+        if isinstance(raw_result, dict):
+            # 如果是 DML 返回的字典，包裹成列表
+            data = [raw_result]
+        elif isinstance(raw_result, list):
+            # 如果是 DQL 返回的列表，直接使用
+            data = raw_result
+        else:
+            data = []
     except Exception as e:
         log.info(f"SQL Execution Error (Safe to ignore if SQL is invalid): {str(e)}")
 
