@@ -82,9 +82,20 @@ def _format_schema_to_text(schema_data: Any) -> str:
     if not schema_data:
         return ""
     try:
+        # 0. 如果是字符串，先尝试解析为 JSON 对象
         if isinstance(schema_data, str):
-            schema_data = json.loads(schema_data)
+            try:
+                schema_data = json.loads(schema_data)
+            except json.JSONDecodeError:
+                return schema_data
         
+        # 1. 【关键修复】优先处理 DDL 字段
+        # 数据库常存为 {"ddl": "CREATE...", "schema": "..."}
+        # 必须提取 ddl 并还原 \n 转义符，否则模型会看到 Python 字典字符串
+        if isinstance(schema_data, dict) and "ddl" in schema_data:
+            return str(schema_data["ddl"]).replace("\\n", "\n")
+
+        # 2. 处理 tables 列表结构
         if isinstance(schema_data, dict) and "tables" in schema_data:
             schema_data = schema_data["tables"]
 
@@ -101,46 +112,54 @@ def _format_schema_to_text(schema_data: Any) -> str:
                     cols = [cols]
                 col_str = ", ".join(str(c) for c in cols)
                 lines.append(f"Table: {t_name}, columns = [{col_str}]")
-        else:
-            return str(schema_data)
+            return "\n".join(lines)
+        
+        # 3. 兜底策略
+        return str(schema_data)
 
-        return "\n".join(lines)
     except Exception as e:
         log.error(f"Schema format error: {e}")
         return str(schema_data)
     
 def _build_ai_messages(model_config: Dict, schema_text: str, question: str) -> List[Dict]:
-    """构建 Prompt 策略"""
-    if model_config["type"] == "local_finetune":
-        prompt_content = f"""I want you to act as a SQL terminal in front of an database.
-Here is the schema:
+    """构建高可读性、结构化的 Prompt 策略"""
+    
+    # 定义清晰的系统指令
+    base_system_instruction = """You are a specialized SQL generation assistant.
+Your ONLY task is to generate valid SQL queries based on the provided database schema and user question.
+
+[Constraints]
+1. Output **ONLY** the SQL code. No explanations, no markdown (```sql).
+2. If the user asks in Chinese, map it semantically to the English schema.
+3. Use the exact table and column names from the schema.
+4. If the question cannot be answered with the schema, return SELECT 'ERROR: Cannot answer';
+"""
+
+    context_block = f"""
+[Database Schema]
 {schema_text}
+"""
 
-I want you to answer the following question.
-### Question: {question}
+    if model_config["type"] == "local_finetune":
+        # 微调模型通常对 User 消息中的上下文反应更好
+        prompt_content = f"""{base_system_instruction}
 
-### Response:
+{context_block}
+
+### User Question
+{question}
+
+### SQL Query
 """
         return [
             {"role": "system", "content": "You are a SQL expert."},
             {"role": "user", "content": prompt_content}
         ]
     else:
-        system_prompt = f"""You are a generic SQL expert. 
-Your task is to generate valid SQL queries based on the provided database schema and user question.
-
-[Database Schema]
-{schema_text}
-
-[Important Rules]
-1. The user asks in **Chinese**, but the table/column names are in **English**. You MUST map them semantically.
-2. Respond **ONLY** with the SQL code. Do NOT wrap it in markdown code blocks.
-3. Do NOT provide explanations.
-4. If the logic involves 'JOIN', ensure column names are disambiguated.
-5. Pay strict attention to column names in the schema. Do not hallucinate IDs.
-"""
+        # 通用大模型
+        full_system_prompt = f"{base_system_instruction}\n{context_block}"
         return [
-            {"role": "system", "content": system_prompt},
+            {"role": "system", "content": full_system_prompt},
             {"role": "user", "content": question}
         ]
 
@@ -196,7 +215,13 @@ async def call_ai_agent(schema_text: str, question: str, model_key: str = None) 
 
     try:
         async with httpx.AsyncClient(timeout=300.0) as client:
-            resp = await client.post(config["api_url"], json=payload, headers=headers)
+            # 【关键修复】使用 json.dumps(..., ensure_ascii=False)
+            # 这强制将 Payload 序列化为 UTF-8 字符 (如 "张三") 而不是 Unicode 转义 (如 "\u5f20\u4e09")
+            resp = await client.post(
+                config["api_url"], 
+                content=json.dumps(payload, ensure_ascii=False).encode("utf-8"), 
+                headers=headers
+            )
 
         resp.raise_for_status()
         raw = resp.json()

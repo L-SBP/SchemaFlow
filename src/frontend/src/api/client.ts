@@ -7,7 +7,7 @@ const BASE_URL = '/api';
 
 const client: AxiosInstance = axios.create({
   baseURL: BASE_URL,
-  timeout: 10000, // 10秒超时
+  timeout: 30000, // 10秒超时
   headers: {
     'Content-Type': 'application/json',
   },

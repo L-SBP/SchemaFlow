@@ -31,6 +31,7 @@ const App: React.FC = () => {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [currentUser, setCurrentUser] = useState<{ role: UserRole, name: string, avatar_url?: string } | null>(null);
   const [activePage, setActivePage] = useState('dashboard');
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
 
   // Shared State
   const [projects, setProjects] = useState<Project[]>(INITIAL_PROJECTS);
@@ -195,22 +196,26 @@ const App: React.FC = () => {
   };
 
   return (
-    <div className="flex h-screen bg-[#f0f2f5] bg-[url('https://gw.alipayobjects.com/zos/rmsportal/TVYTbAXWheQpRcWDaDMu.svg')] bg-center bg-no-repeat bg-contain overflow-hidden min-w-[1440px]">
+    <div className="flex h-screen bg-[#f0f2f5] bg-[url('https://gw.alipayobjects.com/zos/rmsportal/TVYTbAXWheQpRcWDaDMu.svg')] bg-center bg-no-repeat bg-contain overflow-hidden">
       <ToastContainer />
 
       <Sidebar
         role={currentUser?.role || UserRole.USER}
         activePage={activePage}
+        isOpen={isSidebarOpen}
+        onClose={() => setIsSidebarOpen(false)}
         onNavigate={(page) => {
           if (page !== 'workspace') setSelectedProject(null);
           if (page !== 'admin_user_detail') setViewingUser(null);
           setActivePage(page);
+          setIsSidebarOpen(false);
         }}
       />
       <main className="flex-1 flex flex-col min-w-0">
         <Header
           user={currentUser}
           onLogout={handleLogout}
+          onToggleSidebar={() => setIsSidebarOpen(!isSidebarOpen)}
           onNavigate={(page) => {
             setSelectedProject(null);
             setViewingUser(null);
