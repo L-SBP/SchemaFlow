@@ -1,4 +1,10 @@
-# src/backend/app/schema/token.py
+"""
+令牌 Schema。
+
+本模块定义了 JWT 访问令牌 (Access Token) 的响应结构。
+"""
+
+# backend/app/schema/token.py
 
 from typing import Optional
 from pydantic import BaseModel

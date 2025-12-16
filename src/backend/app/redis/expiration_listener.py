@@ -1,3 +1,12 @@
+"""
+Redis 过期事件监听器。
+
+本模块实现了对 Redis 键过期事件 (expired events) 的监听和处理机制。
+主要用于处理 Token 过期、验证码失效等需要触发后续业务逻辑的场景。
+"""
+
+# backend/app/redis/expiration_listener.py
+
 import asyncio
 import aioredis
 
@@ -7,11 +16,14 @@ from service.redis_expire_handle_service import service_handle_expire_token
 from core.log import log
 from core.config import config
 
-async def redis_expire_handler(expire_key):
+async def redis_expire_handler(expire_key: str):
     """
-    过期redis key 分发
-    :param expire_key:
-    :return:
+    Redis 过期键事件分发处理器。
+
+    根据过期键的前缀（如 `verification:`, `token:`）将事件分发给对应的业务逻辑处理。
+
+    Args:
+        expire_key (str): 已过期的 Redis 键名。
     """
     log.info(f"Expired key received: {expire_key}")
     if expire_key.startswith("verification:"):
@@ -24,8 +36,11 @@ async def redis_expire_handler(expire_key):
 
 async def redis_expire_listener():
     """
-    监听channel，等待过期事件，将过期事件交给分发逻辑处理后续动作
-    :return:
+    启动 Redis 过期事件监听循环。
+
+    建立一个独立的 Redis 连接，订阅 `__keyevent@*__:expired` 频道，
+    实时监听所有数据库的键过期事件，并将其投递给 `redis_expire_handler` 进行处理。
+    此函数会无限循环运行，直到程序退出。
     """
     # Create a separate Redis connection for listening
     redis_conn = aioredis.from_url(

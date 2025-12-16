@@ -1,4 +1,8 @@
-# backend/app/api/v1/endpoints/chat.py
+"""
+聊天 API 端点。
+
+处理用户发送消息、获取历史记录，以及与 AI 模型的交互逻辑。
+"""
 
 from fastapi import APIRouter, Depends, HTTPException, Path
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -24,7 +28,13 @@ router = APIRouter()
 # --- 辅助函数：将数据库消息模型转换为 API 响应模型 ---
 def _format_history_response(raw_messages: List[Any]) -> List[ChatResponse]:
     """
-    格式化消息历史，提取 SQL 信息
+    格式化消息历史，提取 SQL 信息。
+
+    Args:
+        raw_messages (List[Any]): 原始消息列表。
+
+    Returns:
+        List[ChatResponse]: 格式化后的响应列表。
     """
     clean_history = []
     for msg in raw_messages:
@@ -73,7 +83,19 @@ async def send_message(
     current_user: UserMe = Depends(get_current_active_user)
 ):
     """
-    发送消息给 AI，并获取 SQL 生成结果
+    发送消息给 AI，并获取 SQL 生成结果。
+
+    Args:
+        session_id (int): 会话 ID。
+        chat_request (ChatRequest): 聊天请求体。
+        db (AsyncSession): 数据库会话。
+        current_user (UserMe): 当前登录用户。
+
+    Returns:
+        ChatResponse: AI 响应结果。
+
+    Raises:
+        HTTPException: 内部错误(500)。
     """
     try:
         # UserMe Schema 里也有 user_id 字段，可以直接用
@@ -104,7 +126,18 @@ async def get_history(
     current_user: UserMe = Depends(get_current_active_user)
 ):
     """
-    获取会话历史消息
+    获取会话历史消息。
+
+    Args:
+        session_id (int): 会话 ID。
+        db (AsyncSession): 数据库会话。
+        current_user (UserMe): 当前登录用户。
+
+    Returns:
+        List[ChatResponse]: 历史消息列表。
+
+    Raises:
+        HTTPException: 获取失败(500)。
     """
     try:
         # TODO: 在 Service 层建议增加检查：session_id 是否属于 current_user.user_id

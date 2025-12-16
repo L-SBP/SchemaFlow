@@ -1,3 +1,12 @@
+"""
+统一响应 Schema。
+
+本模块定义了 API 接口的标准响应格式，包括成功响应、分页响应和错误响应的泛型结构。
+确保所有 API 返回一致的数据结构，便于前端解析。
+"""
+
+# backend/app/schema/unified_response.py
+
 from datetime import datetime
 from pydantic import BaseModel, Field
 from typing import Generic, TypeVar, Optional, Literal, Dict, Any

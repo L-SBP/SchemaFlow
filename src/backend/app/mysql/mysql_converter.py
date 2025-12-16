@@ -1,7 +1,10 @@
 """
-SQLite到MySQL深度转换器
-专门用于将SQLite数据库模式和SQL语句深度转换为MySQL兼容格式
+MySQL 转换器。
+
+专门用于将 SQLite 数据库模式和 SQL 语句深度转换为 MySQL 兼容格式。
 """
+
+# backend/app/mysql/mysql_converter.py
 
 from typing import Dict, Any, List
 from core.sql_dialect_converter import SQLDialectConverter, SQLConversionError
@@ -78,7 +81,12 @@ class MySQLConverter:
     DEFAULT_VARCHAR_LENGTH = 191  # utf8mb4索引最大长度
 
     def __init__(self):
-        """初始化转换器"""
+        """
+        初始化转换器。
+
+        设置基础 SQL 方言转换器、启用深度转换并初始化统计计数器。
+        同时建立 AST 节点类型与转换方法的映射关系。
+        """
         self.generic_converter = SQLDialectConverter()
         self.deep_conversion_enabled = True
         self.conversion_stats = defaultdict(int)
@@ -92,7 +100,15 @@ class MySQLConverter:
         }
 
     def _apply_ast_transformations(self, ast: exp.Expression):
-        """递归应用AST转换规则 (兼容新旧版本)"""
+        """
+        递归应用 AST 转换规则 (兼容 sqlglot 新旧版本)。
+
+        遍历抽象语法树 (AST) 的每个节点，根据节点类型 (如 create_table, foreign_key)
+        调用相应的转换方法 (`_transform_xxx`) 进行深度修改。
+
+        Args:
+            ast (exp.Expression): 待转换的 SQL 抽象语法树根节点。
+        """
         # 遍历所有节点
         for node in ast.walk():
             # 获取节点类型标识 (兼容新旧版本)
@@ -115,7 +131,16 @@ class MySQLConverter:
                 self._add_table_properties(node)
 
     def _transform_create_table(self, node):
-        """转换CREATE TABLE语句"""
+        """
+        转换 CREATE TABLE 语句。
+
+        主要功能：
+        1. 检查表名是否为 MySQL 保留字（如 user, group, order 等）。
+        2. 如果是保留字，则使用反引号 (`) 包裹表名，避免语法错误。
+
+        Args:
+            node: create_table 类型的 AST 节点。
+        """
         # 获取表名 (兼容新旧结构)
         table_name = None
         if hasattr(node, "this") and hasattr(node.this, "name"):
@@ -133,7 +158,15 @@ class MySQLConverter:
             self.conversion_stats["reserved_word_fixes"] += 1
 
     def _transform_primary_key(self, node):
-        """修复主键定义"""
+        """
+        修复主键定义。
+
+        SQLite 允许主键为 TEXT 类型，但在 MySQL 中主键索引有长度限制（InnoDB utf8mb4 默认为 191 字符）。
+        此方法会查找 TEXT 类型的主键列，并将其类型强制转换为 VARCHAR(191)。
+
+        Args:
+            node: primary_key 类型的 AST 节点。
+        """
         # 获取主键列表达式
         pk_columns = []
         if hasattr(node, "expressions"):
@@ -177,7 +210,17 @@ class MySQLConverter:
                         self.conversion_stats["text_primary_key_fixes"] += 1
 
     def _transform_column_def(self, node):
-        """智能修复列定义"""
+        """
+        智能修复列定义。
+
+        包含两个主要修复逻辑：
+        1. **TEXT 主键修复**：如果列定义中包含主键约束且类型为 TEXT，转为 VARCHAR(191)。
+        2. **智能精度分配**：针对 DECIMAL/NUMERIC 类型，根据列名模式（如 price, rate）自动匹配
+           合适的精度（如 DECIMAL(10,2)），避免 MySQL 默认精度可能导致的精度丢失问题。
+
+        Args:
+            node: column_def 类型的 AST 节点。
+        """
         col_name = node.this.name.lower() if hasattr(node, "this") else ""
         
         # 1. 修复TEXT主键 (列级主键)
@@ -221,7 +264,16 @@ class MySQLConverter:
                 self.conversion_stats["default_precision_fixes"] += 1
 
     def _transform_foreign_key(self, node):
-        """添加缺失的外键级联规则"""
+        """
+        添加缺失的外键级联规则。
+
+        SQLite 往往省略外键行为，而 MySQL 需要显式指定。
+        如果外键定义中缺少 ON DELETE 或 ON UPDATE 规则，此方法会默认添加 CASCADE 级联规则，
+        确保数据完整性。
+
+        Args:
+            node: foreign_key 类型的 AST 节点。
+        """
         # 检查是否已有ON DELETE/UPDATE
         has_on_delete = False
         has_on_update = False
@@ -251,7 +303,15 @@ class MySQLConverter:
             self.conversion_stats["fk_cascade_additions"] += 1
 
     def _add_table_properties(self, node):
-        """添加InnoDB引擎和utf8mb4字符集"""
+        """
+        添加 InnoDB 引擎和 utf8mb4 字符集。
+
+        强制所有表使用 InnoDB 引擎和 utf8mb4 字符集，以支持事务和完整的 Unicode 字符（如 Emoji）。
+        这是建表语句转换的最后一步。
+
+        Args:
+            node: create_table 类型的 AST 节点。
+        """
         # 检查是否已有ENGINE属性
         has_engine = False
         properties = getattr(node, "properties", None) or getattr(node, "args", {}).get("properties")
@@ -283,7 +343,18 @@ class MySQLConverter:
         self.conversion_stats["engine_charset_additions"] += 1
 
     def convert_schema(self, sqlite_sql: str) -> str:
-        """深度转换SQLite表结构定义到MySQL格式"""
+        """
+        深度转换 SQLite 表结构定义到 MySQL 格式。
+
+        结合了通用方言转换（基于 sqlglot 默认规则）和自定义 AST 深度转换（`_apply_ast_transformations`），
+        生成生产级可用的 MySQL DDL 语句。
+
+        Args:
+            sqlite_sql (str): SQLite 格式的 DDL 语句。
+
+        Returns:
+            str: 转换后的 MySQL 格式 DDL 语句。
+        """
         try:
             # 基础转换
             mysql_sql = self.generic_converter.convert(

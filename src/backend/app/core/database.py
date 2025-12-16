@@ -1,3 +1,11 @@
+"""
+数据库连接核心模块。
+
+提供 PostgreSQL 数据库的异步连接、会话管理及资源释放功能。
+"""
+
+# backend/app/core/database.py
+
 from contextlib import asynccontextmanager
 
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncAttrs, AsyncSession, async_sessionmaker
@@ -14,21 +22,26 @@ from sqlalchemy.exc import SQLAlchemyError
 
 class Base(AsyncAttrs, DeclarativeBase):
     """
-    数据库基础模型
+    数据库基础模型。
+
+    所有 ORM 模型应继承此类。
     """
 
 class PsqlHelper:
     """
-    PostgresSQL数据库连接处理类
+    PostgresSQL 数据库连接处理类。
     """
 
     @staticmethod
     def _get_async_engine(db_config: DatabaseConfig) -> AsyncEngine:
         """
-        创建异步引擎
+        创建异步引擎。
 
-        :param db_config: 数据库配置
-        :return: 数据库异步引擎
+        Args:
+            db_config (DatabaseConfig): 数据库配置对象。
+
+        Returns:
+            AsyncEngine: 初始化的数据库异步引擎。
         """
 
         return create_async_engine(
@@ -43,10 +56,16 @@ class PsqlHelper:
     @staticmethod
     def _get_async_session(async_engine: AsyncEngine) -> AsyncSession:
         """
-        获取异步会话生成器
+        获取异步会话生成器。
 
-        :param async_engine: 数据库异步引擎
-        :return: 异步会话
+        Args:
+            async_engine (AsyncEngine): 数据库异步引擎。
+
+        Returns:
+            AsyncSession: 异步会话实例。
+
+        Raises:
+            ValueError: 如果异步引擎未初始化。
         """
 
         if not async_engine:
@@ -61,10 +80,15 @@ class PsqlHelper:
     @classmethod
     async def init_conn_psql(cls, db_config: DatabaseConfig) -> AsyncEngine:
         """
-        初始化数据库连接
+        初始化数据库连接。
 
-        :param db_config: 数据库配置
-        :return: 数据库异步引擎
+        创建引擎并确保所有模型表结构已创建。
+
+        Args:
+            db_config (DatabaseConfig): 数据库配置对象。
+
+        Returns:
+            AsyncEngine: 初始化的数据库异步引擎。
         """
 
         engine = cls._get_async_engine(db_config)
@@ -78,9 +102,19 @@ class PsqlHelper:
     @asynccontextmanager
     async def get_session(cls, async_engine: AsyncEngine) -> AsyncGenerator[AsyncSession, None]:
         """
-        获取数据库会话 (使用上下文管理器)
+        获取数据库会话 (使用上下文管理器)。
 
-        :param async_engine: 已初始化的异步引擎
+        提供事务管理的会话，自动提交或回滚。
+
+        Args:
+            async_engine (AsyncEngine): 已初始化的异步引擎。
+
+        Yields:
+            AsyncSession: 数据库会话。
+
+        Raises:
+            ValueError: 如果异步引擎未初始化。
+            Exception: 数据库操作异常时抛出。
         """
         if not async_engine:
             raise ValueError("Async engine is not initialized")
@@ -106,9 +140,10 @@ class PsqlHelper:
     @classmethod
     async def close_conn_psql(cls, async_engine: AsyncEngine) -> None:
         """
-        关闭数据库连接
+        关闭数据库连接。
 
-        :param async_engine: 数据库异步引擎
+        Args:
+            async_engine (AsyncEngine): 数据库异步引擎。
         """
 
         await async_engine.dispose()

@@ -4,6 +4,8 @@
 为用户侧提供公告列表与详情的只读访问；创建与更新由管理员服务处理。
 """
 
+# backend/app/service/announcement_service.py
+
 from sqlalchemy.ext.asyncio import AsyncSession
 from crud.crud_announcement import crud_announcement
 from typing import Any, Dict

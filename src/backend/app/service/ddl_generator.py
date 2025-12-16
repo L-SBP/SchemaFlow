@@ -4,6 +4,8 @@ DDL 生成脚本。
 用于根据需求与逻辑 Schema 调用远端服务生成 DDL，适用于工具链与集成测试。
 """
 
+# backend/app/service/ddl_generator.py
+
 import requests
 
 url = "https://schema2ddl.strangeloop.fun/generate/ddl"

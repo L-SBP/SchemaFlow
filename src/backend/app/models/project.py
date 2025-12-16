@@ -1,3 +1,11 @@
+"""
+项目模型。
+
+本模块定义了用于存储用户项目和业务逻辑定义的 ORM 模型。
+"""
+
+# backend/app/models/project.py
+
 from sqlalchemy import Column, Integer, String, Text, DateTime, ForeignKey, CheckConstraint, Index
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.sql import func
@@ -23,7 +31,7 @@ class Project(Base):
 
     # 表注释和约束
     __table_args__ = (
-        # [修复] 在列表中加入 'pending_confirmation'
+        #在列表中加入 'pending_confirmation'
         CheckConstraint(
             "project_status IN ('active', 'initializing', 'pending_confirmation', 'deleted')",
             name='ck_project_status'
@@ -41,7 +49,7 @@ class Project(Base):
         primary_key=True,
         comment='项目ID'
     )
-    # 【新增】正向关联：让 Project 知道它下面有哪些 Sessions
+    # 正向关联：让 Project 知道它下面有哪些 Sessions
     # 这样以后你可以用 project.sessions 获取所有会话列表
     sessions = relationship("Session", back_populates="project", cascade="all, delete-orphan")
     user_id = Column(
@@ -72,7 +80,6 @@ class Project(Base):
         comment='AI生成的Schema结构（JSON格式，包含schema文本和元数据）'
     )
 
-    # --- 新增字段 ---
     ddl_statement = Column(
         Text,
         nullable=True,
@@ -80,7 +87,6 @@ class Project(Base):
     )
     # ----------------
 
-    # --- 新增字段 ---
     creation_stage = Column(
         String(50),
         default='initializing',

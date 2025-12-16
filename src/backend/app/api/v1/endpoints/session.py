@@ -1,3 +1,8 @@
+"""
+会话 API 端点。
+
+管理用户会话，包括会话的创建、查询、更新和删除。
+"""
 from typing import List, Optional
 
 from fastapi import APIRouter, Depends, Query, Path
@@ -7,6 +12,7 @@ from api.v1 import deps
 from service.session_service import session_service
 from schema.session import SessionCreate, SessionUpdate, SessionResponse
 from schema.user import UserMe
+from core.log import log
 
 router = APIRouter()
 
@@ -21,6 +27,16 @@ async def read_sessions(
 ):
     """
     获取当前用户的会话列表，支持按项目筛选。
+
+    Args:
+        db (AsyncSession): 数据库会话。
+        current_user (UserMe): 当前登录用户。
+        project_id (Optional[int]): 筛选指定项目的会话。
+        skip (int): 跳过记录数。
+        limit (int): 返回记录数限制。
+
+    Returns:
+        List[SessionResponse]: 会话列表。
     """
     return await session_service.get_sessions(
         db=db,
@@ -33,13 +49,22 @@ async def read_sessions(
 
 @router.post("/", response_model=SessionResponse, summary="创建新会话")
 async def create_session(
+    session_in: SessionCreate,
     db: AsyncSession = Depends(deps.get_db),
     current_user: UserMe = Depends(deps.get_current_active_user),
-    session_in: SessionCreate = Depends(),
 ):
     """
     在指定项目下创建新的会话。
+
+    Args:
+        db (AsyncSession): 数据库会话。
+        current_user (UserMe): 当前登录用户。
+        session_in (SessionCreate): 会话创建请求体。
+
+    Returns:
+        SessionResponse: 创建后的会话信息。
     """
+    log.info("创建会话")
     return await session_service.create_session(
         db=db,
         user=current_user,
@@ -55,6 +80,14 @@ async def read_session(
 ):
     """
     获取单个会话详情，仅允许访问自身项目下的会话。
+
+    Args:
+        db (AsyncSession): 数据库会话。
+        current_user (UserMe): 当前登录用户。
+        session_id (int): 会话ID。
+
+    Returns:
+        SessionResponse: 会话详情。
     """
     return await session_service.get_session(
         db=db,
@@ -72,6 +105,15 @@ async def update_session(
 ):
     """
     更新会话信息（如重命名）。
+
+    Args:
+        db (AsyncSession): 数据库会话。
+        current_user (UserMe): 当前登录用户。
+        session_id (int): 会话ID。
+        session_in (SessionUpdate): 会话更新请求体。
+
+    Returns:
+        SessionResponse: 更新后的会话信息。
     """
     return await session_service.update_session(
         db=db,
@@ -89,6 +131,14 @@ async def delete_session(
 ):
     """
     删除会话，仅允许删除自身项目下的会话。
+
+    Args:
+        db (AsyncSession): 数据库会话。
+        current_user (UserMe): 当前登录用户。
+        session_id (int): 会话ID。
+
+    Returns:
+        bool: 删除成功返回True。
     """
     return await session_service.delete_session(
         db=db,

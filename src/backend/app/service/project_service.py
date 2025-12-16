@@ -5,6 +5,8 @@
 等；集成 AI 生成器、数据库助手与 CRUD 层。
 """
 
+# backend/app/service/project_service.py
+
 from typing import Optional, Dict, Any
 from sqlalchemy.ext.asyncio import AsyncSession as Session
 from datetime import datetime, timedelta, timezone

@@ -1,3 +1,9 @@
+"""
+用户 API 端点。
+
+处理当前用户的个人信息查询、修改（用户名、密码、头像、邮箱）及登录历史查询。
+"""
+
 # backend/app/api/v1/endpoints/user.py
 
 from fastapi import APIRouter, Depends, HTTPException, status, Body, File, UploadFile, HTTPException,Query
@@ -25,6 +31,16 @@ async def read_user_me(
 ) -> Any:
     """
     获取当前登录用户详细信息。
+
+    Args:
+        db (AsyncSession): 数据库会话。
+        current_user (User): 当前登录用户。
+
+    Returns:
+        UserMe: 用户信息。
+
+    Raises:
+        HTTPException: 用户未找到(404)或内部服务器错误(500)。
     """
     try:
         # Service 层负责将 ORM 转换为 UserMe DTO
@@ -47,6 +63,17 @@ async def update_username_endpoint(
 ) -> Any:
     """
     更新当前用户名。
+
+    Args:
+        username_data (schemas.UserUpdateUsername): 用户名更新请求体。
+        db (AsyncSession): 数据库会话。
+        current_user (User): 当前登录用户。
+
+    Returns:
+        UserMe: 更新后的用户信息。
+
+    Raises:
+        HTTPException: 用户名已存在(409)、验证失败(422)或内部服务器错误(500)。
     """
     try:
         updated_user_dto = await user_service.update_username_service(
@@ -76,6 +103,17 @@ async def update_password_endpoint(
 ) -> None:
     """
     更新当前用户密码 (成功返回 204 No Content)。
+
+    Args:
+        password_data (schemas.UserUpdatePassword): 密码更新请求体。
+        db (AsyncSession): 数据库会话。
+        current_user (User): 当前登录用户。
+
+    Returns:
+        None
+
+    Raises:
+        HTTPException: 密码错误(401)或内部服务器错误(500)。
     """
     try:
         await user_service.update_password_service(
@@ -104,7 +142,18 @@ async def update_avatar_endpoint(
     current_user = Depends(get_current_active_user),
 ) -> Any:
     """
-    更新头像 URL (接收 JSON).
+    更新头像 URL (接收 JSON)。
+
+    Args:
+        avatar_data (schemas.UserUpdateAvatar): 头像更新请求体。
+        db (AsyncSession): 数据库会话。
+        current_user (User): 当前登录用户。
+
+    Returns:
+        UserUpdateAvatar: 更新后的头像信息。
+
+    Raises:
+        HTTPException: 内部服务器错误(500)。
     """
     try:
         # Service 期望接收的是 schemas.UserUpdateAvatar 对象
@@ -128,6 +177,17 @@ async def request_update_email_endpoint(
 ) -> None:
     """
     向新邮箱发送验证码 (成功返回 204 No Content)。
+
+    Args:
+        request_data (schemas.UserUpdateEmailRequest): 邮箱更新请求体。
+        db (AsyncSession): 数据库会话。
+        current_user (User): 当前登录用户。
+
+    Returns:
+        None
+
+    Raises:
+        HTTPException: 邮箱已存在(409)或请求失败(400)。
     """
     try:
         await user_service.request_update_email_service(db, current_user.user_id, request_data)
@@ -150,6 +210,17 @@ async def confirm_update_email_endpoint(
 ) -> Any:
     """
     确认邮箱变更 (验证验证码) (成功返回 200 OK)。
+
+    Args:
+        confirm_data (schemas.UserUpdateEmailConfirm): 邮箱更新确认请求体。
+        db (AsyncSession): 数据库会话。
+        current_user (User): 当前登录用户。
+
+    Returns:
+        UserMe: 更新后的用户信息。
+
+    Raises:
+        HTTPException: 验证码错误(401)或内部服务器错误(500)。
     """
     try:
         updated_user_dto = await user_service.confirm_update_email_service(
@@ -175,6 +246,18 @@ async def read_login_history(
 ) -> Any:
     """
     获取当前用户的登录历史记录 (包含分页)。
+
+    Args:
+        db (AsyncSession): 数据库会话。
+        current_user (User): 当前登录用户。
+        page (int): 页码。
+        page_size (int): 每页数量。
+
+    Returns:
+        PaginatedLoginHistory: 分页登录历史记录。
+
+    Raises:
+        HTTPException: 内部服务器错误(500)。
     """
     try:
         # Router 严格只调用 Service

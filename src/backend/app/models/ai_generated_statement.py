@@ -1,9 +1,33 @@
+"""
+AI 生成语句模型。
+
+本模块定义了用于存储 AI 生成的 SQL 语句及其执行状态的 ORM 模型。
+"""
+
+# backend/app/models/ai_generated_statement.py
+
 from sqlalchemy import Column, Text, Integer, Index, CheckConstraint, ForeignKey, DateTime
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.sql import func
 from core.database import Base
 
 class AIGeneratedStatement(Base):
+    """
+    AI生成的SQL语句明细表 ORM 模型。
+
+    存储 AI 生成的 SQL 语句、执行状态及结果。
+
+    Attributes:
+        statement_id (int): 语句ID。
+        message_id (int): 所属消息ID。
+        statement_order (int): 语句执行顺序。
+        sql_text (str): SQL语句文本。
+        statement_type (str): 语句类型。
+        execution_status (str): 执行状态。
+        execution_result (dict): 执行结果。
+        executed_at (datetime): 执行时间。
+        created_at (datetime): 创建时间。
+    """
     __tablename__ = "ai_generated_statement"
 
     __table_args__ = (

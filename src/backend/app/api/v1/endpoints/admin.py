@@ -1,5 +1,6 @@
-# backend/app/api/v1/endpoints/admin.py
-
+"""
+管理员 API 端点。提供用户管理、公告管理、违规记录查看及系统统计看板等管理员专属功能。
+"""
 from typing import Optional, Literal, Any
 from fastapi import APIRouter, Depends, Query, Path, status, HTTPException, Body
 from sqlalchemy.ext.asyncio import AsyncSession as Session
@@ -44,7 +45,22 @@ async def get_user_list(
     # 变量名改为 filter_status，增加 alias="status"
     filter_status: Literal["normal", "banned", "all"] = Query("all", alias="status", description="按状态筛选"),
 ) -> Any:
-    """获取用户列表，支持搜索和筛选。"""
+    """
+    获取用户列表，支持搜索和筛选。
+
+    Args:
+        db (Session): 数据库会话。
+        admin_user (UserMe): 当前管理员用户。
+        pagination (PaginationParams): 分页参数。
+        search (Optional[str]): 按用户名/邮箱搜索关键字。
+        filter_status (Literal["normal", "banned", "all"]): 按状态筛选用户。
+
+    Returns:
+        AdminUserListResponse: 用户列表响应。
+
+    Raises:
+        HTTPException: 内部服务器错误(500)。
+    """
     try:
         # 这里传入 filter_status
         return await service.get_admin_user_list_service(
@@ -63,7 +79,21 @@ async def update_user_status(
     db: Session = Depends(get_db),
     admin_user: UserMe = AdminDependency,
 ) -> Any:
-    """封禁或解封用户。"""
+    """
+    封禁或解封用户。
+
+    Args:
+        data (AdminUpdateUserStatusRequest): 用户状态更新请求体。
+        user_id (int): 目标用户ID。
+        db (Session): 数据库会话。
+        admin_user (UserMe): 当前管理员用户。
+
+    Returns:
+        AdminUpdateUserStatusResponse: 更新后的用户状态信息。
+
+    Raises:
+        HTTPException: 用户未找到(404)或内部服务器错误(500)。
+    """
     try:
         return await service.update_user_status_service(db, user_id, data, admin_user.user_id)
     except ItemNotFoundException as e:
@@ -80,7 +110,21 @@ async def update_user_quota(
     db: Session = Depends(get_db),
     admin_user: UserMe = AdminDependency,
 ) -> Any:
-    """调整用户的最大数据库额度。"""
+    """
+    调整用户的最大数据库额度。
+
+    Args:
+        data (AdminUpdateUserQuotaRequest): 用户额度更新请求体。
+        user_id (int): 目标用户ID。
+        db (Session): 数据库会话。
+        admin_user (UserMe): 当前管理员用户。
+
+    Returns:
+        AdminUpdateUserQuotaResponse: 更新后的用户额度信息。
+
+    Raises:
+        HTTPException: 用户未找到(404)或内部服务器错误(500)。
+    """
     try:
         return await service.update_user_quota_service(db, user_id, data)
     except ItemNotFoundException as e:
@@ -98,7 +142,20 @@ async def create_announcement(
     db: Session = Depends(get_db),
     current_admin: UserMe = AdminDependency,
 ) -> Any:
-    """创建新的系统公告。"""
+    """
+    创建新的系统公告。
+
+    Args:
+        data (AnnouncementCreateRequest): 公告创建请求体。
+        db (Session): 数据库会话。
+        current_admin (UserMe): 当前管理员用户。
+
+    Returns:
+        AnnouncementResponse: 创建后的公告信息。
+
+    Raises:
+        HTTPException: 内部服务器错误(500)。
+    """
     try:
         return await service.create_announcement_service(db, data, current_admin.user_id)
     except Exception as e:
@@ -113,7 +170,21 @@ async def update_announcement(
     db: Session = Depends(get_db),
     admin_user: UserMe = AdminDependency,
 ) -> Any:
-    """更新公告内容和状态。"""
+    """
+    更新公告内容和状态。
+
+    Args:
+        data (AnnouncementUpdateRequest): 公告更新请求体。
+        announcement_id (int): 公告ID。
+        db (Session): 数据库会话。
+        admin_user (UserMe): 当前管理员用户。
+
+    Returns:
+        AnnouncementResponse: 更新后的公告信息。
+
+    Raises:
+        HTTPException: 公告未找到(404)或内部服务器错误(500)。
+    """
     try:
         return await service.update_announcement_service(db, announcement_id, data)
     except ItemNotFoundException as e:
@@ -128,7 +199,20 @@ async def delete_announcement(
     db: Session = Depends(get_db),
     admin_user: UserMe = AdminDependency,
 ) -> None:
-    """删除指定的公告。"""
+    """
+    删除指定的公告。
+
+    Args:
+        announcement_id (int): 公告ID。
+        db (Session): 数据库会话。
+        admin_user (UserMe): 当前管理员用户。
+
+    Returns:
+        None: 无返回内容。
+
+    Raises:
+        HTTPException: 公告未找到(404)或内部服务器错误(500)。
+    """
     try:
         await service.delete_announcement_service(db, announcement_id)
         return
@@ -147,7 +231,20 @@ async def get_admin_list(
     admin_user: UserMe = AdminDependency,
     pagination: PaginationParams = Depends(),
 ) -> Any:
-    """获取所有管理员的列表。"""
+    """
+    获取所有管理员的列表。
+
+    Args:
+        db (Session): 数据库会话。
+        admin_user (UserMe): 当前管理员用户。
+        pagination (PaginationParams): 分页参数。
+
+    Returns:
+        AdminListResponse: 管理员列表响应。
+
+    Raises:
+        HTTPException: 内部服务器错误(500)。
+    """
     try:
         return await service.get_admin_list_service(db, pagination.page, pagination.page_size)
     except Exception as e:
@@ -162,7 +259,22 @@ async def get_violation_logs(
     risk_level: Optional[Literal["LOW", "MEDIUM", "HIGH", "CRITICAL"]] = Query(None, description="风险等级筛选"),
     resolution_status: Optional[Literal["pending", "in_progress", "resolved", "ignored"]] = Query(None, description="处理状态筛选"),
 ) -> Any:
-    """获取用户违规操作记录列表，支持筛选。"""
+    """
+    获取用户违规操作记录列表，支持筛选。
+
+    Args:
+        db (Session): 数据库会话。
+        admin_user (UserMe): 当前管理员用户。
+        pagination (PaginationParams): 分页参数。
+        risk_level (Optional[Literal["LOW", "MEDIUM", "HIGH", "CRITICAL"]]): 风险等级筛选。
+        resolution_status (Optional[Literal["pending", "in_progress", "resolved", "ignored"]]): 处理状态筛选。
+
+    Returns:
+        ViolationLogListResponse: 违规记录列表响应。
+
+    Raises:
+        HTTPException: 内部服务器错误(500)。
+    """
     try:
         return await service.get_violation_logs_service(
             db, pagination.page, pagination.page_size, risk_level, resolution_status
@@ -176,7 +288,19 @@ async def get_system_stats(
     db: Session = Depends(get_db),
     admin_user: UserMe = AdminDependency,
 ) -> Any:
-    """获取系统运行的实时统计数据。"""
+    """
+    获取系统运行的实时统计数据。
+
+    Args:
+        db (Session): 数据库会话。
+        admin_user (UserMe): 当前管理员用户。
+
+    Returns:
+        AdminStatsResponse: 系统统计响应。
+
+    Raises:
+        HTTPException: 内部服务器错误(500)。
+    """
     try:
         return await service.get_admin_stats_service(db)
     except Exception as e:

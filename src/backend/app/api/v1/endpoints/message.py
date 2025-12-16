@@ -1,3 +1,8 @@
+"""
+消息 API 端点。
+
+处理会话消息历史的获取。
+"""
 from typing import Any, List
 from fastapi import APIRouter, Depends, Query, Path
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -19,7 +24,14 @@ async def read_messages(
 ) -> Any:
     """
     根据 session_id 获取该会话的消息历史记录。
-    这里调用的是你 crud_message.py 中的 get_recent_messages 方法。
+
+    Args:
+        db (AsyncSession): 数据库会话。
+        session_id (int): 会话ID。
+        limit (int): 限制返回的消息数量。
+
+    Returns:
+        List[MessageResponse]: 消息历史列表。
     """
     messages = await crud_message.get_recent_messages(
         db=db, session_id=session_id, limit=limit

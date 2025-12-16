@@ -1,3 +1,5 @@
+# backend/app/config/base.py
+
 from typing import List
 
 from pydantic_settings import BaseSettings

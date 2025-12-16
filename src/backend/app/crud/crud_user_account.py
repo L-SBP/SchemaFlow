@@ -1,3 +1,11 @@
+"""
+用户账户 CRUD。
+
+本模块提供用户账户管理的 CRUD 操作。
+"""
+
+# backend/app/crud/crud_user_account.py
+
 from typing import Optional, List
 from sqlalchemy.future import select
 from sqlalchemy import update, delete
@@ -13,12 +21,17 @@ class CRUDUserAccount:
     @staticmethod
     async def create(db: AsyncSession, **kwargs) -> UserAccount:
         """
-        创建新的用户账户
-        
-        :param db: 数据库会话
-        :param kwargs: 用户账户字段
-        :return: 创建的用户账户对象
-        :raises SQLAlchemyError: 如果发生数据库错误
+        创建新的用户账户。
+
+        Args:
+            db (AsyncSession): 数据库会话。
+            **kwargs: 用户账户字段。
+
+        Returns:
+            UserAccount: 创建的用户账户对象。
+
+        Raises:
+            DatabaseOperationFailedException: 创建失败时抛出。
         """
         try:
             db_obj = UserAccount(**kwargs)
@@ -33,12 +46,17 @@ class CRUDUserAccount:
     @staticmethod
     async def get(db: AsyncSession, user_id: int) -> Optional[UserAccount]:
         """
-        根据用户ID获取用户账户
-        
-        :param db: 数据库会话
-        :param user_id: 用户ID
-        :return: 如果找到返回用户账户对象，否则返回None
-        :raises DatabaseOperationFailedException: 如果发生数据库错误
+        根据用户ID获取用户账户。
+
+        Args:
+            db (AsyncSession): 数据库会话。
+            user_id (int): 用户ID。
+
+        Returns:
+            Optional[UserAccount]: 如果找到返回用户账户对象，否则返回None。
+
+        Raises:
+            DatabaseOperationFailedException: 查询失败时抛出。
         """
         try:
             query = select(UserAccount).where(UserAccount.user_id == user_id)
@@ -50,12 +68,17 @@ class CRUDUserAccount:
     @staticmethod
     async def get_by_username(db: AsyncSession, username: str) -> Optional[UserAccount]:
         """
-        根据用户名获取用户账户
-        
-        :param db: 数据库会话
-        :param username: 用户名
-        :return: 如果找到返回用户账户对象，否则返回None
-        :raises DatabaseOperationFailedException: 如果发生数据库错误
+        根据用户名获取用户账户。
+
+        Args:
+            db (AsyncSession): 数据库会话。
+            username (str): 用户名。
+
+        Returns:
+            Optional[UserAccount]: 如果找到返回用户账户对象，否则返回None。
+
+        Raises:
+            DatabaseOperationFailedException: 查询失败时抛出。
         """
         try:
             query = select(UserAccount).where(UserAccount.username == username)
@@ -67,12 +90,17 @@ class CRUDUserAccount:
     @staticmethod
     async def get_by_email(db: AsyncSession, email: str) -> Optional[UserAccount]:
         """
-        根据邮箱获取用户账户
-        
-        :param db: 数据库会话
-        :param email: 邮箱地址
-        :return: 如果找到返回用户账户对象，否则返回None
-        :raises DatabaseOperationFailedException: 如果发生数据库错误
+        根据邮箱获取用户账户。
+
+        Args:
+            db (AsyncSession): 数据库会话。
+            email (str): 邮箱地址。
+
+        Returns:
+            Optional[UserAccount]: 如果找到返回用户账户对象，否则返回None。
+
+        Raises:
+            DatabaseOperationFailedException: 查询失败时抛出。
         """
         try:
             query = select(UserAccount).where(UserAccount.email == email)
@@ -84,13 +112,18 @@ class CRUDUserAccount:
     @staticmethod
     async def get_multi(db: AsyncSession, skip: int = 0, limit: int = 100) -> List[UserAccount]:
         """
-        分页获取多个用户账户
-        
-        :param db: 数据库会话
-        :param skip: 跳过的记录数
-        :param limit: 最大返回记录数
-        :return: 用户账户对象列表
-        :raises DatabaseOperationFailedException: 如果发生数据库错误
+        分页获取多个用户账户。
+
+        Args:
+            db (AsyncSession): 数据库会话。
+            skip (int): 跳过的记录数。
+            limit (int): 最大返回记录数。
+
+        Returns:
+            List[UserAccount]: 用户账户对象列表。
+
+        Raises:
+            DatabaseOperationFailedException: 查询失败时抛出。
         """
         try:
             query = select(UserAccount).offset(skip).limit(limit)
@@ -102,13 +135,18 @@ class CRUDUserAccount:
     @staticmethod
     async def update(db: AsyncSession, db_obj: UserAccount, **kwargs) -> UserAccount:
         """
-        更新用户账户
-        
-        :param db: 数据库会话
-        :param db_obj: 要更新的用户账户对象
-        :param kwargs: 要更新的字段
-        :return: 更新后的用户账户对象
-        :raises SQLAlchemyError: 如果发生数据库错误
+        更新用户账户。
+
+        Args:
+            db (AsyncSession): 数据库会话。
+            db_obj (UserAccount): 要更新的用户账户对象。
+            **kwargs: 要更新的字段。
+
+        Returns:
+            UserAccount: 更新后的用户账户对象。
+
+        Raises:
+            DatabaseOperationFailedException: 更新失败时抛出。
         """
         try:
             for field, value in kwargs.items():
@@ -123,12 +161,17 @@ class CRUDUserAccount:
     @staticmethod
     async def remove(db: AsyncSession, user_id: int) -> bool:
         """
-        根据用户ID删除用户账户
-        
-        :param db: 数据库会话
-        :param user_id: 用户ID
-        :return: 如果用户被删除返回True，如果未找到用户返回False
-        :raises SQLAlchemyError: 如果发生数据库错误
+        根据用户ID删除用户账户。
+
+        Args:
+            db (AsyncSession): 数据库会话。
+            user_id (int): 用户ID。
+
+        Returns:
+            bool: 如果用户被删除返回True，如果未找到用户返回False。
+
+        Raises:
+            DatabaseOperationFailedException: 删除失败时抛出。
         """
         try:
             query = delete(UserAccount).where(UserAccount.user_id == user_id)
@@ -142,12 +185,17 @@ class CRUDUserAccount:
     @staticmethod
     async def get_by_username_or_email(db: AsyncSession, username_or_email: str) -> Optional[UserAccount]:
         """
-        根据用户名或邮箱获取用户
+        根据用户名或邮箱获取用户。
 
-        :param db: 数据库会话
-        :param username_or_email: 用户名或邮箱
-        :return: 如果找到返回用户账户对象，否则返回None
-        :raises DatabaseOperationFailedException: 如果发生数据库错误
+        Args:
+            db (AsyncSession): 数据库会话。
+            username_or_email (str): 用户名或邮箱。
+
+        Returns:
+            Optional[UserAccount]: 如果找到返回用户账户对象，否则返回None。
+
+        Raises:
+            DatabaseOperationFailedException: 查询失败时抛出。
         """
         try:
             query = select(UserAccount).where(

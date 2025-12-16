@@ -1,3 +1,11 @@
+"""
+封禁日志模型。
+
+本模块定义了用于存储用户账号封禁操作记录的 ORM 模型。
+"""
+
+# backend/app/models/user_ban_log.py
+
 from sqlalchemy import Column, Integer, Text, CheckConstraint, DateTime, ForeignKey, Index
 from sqlalchemy.sql import func
 from sqlalchemy.dialects.postgresql import INTERVAL
@@ -5,6 +13,20 @@ from sqlalchemy.dialects.postgresql import INTERVAL
 from core.database import Base
 
 class UserBanLog(Base):
+    """
+    封禁操作日志表 ORM 模型。
+
+    Attributes:
+        log_id (int): 日志ID。
+        target_user_id (int): 被封禁的用户ID。
+        admin_user_id (int): 执行操作的管理员ID。
+        action_type (str): 操作类型：ban/unban/warning。
+        reason (str): 封禁/解封原因。
+        duration (interval): 封禁持续时间。
+        effective_time (datetime): 生效时间。
+        expiry_time (datetime): 过期时间。
+        created_at (datetime): 记录创建时间。
+    """
     __tablename__ = "user_ban_log"
 
     __table_args__ = (

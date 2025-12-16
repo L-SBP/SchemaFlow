@@ -1,3 +1,12 @@
+"""
+聊天交互 Schema。
+
+本模块定义了用户与 AI 对话过程中的消息交互模型，
+包含消息发送请求、AI 响应流式数据包以及消息确认机制。
+"""
+
+# backend/app/schema/chat.py
+
 from pydantic import BaseModel, Field, ConfigDict
 from typing import List, Optional, Any, Dict
 from enum import Enum
@@ -10,12 +19,31 @@ class MessageType(str, Enum):
 
 # 1. 接收用户发送的消息 (Request DTO)
 class ChatRequest(BaseModel):
+    """
+    聊天请求 Schema。
+
+    Attributes:
+        content (str): 用户输入的自然语言内容。
+        model (Optional[str]): 指定使用的AI模型ID。
+    """
     content: str = Field(..., min_length=1, description="用户输入的自然语言内容")
     # 允许前端指定模型，可选值建议与后端 Registry 保持一致，但为了灵活先用 str
     model: Optional[str] = Field(None, description="指定使用的AI模型ID，如 'xiyan-sql'")
 
 # 2. 响应体：包含完整的对话信息 (Response DTO)
 class ChatResponse(BaseModel):
+    """
+    聊天响应 Schema。
+
+    Attributes:
+        message_id (int): 消息ID。
+        content (str): 消息内容。
+        message_type (MessageType): 消息角色。
+        sql_text (Optional[str]): 生成的 SQL 语句。
+        sql_type (str): SQL 类型。
+        requires_confirmation (bool): 是否需要用户确认执行。
+        data (Optional[List[Dict[str, Any]]]): 数据结果。
+    """
     message_id: int = Field(..., description="消息ID")
     content: str = Field(..., description="消息内容")
     message_type: MessageType = Field(..., description="消息角色")

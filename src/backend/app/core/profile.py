@@ -1,21 +1,28 @@
+# backend/app/core/profile.py
+
 from pathlib import Path
 
 class Profile:
+    """
+    项目配置辅助类。
+    
+    用于获取项目相关的路径信息。
+    """
     @staticmethod
     def get_project_root() -> Path:
         """
-        获取项目根目录
+        获取项目根目录。
 
-        :return: 项目根目录
+        通过向上查找 config.yaml 文件来确定项目根目录。
+        如果未找到，则回退到基于当前文件位置的相对路径。
+
+        Returns:
+            Path: 项目根目录路径。
         """
-        # More robust way to find project root by looking for key files/directories
         current_path = Path(__file__)
         
-        # Traverse up until we find the backend directory (which contains config.yaml)
         for parent in current_path.parents:
             if (parent / "config.yaml").exists():
                 return parent
         
-        # Fallback - navigate up a fixed number of levels
-        # This maintains backward compatibility
         return current_path.parent.parent.parent

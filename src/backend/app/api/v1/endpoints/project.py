@@ -1,5 +1,8 @@
-# backend/app/api/v1/endpoints/project.py
+"""
+项目 API 端点。
 
+管理项目的全生命周期，包括创建（生成Schema、DDL、部署）、查询、更新和删除。
+"""
 from fastapi import APIRouter, Depends, HTTPException, status, Query, Header,BackgroundTasks
 from sqlalchemy.ext.asyncio import AsyncSession as Session
 from typing import Any, Optional
@@ -25,6 +28,18 @@ async def create_project(
     1. 创建项目记录。
     2. 触发后台任务生成 Logical Schema。
     3. 返回项目ID，用户需轮询状态直到 schema_generated。
+
+    Args:
+        project_in (schemas.ProjectCreate): 项目创建请求体。
+        background_tasks (BackgroundTasks): 后台任务对象。
+        db (Session): 数据库会话依赖。
+        current_user (Any): 当前登录用户。
+
+    Returns:
+        Any: 异步响应，包含项目ID。
+
+    Raises:
+        HTTPException: 内部服务器错误(500)。
     """
     try:
         return await project_service.create_project_service(db, project_in, current_user.user_id, background_tasks)
@@ -46,6 +61,19 @@ async def generate_ddl(
     创建项目第二步：
     1. 接收用户确认/修改后的 Schema。
     2. 触发后台任务生成 DDL。
+
+    Args:
+        project_id (int): 项目ID。
+        request_data (schemas.GenerateDDLRequest): 生成DDL请求体。
+        background_tasks (BackgroundTasks): 后台任务对象。
+        db (Session): 数据库会话依赖。
+        current_user (Any): 当前登录用户。
+
+    Returns:
+        Any: 异步响应，包含项目ID。
+
+    Raises:
+        HTTPException: 项目未找到(404)或内部服务器错误(500)。
     """
     try:
         return await project_service.request_ddl_generation_service(
@@ -71,6 +99,18 @@ async def deploy_project(
     1. 接收用户确认/修改后的 DDL。
     2. 执行建库建表。
     3. 项目状态变为 Active。
+
+    Args:
+        project_id (int): 项目ID。
+        deploy_data (schemas.ProjectDeployRequest): 部署请求体。
+        db (Session): 数据库会话依赖。
+        current_user (Any): 当前登录用户。
+
+    Returns:
+        Any: 部署后的项目信息。
+
+    Raises:
+        HTTPException: 项目未找到(404)或部署失败(500)。
     """
     try:
         return await project_service.deploy_project_service(
@@ -140,6 +180,21 @@ async def update_project_info(
     db: Session = Depends(deps.get_db),
     current_user: Any = Depends(deps.get_current_active_user),
 ) -> Any:
+    """
+    更新项目信息。
+
+    Args:
+        project_id (int): 项目 ID。
+        update_data (schemas.ProjectUpdate): 更新数据。
+        db (Session): 数据库会话依赖。
+        current_user (Any): 当前登录用户。
+
+    Returns:
+        Any: 更新后的项目信息。
+
+    Raises:
+        HTTPException: 项目未找到(404)。
+    """
     try:
         return await project_service.update_project_info_service(db, project_id, current_user.user_id, update_data.model_dump(exclude_unset=True))
     except ItemNotFoundException:

@@ -1,9 +1,30 @@
+"""
+资料变更日志模型。
+
+本模块定义了用于记录用户个人资料修改历史的 ORM 模型。
+"""
+
+# backend/app/models/user_profile_change_log.py
+
 from sqlalchemy import Column, Integer, CheckConstraint, Text, DateTime, String, ForeignKey, Index
 from sqlalchemy.sql import func
 
 from core.database import Base
 
 class UserProfileChangeLog(Base):
+    """
+    用户资料变更历史记录表 ORM 模型。
+
+    Attributes:
+        change_id (int): 变更ID。
+        user_id (int): 被修改的用户ID。
+        change_type (str): 变更类型。
+        old_value (str): 变更前的值。
+        new_value (str): 变更后的值。
+        created_at (datetime): 变更时间。
+        ip_address (str): 操作IP地址。
+        user_agent (str): 操作设备信息。
+    """
     __tablename__ = "user_profile_change_log"
 
     __table_args__ = (
@@ -22,7 +43,7 @@ class UserProfileChangeLog(Base):
     )
     user_id = Column(
         Integer,
-        # 👇 修改点：users -> user_account
+        # users -> user_account
         ForeignKey("user_account.user_id", ondelete="CASCADE"),
         nullable=False,
         comment='被修改的用户ID'

@@ -1,3 +1,11 @@
+"""
+会话 CRUD。
+
+本模块提供聊天会话的 CRUD 操作。
+"""
+
+# backend/app/crud/crud_session.py
+
 from typing import Optional, List
 from sqlalchemy.future import select
 from sqlalchemy import delete
@@ -6,20 +14,27 @@ from sqlalchemy.exc import SQLAlchemyError
 
 from models.session import Session
 from core.exceptions import DatabaseOperationFailedException
+from core.log import log
 
 
 class CRUDSession:
     @staticmethod
     async def create(db: AsyncSession, **kwargs) -> Session:
         """
-        创建新的会话
-        
-        :param db: 数据库会话
-        :param kwargs: 会话字段
-        :return: 创建的会话对象
-        :raises SQLAlchemyError: 如果发生数据库错误
+        创建新的会话。
+
+        Args:
+            db (AsyncSession): 数据库会话。
+            **kwargs: 会话字段。
+
+        Returns:
+            Session: 创建的会话对象。
+
+        Raises:
+            DatabaseOperationFailedException: 创建失败时抛出。
         """
         try:
+            log.info("create session")
             db_obj = Session(**kwargs)
             db.add(db_obj)
             await db.commit()
@@ -32,12 +47,17 @@ class CRUDSession:
     @staticmethod
     async def get(db: AsyncSession, session_id: int) -> Optional[Session]:
         """
-        根据会话ID获取会话
-        
-        :param db: 数据库会话
-        :param session_id: 会话ID
-        :return: 如果找到返回会话对象，否则返回None
-        :raises DatabaseOperationFailedException: 如果发生数据库错误
+        根据会话ID获取会话。
+
+        Args:
+            db (AsyncSession): 数据库会话。
+            session_id (int): 会话ID。
+
+        Returns:
+            Optional[Session]: 如果找到返回会话对象，否则返回None。
+
+        Raises:
+            DatabaseOperationFailedException: 查询失败时抛出。
         """
         try:
             query = select(Session).where(Session.session_id == session_id)
@@ -49,14 +69,19 @@ class CRUDSession:
     @staticmethod
     async def get_by_project(db: AsyncSession, project_id: int, skip: int = 0, limit: int = 100) -> List[Session]:
         """
-        根据项目ID获取会话列表
-        
-        :param db: 数据库会话
-        :param project_id: 项目ID
-        :param skip: 跳过的记录数
-        :param limit: 最大返回记录数
-        :return: 会话对象列表
-        :raises DatabaseOperationFailedException: 如果发生数据库错误
+        根据项目ID获取会话列表。
+
+        Args:
+            db (AsyncSession): 数据库会话。
+            project_id (int): 项目ID。
+            skip (int): 跳过的记录数。
+            limit (int): 最大返回记录数。
+
+        Returns:
+            List[Session]: 会话对象列表。
+
+        Raises:
+            DatabaseOperationFailedException: 查询失败时抛出。
         """
         try:
             query = select(Session).where(Session.project_id == project_id).offset(skip).limit(limit)
@@ -68,13 +93,18 @@ class CRUDSession:
     @staticmethod
     async def get_multi(db: AsyncSession, skip: int = 0, limit: int = 100) -> List[Session]:
         """
-        分页获取多个会话
-        
-        :param db: 数据库会话
-        :param skip: 跳过的记录数
-        :param limit: 最大返回记录数
-        :return: 会话对象列表
-        :raises DatabaseOperationFailedException: 如果发生数据库错误
+        分页获取多个会话。
+
+        Args:
+            db (AsyncSession): 数据库会话。
+            skip (int): 跳过的记录数。
+            limit (int): 最大返回记录数。
+
+        Returns:
+            List[Session]: 会话对象列表。
+
+        Raises:
+            DatabaseOperationFailedException: 查询失败时抛出。
         """
         try:
             query = select(Session).offset(skip).limit(limit)
@@ -86,13 +116,18 @@ class CRUDSession:
     @staticmethod
     async def update(db: AsyncSession, db_obj: Session, **kwargs) -> Session:
         """
-        更新会话
-        
-        :param db: 数据库会话
-        :param db_obj: 要更新的会话对象
-        :param kwargs: 要更新的字段
-        :return: 更新后的会话对象
-        :raises SQLAlchemyError: 如果发生数据库错误
+        更新会话。
+
+        Args:
+            db (AsyncSession): 数据库会话。
+            db_obj (Session): 要更新的会话对象。
+            **kwargs: 要更新的字段。
+
+        Returns:
+            Session: 更新后的会话对象。
+
+        Raises:
+            DatabaseOperationFailedException: 更新失败时抛出。
         """
         try:
             for field, value in kwargs.items():
@@ -107,12 +142,17 @@ class CRUDSession:
     @staticmethod
     async def remove(db: AsyncSession, session_id: int) -> bool:
         """
-        根据会话ID删除会话
-        
-        :param db: 数据库会话
-        :param session_id: 会话ID
-        :return: 如果会话被删除返回True，如果未找到会话返回False
-        :raises SQLAlchemyError: 如果发生数据库错误
+        根据会话ID删除会话。
+
+        Args:
+            db (AsyncSession): 数据库会话。
+            session_id (int): 会话ID。
+
+        Returns:
+            bool: 如果会话被删除返回True，如果未找到会话返回False。
+
+        Raises:
+            DatabaseOperationFailedException: 删除失败时抛出。
         """
         try:
             query = delete(Session).where(Session.session_id == session_id)
@@ -126,17 +166,22 @@ class CRUDSession:
     @staticmethod
     async def update_last_activity(db: AsyncSession, session_id: int) -> Optional[Session]:
         """
-        更新会话的最后活动时间
-        
-        :param db: 数据库会话
-        :param session_id: 会话ID
-        :return: 更新后的会话对象，如果未找到会话返回None
-        :raises DatabaseOperationFailedException: 如果发生数据库错误
+        更新会话的最后活动时间。
+
+        Args:
+            db (AsyncSession): 数据库会话。
+            session_id (int): 会话ID。
+
+        Returns:
+            Optional[Session]: 更新后的会话对象，如果未找到会话返回None。
+
+        Raises:
+            DatabaseOperationFailedException: 更新失败时抛出。
         """
         try:
             session = await CRUDSession.get(db, session_id)
             if session:
-                # The last_activity field will be automatically updated on commit due to onupdate=func.now()
+           
                 await db.commit()
                 await db.refresh(session)
             return session

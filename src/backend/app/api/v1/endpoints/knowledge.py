@@ -1,4 +1,8 @@
-# backend/app/api/v1/endpoints/knowledge.py
+"""
+知识库/术语 API 端点。
+
+管理项目的业务术语，包括增删改查、批量导入导出等操作。
+"""
 
 from fastapi import APIRouter, Depends, HTTPException, status, Query, UploadFile, File, Path
 from sqlalchemy.ext.asyncio import AsyncSession as Session
@@ -23,7 +27,21 @@ async def create_term(
     db: Session = Depends(deps.get_db),
     current_user: Any = Depends(deps.get_current_active_user),
 ) -> Any:
-    """创建新业务术语。"""
+    """
+    创建新业务术语。
+
+    Args:
+        data (schemas.KnowledgeCreate): 术语创建请求体。
+        project_id (int): 项目 ID。
+        db (Session): 数据库会话。
+        current_user (Any): 当前登录用户。
+
+    Returns:
+        Any: 创建后的术语信息。
+
+    Raises:
+        HTTPException: 项目未找到(404)、冲突(409)或内部错误(500)。
+    """
     try:
         return await knowledge_service.create_knowledge_service(db, project_id, current_user.user_id, data)
     except ItemNotFoundException:
@@ -46,7 +64,23 @@ async def get_terms(
     db: Session = Depends(deps.get_db),
     current_user: Any = Depends(deps.get_current_active_user),
 ) -> Any:
-    """获取项目中的所有术语。"""
+    """
+    获取项目中的所有术语。
+
+    Args:
+        project_id (int): 项目 ID。
+        search (Optional[str]): 搜索关键字。
+        page (int): 页码。
+        page_size (int): 每页数量。
+        db (Session): 数据库会话。
+        current_user (Any): 当前登录用户。
+
+    Returns:
+        Any: 分页术语列表。
+
+    Raises:
+        HTTPException: 项目未找到(404)或内部错误(500)。
+    """
     try:
         return await knowledge_service.get_knowledge_list_service(
             db, project_id, current_user.user_id, page, page_size, search
@@ -68,7 +102,22 @@ async def update_term(
     db: Session = Depends(deps.get_db),
     current_user: Any = Depends(deps.get_current_active_user),
 ) -> Any:
-    """更新术语信息。"""
+    """
+    更新术语信息。
+
+    Args:
+        data (schemas.KnowledgeUpdate): 术语更新请求体。
+        project_id (int): 项目 ID。
+        knowledge_id (int): 术语 ID。
+        db (Session): 数据库会话。
+        current_user (Any): 当前登录用户。
+
+    Returns:
+        Any: 更新后的术语信息。
+
+    Raises:
+        HTTPException: 术语/项目未找到(404)或内部错误(500)。
+    """
     try:
         return await knowledge_service.update_knowledge_service(
             db, project_id, knowledge_id, current_user.user_id, data
@@ -88,7 +137,21 @@ async def batch_delete_terms(
     db: Session = Depends(deps.get_db),
     current_user: Any = Depends(deps.get_current_active_user),
 ) -> Any:
-    """批量删除术语。"""
+    """
+    批量删除术语。
+
+    Args:
+        data (schemas.BulkDeleteRequest): 批量删除请求体。
+        project_id (int): 项目 ID。
+        db (Session): 数据库会话。
+        current_user (Any): 当前登录用户。
+
+    Returns:
+        Any: 删除结果。
+
+    Raises:
+        HTTPException: 项目未找到(404)或内部错误(500)。
+    """
     try:
         count = await knowledge_service.batch_delete_knowledge_service(
             db, project_id, current_user.user_id, data.ids
@@ -112,7 +175,21 @@ async def import_terms(
     db: Session = Depends(deps.get_db),
     current_user: Any = Depends(deps.get_current_active_user),
 ) -> Any:
-    """从文件批量导入术语。"""
+    """
+    从文件批量导入术语。
+
+    Args:
+        project_id (int): 项目 ID。
+        file (UploadFile): 上传的文件。
+        db (Session): 数据库会话。
+        current_user (Any): 当前登录用户。
+
+    Returns:
+        Any: 导入结果统计。
+
+    Raises:
+        HTTPException: 格式错误(400)、项目未找到(404)或导入失败(500)。
+    """
     try:
         return await knowledge_service.import_knowledge_service(
             db, project_id, current_user.user_id, file
@@ -134,7 +211,20 @@ async def export_terms(
     db: Session = Depends(deps.get_db),
     current_user: Any = Depends(deps.get_current_active_user),
 ) -> Any:
-    """导出术语库。"""
+    """
+    导出术语库。
+
+    Args:
+        project_id (int): 项目 ID。
+        db (Session): 数据库会话。
+        current_user (Any): 当前登录用户。
+
+    Returns:
+        Any: 导出文件下载链接。
+
+    Raises:
+        HTTPException: 项目未找到(404)或内部错误(500)。
+    """
     try:
         return await knowledge_service.export_knowledge_service(db, project_id, current_user.user_id)
     except ItemNotFoundException:

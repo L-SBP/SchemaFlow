@@ -8,6 +8,9 @@ MySQL 用户配置服务。
 from sqlalchemy import URL, text
 from typing import Optional, Tuple
 import re
+# backend/app/service/mysql_service.py
+
+from sqlalchemy import URL
 
 from core.config import config
 from core.log import log
@@ -44,7 +47,7 @@ async def _execute_raw_sql(sql: str) -> None:
     """
     # 验证 SQL 安全性
     validate_safe_sql(sql, is_root=True)
-    
+
     # 直接获取引擎并执行
     # 使用 raw=True 参数避免 SQLAlchemy 处理百分号
     engine = await MysqlHelper.get_root_engine()
@@ -62,12 +65,12 @@ async def create_mysql_user_with_plugin(
 ) -> None:
     """
     创建 MySQL 用户并指定认证插件。
-    
+
     Args:
         db_username (str): 用户名。
         db_password (str): 明文密码。
         plugin (str): 认证插件，可选 "sha256_password" 或 "mysql_native_password"。
-        
+
     Raises:
         Exception: 创建用户失败时抛出异常。
     """
@@ -88,16 +91,16 @@ async def create_mysql_user_with_plugin(
 
 
 async def grant_user_privileges(
-    db_name: str, 
+    db_name: str,
     db_username: str
 ) -> None:
     """
     授予用户对指定数据库的所有权限。
-    
+
     Args:
         db_name (str): 数据库名称。
         db_username (str): 用户名。
-        
+
     Raises:
         Exception: 授予权限失败时抛出异常。
     """
@@ -116,7 +119,7 @@ async def grant_user_privileges(
 async def flush_privileges() -> None:
     """
     刷新 MySQL 权限。
-    
+
     Raises:
         Exception: 刷新权限失败时抛出异常。
     """
@@ -128,18 +131,18 @@ async def flush_privileges() -> None:
 
 
 async def alter_user_plugin(
-    db_username: str, 
-    db_password: str, 
+    db_username: str,
+    db_password: str,
     plugin: str = "mysql_native_password"
 ) -> None:
     """
     修改用户认证插件。
-    
+
     Args:
         db_username (str): 用户名。
         db_password (str): 明文密码。
         plugin (str): 新的认证插件。
-        
+
     Raises:
         Exception: 修改插件失败时抛出异常。
     """
@@ -159,16 +162,16 @@ async def alter_user_plugin(
 
 
 def build_mysql_url(
-    db_username: str, 
-    db_password: str, 
-    db_name: str, 
+    db_username: str,
+    db_password: str,
+    db_name: str,
     plugin: str = "sha256_password",
     host: str = "localhost",
     port: int = 3306
 ) -> URL:
     """
     构建 MySQL 连接 URL。
-    
+
     Args:
         db_username (str): 用户名。
         db_password (str): 明文密码。
@@ -176,13 +179,13 @@ def build_mysql_url(
         plugin (str): 认证插件。
         host (str): 主机地址。
         port (int): 端口号。
-        
+
     Returns:
         URL: SQLAlchemy URL 对象。
     """
     from urllib.parse import quote
     encoded_password = quote(db_password, safe='')
-    
+
     return URL.create(
         drivername="mysql+aiomysql",
         username=db_username,
@@ -198,22 +201,22 @@ def build_mysql_url(
 
 
 async def init_user_engine_with_plugin(
-    db_username: str, 
-    db_password: str, 
-    db_name: str, 
-    instance_id: int, 
+    db_username: str,
+    db_password: str,
+    db_name: str,
+    instance_id: int,
     plugin: str = "sha256_password"
 ) -> bool:
     """
     使用指定插件初始化用户引擎。
-    
+
     Args:
         db_username (str): 用户名。
         db_password (str): 明文密码。
         db_name (str): 数据库名称。
         instance_id (int): 关联实例 ID。
         plugin (str): 认证插件。
-        
+
     Returns:
         bool: 初始化成功返回 True，否则返回 False。
     """
@@ -228,46 +231,46 @@ async def init_user_engine_with_plugin(
 
 
 async def create_mysql_user(
-    db_name: str, 
-    db_username: str, 
+    db_name: str,
+    db_username: str,
     db_password: str,
     instance_id: int
 ) -> None:
     """
     创建 MySQL 用户并优先使用 `sha256_password` 插件。
-    
+
     在失败时自动回退到 `mysql_native_password`，同时完成权限授予与用户引擎初始化。
-    
+
     Args:
         db_name (str): 数据库名称。
         db_username (str): 用户名。
         db_password (str): 明文密码（用于初始化）。
         instance_id (int): 关联实例 ID。
-        
+
     Raises:
         Exception: 创建或初始化过程中出现的错误会向上抛出。
     """
     try:
         # 1. 创建用户
         await create_mysql_user_with_plugin(db_username, db_password, "sha256_password")
-        
+
         # 2. 授予权限
         await grant_user_privileges(db_name, db_username)
-        
+
         # 3. 刷新权限
         await flush_privileges()
-        
+
         log.info(f"[MySQL] User setup completed for {db_username}")
 
         # 4. 尝试使用 sha256_password 初始化用户引擎
         if not await init_user_engine_with_plugin(db_username, db_password, db_name, instance_id, "sha256_password"):
             # 5. 如果失败，回退到 mysql_native_password
             log.info("[MySQL] Falling back to mysql_native_password")
-            
+
             # 修改用户插件
             await alter_user_plugin(db_username, db_password, "mysql_native_password")
             await flush_privileges()
-            
+
             # 重新尝试初始化
             if not await init_user_engine_with_plugin(db_username, db_password, db_name, instance_id, "mysql_native_password"):
                 raise Exception("Failed to initialize user engine with both sha256_password and mysql_native_password")
@@ -278,29 +281,29 @@ async def create_mysql_user(
 
 
 async def ensure_user_and_engine(
-    db_name: str, 
-    db_username: str, 
-    db_password: str, 
+    db_name: str,
+    db_username: str,
+    db_password: str,
     instance_id: int
 ) -> bool:
     """
     确保用户存在且引擎已初始化。
-    
+
     执行 SQL 逻辑前的检查函数：
     1. 检查 MysqlHelper 中的 _user_engine 是否有对应项目的引擎
     2. 如果没有，检查 _user_exist 中是否有这个用户
     3. 如果没有，去 MySQL 中查询是否创建有该用户
     4. 如果没有，在 MySQL 中创建用户，并加入 _user_exist 中
-    
+
     Args:
         db_name (str): 数据库名称。
         db_username (str): 用户名。
         db_password (str): 明文密码。
         instance_id (int): 关联实例 ID。
-        
+
     Returns:
         bool: 如果用户和引擎都已准备好返回 True，否则返回 False。
-        
+
     Raises:
         Exception: 检查或创建过程中出现的错误会向上抛出。
     """
@@ -309,71 +312,71 @@ async def ensure_user_and_engine(
         if MysqlHelper.is_user_engine_exists(instance_id):
             log.info(f"[MySQL] User engine already exists for instance {instance_id}")
             return True
-        
+
         log.info(f"[MySQL] User engine not found for instance {instance_id}, checking user status...")
-        
+
         # 2. 检查 _user_exist 中是否有这个用户
         if MysqlHelper.is_user_exists(db_username):
             log.info(f"[MySQL] User {db_username} found in cache, checking privileges...")
-            
+
             # 检查用户是否有该数据库的权限
             has_privileges = await MysqlHelper.check_privilege(db_username, db_name)
             if not has_privileges:
                 log.info(f"[MySQL] User {db_username} does not have privileges for {db_name}, granting privileges...")
                 await grant_user_privileges(db_name, db_username)
                 await flush_privileges()
-            
+
             # 尝试初始化引擎（使用 sha256_password）
             if await init_user_engine_with_plugin(db_username, db_password, db_name, instance_id, "sha256_password"):
                 return True
-            
+
             # 如果失败，尝试 mysql_native_password
             log.info("[MySQL] sha256_password failed, trying mysql_native_password...")
             if await init_user_engine_with_plugin(db_username, db_password, db_name, instance_id, "mysql_native_password"):
                 return True
-            
+
             log.error(f"[MySQL] Failed to initialize engine for existing user {db_username}")
             return False
-        
+
         # 3. 检查 MySQL 中是否创建有该用户
         log.info(f"[MySQL] Checking if user {db_username} exists in MySQL...")
         user_exists = await MysqlHelper.is_user_exist_in_mysql(db_username)
-        
+
         if user_exists:
             log.info(f"[MySQL] User {db_username} exists in MySQL, adding to cache...")
             MysqlHelper.add_user(db_username)
-            
+
             # 检查用户是否有该数据库的权限
             has_privileges = await MysqlHelper.check_privilege(db_username, db_name)
             if not has_privileges:
                 log.info(f"[MySQL] User {db_username} does not have privileges for {db_name}, granting privileges...")
                 await grant_user_privileges(db_name, db_username)
                 await flush_privileges()
-            
+
             # 尝试初始化引擎
             if await init_user_engine_with_plugin(db_username, db_password, db_name, instance_id, "sha256_password"):
                 return True
-            
+
             # 如果失败，尝试 mysql_native_password
             log.info("[MySQL] sha256_password failed, trying mysql_native_password...")
             if await init_user_engine_with_plugin(db_username, db_password, db_name, instance_id, "mysql_native_password"):
                 return True
-            
+
             log.error(f"[MySQL] Failed to initialize engine for existing user {db_username}")
             return False
-        
+
         # 4. 用户不存在，在 MySQL 中创建用户
         log.info(f"[MySQL] User {db_username} not found, creating new user...")
-        
+
         try:
             # 创建用户并初始化
             await create_mysql_user(db_name, db_username, db_password, instance_id)
             return True
-            
+
         except Exception as create_error:
             log.error(f"[MySQL] Failed to create user {db_username}: {str(create_error)}")
             raise
-            
+
     except Exception as e:
         log.error(f"[MySQL] Error in ensure_user_and_engine: {str(e)}", exc_info=True)
         raise
@@ -386,15 +389,15 @@ async def execute_sql_with_user_check(
 ) -> Optional[list]:
     """
     执行 SQL 前先检查用户和引擎状态，然后执行 SQL。
-    
+
     Args:
         sql (str): 要执行的 SQL 语句。
         sql_type: sql类型
         instance_obj: 数据库实例
-        
+
     Returns:
         Optional[list]: 如果是 DQL 返回查询结果列表，如果是 DML 返回 None。
-        
+
     Raises:
         Exception: 执行过程中出现的错误会向上抛出。
     """
@@ -412,7 +415,7 @@ async def execute_sql_with_user_check(
             result = await execute_dml_user(sql, instance_obj)
             log.info(f"[MySQL] DML executed successfully for instance {instance_obj.instance_id}")
             return result
-            
+
     except Exception as e:
         log.error(f"[MySQL] Error executing SQL for instance {instance_obj.instance_id}: {str(e)}", exc_info=True)
         raise

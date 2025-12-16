@@ -1,8 +1,30 @@
+"""
+系统公告模型。
+
+本模块定义了用于存储系统公告信息的 ORM 模型。
+"""
+
+# backend/app/models/system_announcement.py
+
 from sqlalchemy import Column, Text, String, Integer, Index, CheckConstraint, ForeignKey, DateTime
 from sqlalchemy.sql import func
 from core.database import Base
 
 class SystemAnnouncement(Base):
+    """
+    系统公告表 ORM 模型。
+
+    存储管理员发布的系统通知。
+
+    Attributes:
+        announcement_id (int): 公告唯一ID。
+        title (str): 公告标题。
+        content (str): 公告内容。
+        status (str): 公告状态：draft/published/unpublished/expired。
+        created_by (int): 创建人（管理员user_id）。
+        created_at (datetime): 公告发布时间。
+        updated_at (datetime): 最后更新时间。
+    """
     __tablename__ = 'system_announcement'
 
     __table_args__ = (

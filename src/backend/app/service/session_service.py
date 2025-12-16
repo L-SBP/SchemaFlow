@@ -1,3 +1,11 @@
+"""
+会话服务。
+
+统一处理 Session 的业务逻辑，包括鉴权、越权校验及增删改查操作。
+"""
+
+# backend/app/service/session_service.py
+
 from typing import List, Optional
 
 from fastapi import HTTPException, status
@@ -7,6 +15,7 @@ from crud.crud_session import crud_session
 from crud.crud_project import crud_project
 from schema.session import SessionCreate, SessionUpdate, SessionResponse
 from schema.user import UserMe
+from core.log import log
 
 
 class SessionService:
@@ -18,7 +27,6 @@ class SessionService:
     """
 
     @staticmethod
-
     
     async def _check_project_owner(
         db: AsyncSession,
@@ -27,10 +35,22 @@ class SessionService:
     ) -> None:
         """
         校验项目是否属于当前用户。
+        
         这是 Session 鉴权的核心逻辑，所有涉及 project_id 的操作必须经过此校验。
+
+        Args:
+            db (AsyncSession): 数据库会话。
+            project_id (int): 项目 ID。
+            user (UserMe): 当前用户对象。
+
+        Raises:
+            HTTPException: 权限不足时抛出 403。
         """
+        log.info("检查项目")
         project = await crud_project.get(db=db, project_id=project_id)
+        log.info("检查项目2")
         if not project or project.user_id != user.user_id:
+            log.info("检查项目3")
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="Project access forbidden"
@@ -44,7 +64,19 @@ class SessionService:
     ):
         """
         校验会话是否属于当前用户。
+        
         通过 session → project → user 的链路进行校验，防止越权访问。
+
+        Args:
+            db (AsyncSession): 数据库会话。
+            session_id (int): 会话 ID。
+            user (UserMe): 当前用户对象。
+
+        Returns:
+            Session: 会话对象。
+
+        Raises:
+            HTTPException: 会话不存在或权限不足时抛出。
         """
         session = await crud_session.get(db=db, session_id=session_id)
         if not session:
@@ -69,9 +101,19 @@ class SessionService:
         limit: int
     ) -> List[SessionResponse]:
         """
-        获取会话列表：
-        - 支持按 project_id 过滤
-        - 强制校验 project 属于当前用户
+        获取会话列表。
+
+        支持按 project_id 过滤，强制校验 project 属于当前用户。
+
+        Args:
+            db (AsyncSession): 数据库会话。
+            user (UserMe): 当前用户对象。
+            project_id (Optional[int]): 项目 ID 过滤。
+            skip (int): 跳过数量。
+            limit (int): 返回限制。
+
+        Returns:
+            List[SessionResponse]: 会话列表。
         """
         if project_id:
             await SessionService._check_project_owner(db, project_id, user)
@@ -97,16 +139,26 @@ class SessionService:
         session_in: SessionCreate
     ) -> SessionResponse:
         """
-        创建新会话：
+        创建新会话。
+        
         - 校验 project 属于当前用户
         - 统一由后端控制可写字段
+
+        Args:
+            db (AsyncSession): 数据库会话。
+            user (UserMe): 当前用户对象。
+            session_in (SessionCreate): 会话创建参数。
+
+        Returns:
+            SessionResponse: 创建后的会话。
         """
+        log.info("创建会话2")
         await SessionService._check_project_owner(
             db=db,
             project_id=session_in.project_id,
             user=user
         )
-
+        log.info("创建会话3")
         return await crud_session.create(
             db=db,
             **session_in.dict()
@@ -120,6 +172,14 @@ class SessionService:
     ) -> SessionResponse:
         """
         获取单个会话详情。
+
+        Args:
+            db (AsyncSession): 数据库会话。
+            user (UserMe): 当前用户对象。
+            session_id (int): 会话 ID。
+
+        Returns:
+            SessionResponse: 会话详情。
         """
         return await SessionService._check_session_owner(
             db=db,
@@ -136,6 +196,15 @@ class SessionService:
     ) -> SessionResponse:
         """
         更新会话信息（如重命名）。
+
+        Args:
+            db (AsyncSession): 数据库会话。
+            user (UserMe): 当前用户对象。
+            session_id (int): 会话 ID。
+            session_in (SessionUpdate): 会话更新参数。
+
+        Returns:
+            SessionResponse: 更新后的会话。
         """
         session = await SessionService._check_session_owner(
             db=db,
@@ -158,6 +227,14 @@ class SessionService:
     ) -> bool:
         """
         删除会话。
+
+        Args:
+            db (AsyncSession): 数据库会话。
+            user (UserMe): 当前用户对象。
+            session_id (int): 会话 ID。
+
+        Returns:
+            bool: 是否删除成功。
         """
         await SessionService._check_session_owner(
             db=db,

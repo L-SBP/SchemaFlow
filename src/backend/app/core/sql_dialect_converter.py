@@ -1,7 +1,10 @@
 """
-SQL方言转换工具类
-支持多种数据库方言之间的SQL语句转换
+SQL方言转换工具类。
+
+支持多种数据库方言之间的SQL语句转换。
 """
+
+# backend/app/core/sql_dialect_converter.py
 
 from typing import Optional, Dict, Any
 try:
@@ -15,8 +18,12 @@ except ImportError:
 
 class SQLDialectConverter:
     """
-    SQL方言转换器
-    支持在不同数据库方言之间转换SQL语句
+    SQL方言转换器。
+
+    支持在不同数据库方言之间转换SQL语句。
+
+    Attributes:
+        SUPPORTED_DIALECTS (Dict[str, str]): 支持的数据库方言映射表。
     """
     
     # 支持的数据库方言映射
@@ -39,6 +46,12 @@ class SQLDialectConverter:
     } if SQLGLOT_AVAILABLE else {}
     
     def __init__(self):
+        """
+        初始化 SQL 方言转换器。
+
+        Raises:
+            ImportError: 如果 sqlglot 库未安装。
+        """
         if not SQLGLOT_AVAILABLE:
             raise ImportError(
                 "sqlglot库未安装。请运行 'pip install sqlglot' 安装后再使用此功能。"
@@ -47,20 +60,20 @@ class SQLDialectConverter:
     def convert(self, sql: str, source_dialect: str, target_dialect: str, 
                 pretty: bool = False) -> str:
         """
-        将SQL语句从源方言转换为目标方言
+        将SQL语句从源方言转换为目标方言。
         
         Args:
-            sql: 要转换的SQL语句
-            source_dialect: 源数据库方言
-            target_dialect: 目标数据库方言
-            pretty: 是否美化输出
+            sql (str): 要转换的SQL语句。
+            source_dialect (str): 源数据库方言。
+            target_dialect (str): 目标数据库方言。
+            pretty (bool): 是否美化输出。
             
         Returns:
-            转换后的SQL语句
+            str: 转换后的SQL语句。
             
         Raises:
-            ValueError: 当指定的方言不支持时
-            SQLConversionError: 当SQL转换失败时
+            ValueError: 当指定的方言不支持时。
+            SQLConversionError: 当SQL转换失败时。
         """
         # 验证方言是否支持
         if source_dialect not in self.SUPPORTED_DIALECTS:
@@ -85,14 +98,17 @@ class SQLDialectConverter:
     
     def validate_sql(self, sql: str, dialect: str = 'mysql') -> bool:
         """
-        验证SQL语法是否正确
+        验证SQL语法是否正确。
         
         Args:
-            sql: 要验证的SQL语句
-            dialect: SQL方言，默认为MySQL
+            sql (str): 要验证的SQL语句。
+            dialect (str): SQL方言，默认为MySQL。
             
         Returns:
-            如果SQL语法正确返回True，否则返回False
+            bool: 如果SQL语法正确返回True，否则返回False。
+            
+        Raises:
+            ValueError: 当指定的方言不支持时。
         """
         if dialect not in self.SUPPORTED_DIALECTS:
             raise ValueError(f"不支持的方言: {dialect}")
@@ -107,15 +123,19 @@ class SQLDialectConverter:
     
     def format_sql(self, sql: str, dialect: str = 'mysql', pretty: bool = True) -> str:
         """
-        格式化SQL语句
+        格式化SQL语句。
         
         Args:
-            sql: 要格式化的SQL语句
-            dialect: SQL方言，默认为MySQL
-            pretty: 是否美化输出
+            sql (str): 要格式化的SQL语句。
+            dialect (str): SQL方言，默认为MySQL。
+            pretty (bool): 是否美化输出。
             
         Returns:
-            格式化后的SQL语句
+            str: 格式化后的SQL语句。
+            
+        Raises:
+            ValueError: 当指定的方言不支持时。
+            SQLConversionError: 当格式化失败时。
         """
         if dialect not in self.SUPPORTED_DIALECTS:
             raise ValueError(f"不支持的方言: {dialect}")
@@ -135,10 +155,10 @@ class SQLDialectConverter:
     
     def get_supported_dialects(self) -> Dict[str, str]:
         """
-        获取支持的方言列表
+        获取支持的方言列表。
         
         Returns:
-            支持的方言字典
+            Dict[str, str]: 支持的方言字典。
         """
         return self.SUPPORTED_DIALECTS.copy()
 
