@@ -86,6 +86,11 @@ class Project(Base):
         comment='AI生成的DDL语句'
     )
     # ----------------
+    er_diagram_code = Column(
+        Text,
+        nullable=True,
+        comment='AI生成的Mermaid ER图代码'
+    )
 
     creation_stage = Column(
         String(50),

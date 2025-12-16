@@ -20,9 +20,9 @@ from schema.admin import (
     AdminUserListResponse,
     AdminUserListItem,
     AdminUpdateUserStatusRequest,
-    AdminUpdateUserStatusResponse,  # 新增导入
+    AdminUpdateUserStatusResponse,
     AdminUpdateUserQuotaRequest,
-    AdminUpdateUserQuotaResponse,  # 新增导入
+    AdminUpdateUserQuotaResponse,
     AnnouncementCreateRequest,
     AnnouncementResponse,
     AnnouncementUpdateRequest,

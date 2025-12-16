@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { UserRole } from '../types.ts';
-import { LogOut, User as UserIcon, Settings } from 'lucide-react';
+import { LogOut, User as UserIcon, Settings, Menu } from 'lucide-react';
 
 /**
  * 顶部导航栏属性接口
@@ -12,6 +12,8 @@ interface HeaderProps {
     user: { name: string; role: UserRole; avatar_url?: string | null } | null;
     /** 退出登录回调函数 */
     onLogout: () => void;
+    /** 切换侧边栏显示状态 */
+    onToggleSidebar: () => void;
     /** * 页面导航回调函数
      * 用于跳转到个人设置等页面
      */
@@ -26,7 +28,7 @@ interface HeaderProps {
  * @param {HeaderProps} props - 组件属性
  * @returns {JSX.Element} 顶部栏元素
  */
-export const Header: React.FC<HeaderProps> = ({ user, onLogout, onNavigate }) => {
+export const Header: React.FC<HeaderProps> = ({ user, onLogout, onToggleSidebar, onNavigate }) => {
     const [isOpen, setIsOpen] = useState(false);
     const dropdownRef = useRef<HTMLDivElement>(null);
 
@@ -45,7 +47,16 @@ export const Header: React.FC<HeaderProps> = ({ user, onLogout, onNavigate }) =>
     }, []);
 
     return (
-        <header className="h-16 bg-white border-b border-gray-200 px-8 flex justify-end items-center sticky top-0 z-20 shrink-0">
+        <header className="h-16 bg-white border-b border-gray-200 px-4 sm:px-8 flex justify-between items-center sticky top-0 z-20 shrink-0">
+            <div className="flex items-center">
+                <button
+                    onClick={onToggleSidebar}
+                    className="md:hidden p-2 mr-4 text-gray-600 hover:bg-gray-100 rounded-md"
+                >
+                    <Menu size={24} />
+                </button>
+            </div>
+
             {/* 用户信息及下拉菜单容器 */}
             <div className="relative" ref={dropdownRef}>
                 <button

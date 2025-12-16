@@ -7,9 +7,9 @@
 
 # backend/app/service/report_service.py
 
-from typing import List, Dict, Any
+from typing import List
 from sqlalchemy.ext.asyncio import AsyncSession as Session
-from sqlalchemy import select, delete, update
+from sqlalchemy import select
 from fastapi import HTTPException
 
 from schema import report as schemas

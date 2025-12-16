@@ -10,6 +10,7 @@ from sqlalchemy import Column, String, CheckConstraint, Index, Integer, ForeignK
 from sqlalchemy.sql import func
 from core.database import Base
 from sqlalchemy.orm import relationship
+
 class Session(Base):
     """
     会话表 ORM 模型。
@@ -20,6 +21,7 @@ class Session(Base):
         session_id (int): 会话ID。
         project_id (int): 关联的项目ID。
         session_name (str): 会话名称。
+        current_model (str): 当前会话偏好的AI模型ID (新增)。
         created_at (datetime): 创建时间。
         last_activity (datetime): 最后活动时间。
     """
@@ -43,14 +45,20 @@ class Session(Base):
         nullable=False,
         comment='关联的项目ID'
     )
-    # 反向关联：让 Session 知道它属于哪个 Project
-    project = relationship("Project", back_populates="sessions")
     session_name = Column(
         String(100),
         nullable=False,
         default='New Session',
         comment='会话名称'
     )
+    
+    # 【新增字段】记录当前会话使用的模型
+    current_model = Column(
+        String(50), 
+        nullable=True, 
+        comment="当前会话偏好的AI模型ID"
+    )
+
     created_at = Column(
         DateTime(timezone=True),
         server_default=func.now(),
@@ -63,5 +71,12 @@ class Session(Base):
         nullable=True,
         comment='最后活动时间'
     )
+    
+    # 关联关系
+    # 反向关联：让 Session 知道它属于哪个 Project
+    project = relationship("Project", back_populates="sessions")
+    
+    # messages = relationship("Message", back_populates="session", cascade="all, delete-orphan") # 如果你有 Message 模型的话
+
     class Config:
         from_attributes = True
