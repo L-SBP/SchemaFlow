@@ -24,33 +24,40 @@ router = APIRouter()
 # src/backend/app/api/v1/endpoints/chat.py
 
 def _format_history_response(raw_messages: List[Any]) -> List[ChatResponse]:
-    """格式化消息历史，支持从持久化表获取 SQL 和结果集"""
     clean_history = []
     for msg in raw_messages:
         sql_text = None
         sql_type = "UNKNOWN"
-        data = None # 新增：用于存储查询结果快照
+        data = None
         
-        # 1. 优先从持久化模型 (AiGeneratedStatement) 获取元数据
+        # 1. 提取 SQL 和 Data (这部分你写得是对的)
         if hasattr(msg, 'ai_statement') and msg.ai_statement:
-            # 假设一条消息对应一条 SQL 语句
             stmt = msg.ai_statement[0] if isinstance(msg.ai_statement, list) else msg.ai_statement
             if stmt:
                 sql_text = getattr(stmt, 'sql_text', None)
                 sql_type = getattr(stmt, 'statement_type', "UNKNOWN")
-                # 【核心修改】从数据库中取出之前存好的 JSON 结果快照
                 data = getattr(stmt, 'execution_result', None)
 
-        # 2. 兜底解析逻辑（用于处理旧数据或未持久化的数据）
-        msg_type = MessageType.ASSISTANT if getattr(msg, 'role', '') == "assistant" else MessageType.USER
+        # 2. 【核心修复】精确判定消息类型
+        # 尝试获取 message_type 或 role 字段，并统一转为小写比较
+        raw_role = getattr(msg, 'message_type', getattr(msg, 'role', '')).lower()
+        
+        if raw_role == "assistant":
+            msg_type = MessageType.ASSISTANT
+        else:
+            msg_type = MessageType.USER
+
+        # 3. 如果是 AI 消息但没有 SQL，进行解析 (保持你原来的逻辑)
         if msg_type == MessageType.ASSISTANT and not sql_text and msg.content:
-            # ... 原有的正则或字符串切分逻辑保持不变 ...
+            # 这里写你原有的正则解析逻辑
             pass
 
+        # 4. 确认逻辑
         requires_conf = sql_type in ["INSERT", "UPDATE", "DELETE", "DROP", "ALTER", "TRUNCATE"]
         if getattr(msg, 'user_confirmed', False): 
             requires_conf = False
 
+        # 5. 组装返回
         clean_history.append(ChatResponse(
             message_id=msg.message_id if hasattr(msg, 'message_id') else msg.id,
             content=msg.content,
@@ -58,7 +65,7 @@ def _format_history_response(raw_messages: List[Any]) -> List[ChatResponse]:
             sql_text=sql_text,
             sql_type=sql_type,
             requires_confirmation=requires_conf,
-            data=data # 现在 data 能够被正确返回给前端了
+            data=data
         ))
     return clean_history
 
