@@ -1,8 +1,9 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Project, Message, QueryResult, ChatSession } from '../types';
-import { Button, message as GlobalMessage } from '../components/UI';
-import { Send, Plus, MessageSquare, Edit2, Trash2, Check, X, ChevronLeft, Loader2, Sparkles, AlertTriangle, Play, Ban, Table as TableIcon } from 'lucide-react';
-import { sessionApi, ChatMessageResponse } from '../api/session';
+import { Project, Message, QueryResult, ChatSession, ChatResponse } from '../types';
+import { Button, message as GlobalMessage, Modal } from '../components/UI';
+import { Send, Plus, MessageSquare, Edit2, Trash2, Check, X, ChevronLeft, Loader2, Sparkles, AlertTriangle, Play, Ban, Table as TableIcon, Info, Bot } from 'lucide-react';
+import { sessionApi } from '../api/session';
+import { ProjectWizard } from '../components/ProjectWizard';
 
 interface WorkspaceProps {
   project: Project;
@@ -44,7 +45,7 @@ const Typewriter: React.FC<{ text: string; onComplete?: () => void }> = ({ text,
 
 // --- 辅助函数: 消息转换 ---
 // 将后端 API 返回的下划线格式字段映射为前端 Message 类型
-const mapBackendMessageToFrontend = (msg: ChatMessageResponse): Message => {
+const mapBackendMessageToFrontend = (msg: ChatResponse): Message => {
   let type: Message['type'] = 'text';
   let tableData: QueryResult | undefined = undefined;
 
@@ -74,7 +75,7 @@ const mapBackendMessageToFrontend = (msg: ChatMessageResponse): Message => {
     else {
       // FIX: 优化正则，使用非贪婪匹配 [\s\S]+? 并尝试在分号 ; 或双换行 \n\n 处停止，
       // 防止正则吞掉 SQL 语句后面的普通文本说明。
-      const plainMatch = displayText.match(/(?:已生成查询语句[：:]\s*)?\n?((?:SELECT|INSERT|UPDATE|DELETE|DROP|CREATE|ALTER)\s+[\s\S]+?(?:;|\n\n|$))/i);
+      const plainMatch = displayText.match(/(?:已生成SQL语句[：:]\s*)?\n?((?:SELECT|INSERT|UPDATE|DELETE|DROP|CREATE|ALTER)\s+[\s\S]+?(?:;|\n\n|$))/i);
       if (plainMatch && plainMatch[1]) {
         // 简单的二次校验：长度大于 10 且包含空格，避免误判
         const potentialSql = plainMatch[1].trim();
@@ -131,10 +132,14 @@ export const Workspace: React.FC<WorkspaceProps> = ({ project, onBack }) => {
   const [editingSessionId, setEditingSessionId] = useState<string | null>(null);
   const [editName, setEditName] = useState('');
 
+  // Project Info Modal
+  const [isInfoModalOpen, setIsInfoModalOpen] = useState(false);
+
   // 聊天交互状态
   const [inputValue, setInputValue] = useState('');
   const [isSending, setIsSending] = useState(false); // 发送中/思考中
   const [isTyping, setIsTyping] = useState(false);   // 打字机效果进行中
+  const [selectedModel, setSelectedModel] = useState<string>('xiyan-sql'); // 模型选择
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const activeSession = sessions.find(s => s.id === activeSessionId);
@@ -300,7 +305,7 @@ export const Workspace: React.FC<WorkspaceProps> = ({ project, onBack }) => {
 
     try {
       // 2. 调用后端 API 发送消息
-      const res = await sessionApi.sendMessage(Number(activeSessionId), textToSend);
+      const res = await sessionApi.sendMessage(Number(activeSessionId), textToSend, selectedModel);
 
       // 3. 处理响应并转换格式
       const aiMsg = mapBackendMessageToFrontend(res);
@@ -343,12 +348,43 @@ export const Workspace: React.FC<WorkspaceProps> = ({ project, onBack }) => {
 
   // --- 处理高危操作确认 ---
   // 后端返回 requiresConfirmation=true 时，用户点击按钮触发
-  const handleConfirmation = (action: 'confirm' | 'cancel') => {
+  const handleConfirmation = async (messageId: string, action: 'confirm' | 'cancel') => {
     if (action === 'confirm') {
-      // 发送确认指令，后端 Session 上下文会识别
-      handleSend("确认执行");
+      try {
+        setIsSending(true);
+        // 调用确认 API
+        const res = await sessionApi.confirmMessage(Number(messageId));
+        const aiMsg = mapBackendMessageToFrontend(res);
+
+        setSessions(prev => prev.map(s => {
+          if (s.id !== activeSessionId) return s;
+
+          // 更新原消息状态，移除确认按钮
+          const updatedMessages = s.messages.map(m =>
+            m.id === messageId ? { ...m, requiresConfirmation: false } : m
+          );
+
+          return {
+            ...s,
+            messages: [...updatedMessages, aiMsg]
+          };
+        }));
+      } catch (error) {
+        console.error('Confirm message failed:', error);
+        GlobalMessage.error('执行失败');
+      } finally {
+        setIsSending(false);
+      }
     } else {
+      // 取消操作
       handleSend("取消");
+      // 隐藏原消息的确认按钮
+      setSessions(prev => prev.map(s =>
+        s.id === activeSessionId ? {
+          ...s,
+          messages: s.messages.map(m => m.id === messageId ? { ...m, requiresConfirmation: false } : m)
+        } : s
+      ));
     }
   };
 
@@ -436,6 +472,9 @@ export const Workspace: React.FC<WorkspaceProps> = ({ project, onBack }) => {
               当前会话: {activeSession?.name || '未选择'}
             </p>
           </div>
+          <Button variant="default" icon={<Info size={16} />} onClick={() => setIsInfoModalOpen(true)}>
+            项目详情
+          </Button>
         </div>
 
         {/* 消息列表区 */}
@@ -497,7 +536,7 @@ export const Workspace: React.FC<WorkspaceProps> = ({ project, onBack }) => {
                             <div className={`mt-3 p-3 border rounded-md animate-in fade-in slide-in-from-top-2 ${isHighRisk ? 'bg-red-50 border-red-200' : 'bg-yellow-50 border-yellow-200'}`}>
                               <div className={`flex items-center gap-2 font-bold text-xs mb-2 ${isHighRisk ? 'text-red-700' : 'text-yellow-700'}`}>
                                 <AlertTriangle size={14} />
-                                {isHighRisk ? '高危操作警告' : '操作确认'}
+                                {isHighRisk ? '需确认操作' : '操作确认'}
                               </div>
                               <p className="text-xs text-gray-600 mb-3">
                                 {isHighRisk
@@ -508,7 +547,7 @@ export const Workspace: React.FC<WorkspaceProps> = ({ project, onBack }) => {
                                 <Button
                                   variant={isHighRisk ? 'danger' : 'primary'}
                                   className="h-7 px-3 text-xs"
-                                  onClick={() => handleConfirmation('confirm')}
+                                  onClick={() => handleConfirmation(msg.id, 'confirm')}
                                   icon={<Play size={12} fill="currentColor" />}
                                   disabled={isSending}
                                 >
@@ -517,7 +556,7 @@ export const Workspace: React.FC<WorkspaceProps> = ({ project, onBack }) => {
                                 <Button
                                   variant="default"
                                   className="h-7 px-3 text-xs"
-                                  onClick={() => handleConfirmation('cancel')}
+                                  onClick={() => handleConfirmation(msg.id, 'cancel')}
                                   icon={<Ban size={12} />}
                                   disabled={isSending}
                                 >
@@ -532,7 +571,7 @@ export const Workspace: React.FC<WorkspaceProps> = ({ project, onBack }) => {
                             <div className="mt-4 bg-white rounded-lg border border-gray-200 overflow-hidden shadow-sm">
                               <div className="px-4 py-2 bg-gray-50 border-b border-gray-200 flex items-center gap-2 text-xs font-semibold text-gray-600">
                                 <TableIcon size={14} />
-                                查询结果 ({msg.tableData.data.length} 条)
+                                {msg.sql && /^\s*(INSERT|UPDATE|DELETE|CREATE|ALTER|DROP)/i.test(msg.sql) ? '执行结果' : '查询结果'} ({msg.tableData.data.length} 条)
                               </div>
                               <div className="overflow-x-auto max-h-[300px]">
                                 <table className="w-full text-sm text-left">
@@ -590,7 +629,8 @@ export const Workspace: React.FC<WorkspaceProps> = ({ project, onBack }) => {
 
         {/* 底部输入区 */}
         <div className="p-6 bg-white border-t border-gray-200">
-          <div className="relative max-w-4xl mx-auto">
+          <div className="relative max-w-4xl mx-auto flex items-center">
+            {/* 输入框 */}
             <textarea
               value={inputValue}
               onChange={(e) => setInputValue(e.target.value)}
@@ -600,23 +640,60 @@ export const Workspace: React.FC<WorkspaceProps> = ({ project, onBack }) => {
                   handleSend();
                 }
               }}
-              placeholder={activeSessionId ? "输入您的指令，例如：查询本月销售额最高的商品..." : "请先选择左侧会话"}
-              className="w-full pl-4 pr-12 py-3 bg-gray-50 border border-gray-300 rounded-xl focus:ring-2 focus:ring-primary focus:border-primary resize-none shadow-sm text-sm h-14 overflow-hidden disabled:opacity-60 disabled:cursor-not-allowed"
+              placeholder={activeSessionId ? "输入您的指令..." : "请先选择左侧会话"}
+              // 关键修改：右侧内边距设置为 13rem (约 208px)，为右侧的控件组预留空间
+              className="w-full pl-4 pr-[13rem] py-4 bg-gray-50 border border-gray-300 rounded-xl focus:ring-2 focus:ring-primary focus:border-primary resize-none shadow-sm text-sm h-14 overflow-hidden disabled:opacity-60 disabled:cursor-not-allowed"
               disabled={isSending || !activeSessionId}
             />
-            <button
-              onClick={() => handleSend()}
-              disabled={isSending || !inputValue.trim() || !activeSessionId}
-              className="absolute right-3 top-3 p-2 bg-primary text-white rounded-lg hover:bg-primary-hover disabled:opacity-50 disabled:bg-gray-300 transition-colors shadow-sm"
-            >
-              {isSending ? <Loader2 size={16} className="animate-spin" /> : <Send size={16} />}
-            </button>
+
+            {/* 右侧控件组容器: 包含模型选择器和发送按钮 */}
+            <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-2">
+              {/* 模型选择器 */}
+              <div className="flex items-center bg-white border border-gray-200 rounded-lg shadow-sm px-2 h-9 hover:border-gray-300 transition-colors">
+                <Bot size={14} className="text-gray-400 mr-1.5" />
+                <span className="text-[10px] text-gray-400 mr-1 select-none">模型</span>
+                <select
+                  value={selectedModel}
+                  onChange={(e) => setSelectedModel(e.target.value)}
+                  className="text-xs bg-transparent border-none focus:ring-0 text-gray-700 font-medium cursor-pointer outline-none p-0 pr-1 max-w-[100px] truncate"
+                  title="选择模型"
+                >
+                  <option value="xiyan-sql">xiyan-sql</option>
+                  <option value="deepseek-v3">DeepSeek V3.1</option>
+                  <option value="my-finetuned-sql">my-finetuned-sql</option>
+                </select>
+              </div>
+
+              {/* 发送按钮 */}
+              <button
+                onClick={() => handleSend()}
+                disabled={isSending || !inputValue.trim() || !activeSessionId}
+                className="p-2 bg-primary text-white rounded-lg hover:bg-primary-hover disabled:opacity-50 disabled:bg-gray-300 transition-colors shadow-sm h-9 w-9 flex items-center justify-center"
+              >
+                {isSending ? <Loader2 size={16} className="animate-spin" /> : <Send size={16} />}
+              </button>
+            </div>
           </div>
           <p className="text-center text-xs text-gray-400 mt-2">
             AI 内容仅供参考。涉及增删改操作时，系统会请求二次确认。
           </p>
         </div>
       </div>
+
+      <Modal
+        isOpen={isInfoModalOpen}
+        onClose={() => setIsInfoModalOpen(false)}
+        title="项目详情"
+        maxWidth="max-w-6xl"
+        footer={<Button onClick={() => setIsInfoModalOpen(false)}>关闭</Button>}
+      >
+        <ProjectWizard
+          projectId={project.id}
+          onComplete={() => setIsInfoModalOpen(false)}
+          onClose={() => setIsInfoModalOpen(false)}
+          viewOnly={true}
+        />
+      </Modal>
     </div>
   );
 };

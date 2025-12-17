@@ -113,12 +113,26 @@ const App: React.FC = () => {
   };
 
   const handleProjectSelect = (projectDTO: ProjectDTO) => {
+    const dbTypeMap: Record<string, 'MySQL' | 'PostgreSQL' | 'SQLite'> = {
+      'mysql': 'MySQL',
+      'postgresql': 'PostgreSQL',
+      'sqlite': 'SQLite'
+    };
+
+    const statusMap: Record<string, 'active' | 'deploying' | 'error' | 'deleted'> = {
+      'initializing': 'deploying',
+      'pending_confirmation': 'deploying',
+      'active': 'active',
+      'deleted': 'deleted',
+      'error': 'error'
+    };
+
     const project: Project = {
-      id: projectDTO.project_id,
+      id: projectDTO.project_id.toString(),
       name: projectDTO.project_name,
-      type: projectDTO.db_type,
+      type: dbTypeMap[projectDTO.db_type.toLowerCase()] || 'MySQL',
       description: projectDTO.description,
-      status: projectDTO.project_status === 'initializing' ? 'deploying' : projectDTO.project_status,
+      status: statusMap[projectDTO.project_status.toLowerCase()] || 'active',
       createdAt: projectDTO.created_at
     };
 

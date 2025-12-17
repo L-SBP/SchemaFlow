@@ -1,4 +1,5 @@
 import client from './client.ts';
+import { ChatResponse } from '../types';
 
 // 对应文档: SessionResponse (会话信息)
 export interface SessionItem {
@@ -7,22 +8,6 @@ export interface SessionItem {
   project_id: number;
   created_at: string;
   last_activity: string | null;
-}
-
-// 对应文档: ChatResponse (消息体)
-export interface ChatMessageResponse {
-  message_id: number;
-  content: string;
-  // 文档定义: message_type: "user" | "assistant"
-  message_type: 'user' | 'assistant';
-  // 生成的 SQL 语句 (如果有)
-  sql_text?: string | null;
-  // SQL 类型 (如 SELECT, INSERT, UPDATE, DELETE, UNKNOWN)
-  sql_type?: string;
-  // 是否需要前端显示确认按钮 (通常用于高危操作)
-  requires_confirmation: boolean;
-  // 执行 SQL 后返回的数据结果集
-  data?: any[] | null;
 }
 
 export const sessionApi = {
@@ -81,9 +66,10 @@ export const sessionApi = {
    * 2.1 发送消息 (对话)
    * POST /api/v1/sessions/{session_id}/messages
    */
-  sendMessage: (sessionId: number, content: string) => {
-    return client.post<any, ChatMessageResponse>(`/v1/sessions/${sessionId}/messages`, {
-      content
+  sendMessage: (sessionId: number, content: string, model?: string) => {
+    return client.post<any, ChatResponse>(`/v1/sessions/${sessionId}/messages`, {
+      content,
+      model
     });
   },
 
@@ -92,6 +78,14 @@ export const sessionApi = {
    * GET /api/v1/sessions/{session_id}/messages
    */
   getMessages: (sessionId: number) => {
-    return client.get<any, ChatMessageResponse[]>(`/v1/sessions/${sessionId}/messages`);
+    return client.get<any, ChatResponse[]>(`/v1/sessions/${sessionId}/messages`);
+  },
+
+  /**
+   * 2.3 确认消息 (执行 SQL)
+   * POST /api/v1/messages/{message_id}/confirm
+   */
+  confirmMessage: (messageId: number) => {
+    return client.post<any, ChatResponse>(`/v1/messages/${messageId}/confirm`);
   }
 };
