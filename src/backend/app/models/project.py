@@ -15,12 +15,23 @@ from sqlalchemy.orm import relationship
 class Project(Base):
     """
     项目表 ORM 模型，存储用户业务场景的逻辑定义。
+
+    Attributes:
+        project_id (int): 项目ID。
+        user_id (int): 所属用户ID。
+        instance_id (int): 关联的数据库实例ID。
+        project_name (str): 项目名称。
+        description (str): 业务需求描述。
+        schema_definition (dict): AI生成的DDL结构。
+        project_status (str): 项目状态。
+        created_at (datetime): 创建时间。
+        updated_at (datetime): 最后更新时间。
     """
     __tablename__ = 'project'
 
     # 表注释和约束
     __table_args__ = (
-        # 【保留你的修改】必须包含 'completed'，否则部署成功后改状态会报错
+        # 必须包含 'completed'，否则部署成功后改状态会报错
         CheckConstraint(
             "project_status IN ('active', 'initializing', 'pending_confirmation', 'deleted', 'completed')",
             name='ck_project_status'
@@ -76,7 +87,7 @@ class Project(Base):
         comment='AI生成的DDL建表语句'
     )
 
-    # 👇【新增合并】这是你同学加的新字段，用于存 ER 图代码
+    # 新字段，用于存 ER 图代码
     er_diagram_code = Column(
         Text,
         nullable=True,

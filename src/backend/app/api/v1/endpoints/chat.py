@@ -1,5 +1,7 @@
 """
 聊天 API 端点。
+
+处理用户发送消息、获取历史记录，以及与 AI 模型的交互逻辑。
 """
 
 import sqlparse
@@ -7,9 +9,12 @@ from fastapi import APIRouter, Depends, HTTPException, Path
 from sqlalchemy.ext.asyncio import AsyncSession
 from typing import List, Any
 
+# 1. 导入核心工具
 from core.log import log
 from service.chat_service import process_chat, confirm_and_execute_sql
 from crud.crud_message import crud_message
+
+# 3. 导入 Schema
 from schema.chat import ChatResponse, ChatRequest, MessageType
 from schema.user import UserMe
 from api.v1.deps import get_current_active_user, get_db
@@ -17,7 +22,15 @@ from api.v1.deps import get_current_active_user, get_db
 router = APIRouter()
 
 def _format_history_response(raw_messages: List[Any]) -> List[ChatResponse]:
-    """格式化消息历史，包含兜底 SQL 解析"""
+    """
+    格式化消息历史，提取 SQL 信息。
+
+    Args:
+        raw_messages (List[Any]): 原始消息列表。
+
+    Returns:
+        List[ChatResponse]: 格式化后的响应列表。
+    """
     clean_history = []
     for msg in raw_messages:
         sql_text = None
@@ -25,6 +38,7 @@ def _format_history_response(raw_messages: List[Any]) -> List[ChatResponse]:
         
         # 1. 尝试从数据库元数据获取
         if msg.ai_statement:
+            # 兼容列表或单对象，取第一个核心 SQL
             stmt = msg.ai_statement[0] if isinstance(msg.ai_statement, list) and len(msg.ai_statement) > 0 else msg.ai_statement
             if stmt and hasattr(stmt, 'sql_text'):
                 sql_text = stmt.sql_text
@@ -61,13 +75,28 @@ async def send_message(
     db: AsyncSession = Depends(get_db),
     current_user: UserMe = Depends(get_current_active_user)
 ):
+    """
+    发送消息给 AI，并获取 SQL 生成结果。
+
+    Args:
+        session_id (int): 会话 ID。
+        chat_request (ChatRequest): 聊天请求体。
+        db (AsyncSession): 数据库会话。
+        current_user (UserMe): 当前登录用户。
+
+    Returns:
+        ChatResponse: AI 响应结果。
+
+    Raises:
+        HTTPException: 内部错误(500)。
+    """
     try:
         return await process_chat(
             db=db, session_id=session_id, user_input=chat_request.content,
             user_id=current_user.user_id, selected_model=chat_request.model 
         )
     except Exception as e:
-        # ✅ 修复：安全的日志记录方式
+        # 安全的日志记录方式
         log.error("Chat Error: {}", str(e), exc_info=True)
         raise HTTPException(status_code=500, detail="Internal Server Error processing chat")
 
@@ -77,6 +106,20 @@ async def get_history(
     db: AsyncSession = Depends(get_db),
     current_user: UserMe = Depends(get_current_active_user)
 ):
+    """
+    获取会话历史消息。
+
+    Args:
+        session_id (int): 会话 ID。
+        db (AsyncSession): 数据库会话。
+        current_user (UserMe): 当前登录用户。
+
+    Returns:
+        List[ChatResponse]: 历史消息列表。
+
+    Raises:
+        HTTPException: 获取失败(500)。
+    """
     try:
         raw_messages = await crud_message.get_recent_messages(db, session_id, limit=50)
         return _format_history_response(raw_messages)

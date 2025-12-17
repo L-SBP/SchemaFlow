@@ -30,20 +30,22 @@ from models.session import Session as SessionModel
 from schema.chat import ChatResponse, MessageType
 from service.mysql_service import execute_sql_with_user_check
 
-# 【关键融合 1】必须导入这些模型类，否则确认接口无法运行
+# 必须导入这些模型类，否则确认接口无法运行
 from models.message import Message as MessageModel 
 from models.project import Project as ProjectModel
 
 # =========================================================
-# 1. 模型配置注册表 (保留同学的更新)
+# 1. 模型配置注册表
 # =========================================================
 
 MODEL_REGISTRY = {
     "my-finetuned-sql": {
         "name": "My Fine-Tuned SQL Model",
-        "api_url": "http://1.92.127.206:8080/v1/chat/completions", 
+        # 1. 填入云服务器地址 (保留 /v1/chat/completions)
+        "api_url": "http://1.92.127.206:8080/v1/chat/completions",
         "model_id": "codellama/CodeLlama-13b-Instruct-hf",
-        "api_key": "sk-2025texttosql", 
+        # 2. 填入真实密钥
+        "api_key": "sk-2025texttosql",
         "type": "local_finetune"
     },
     "xiyan-sql": {
@@ -72,7 +74,7 @@ MODEL_REGISTRY = {
 DEFAULT_MODEL = "my-finetuned-sql"
 
 # =========================================================
-# 2. 辅助函数 (保留同学优化的 Prompt 策略)
+# 2. 辅助函数
 # =========================================================
 
 def _build_ai_messages(model_config: Dict, schema_text: str, question: str) -> List[Dict]:
@@ -173,7 +175,7 @@ async def call_ai_agent(ddl_text: str, question: str, model_key: str = None) -> 
 
     try:
         async with httpx.AsyncClient(timeout=300.0) as client:
-            # 【保留同学的 UTF-8 修复】这很重要，防止中文乱码
+            # 【保留 UTF-8 修复】这很重要，防止中文乱码
             resp = await client.post(
                 config["api_url"], 
                 content=json.dumps(payload, ensure_ascii=False).encode("utf-8"), 
@@ -188,16 +190,21 @@ async def call_ai_agent(ddl_text: str, question: str, model_key: str = None) -> 
             content = raw["choices"][0]["message"]["content"]
         
         # 清洗数据
+        # 1. 如果模型输出了停止符，只取前面的部分
         if "<|im_end|>" in content:
             content = content.split("<|im_end|>")[0]
         if "<|im_start|>" in content:
             content = content.split("<|im_start|>")[0]
             
+        # 2. 有时候模型会把 SQL 写在 Markdown 块里，先去 Markdown
         clean_sql = content.strip().replace("```sql", "").replace("```", "").strip()
         
+        # 3. 如果还是有多行，且第一行就是完整的 SQL (以分号结尾)，就只取第一行
+        # 防止它在 SQL 后面通过换行继续自言自语
         if ";\n" in clean_sql:
              clean_sql = clean_sql.split(";\n")[0] + ";"
         elif clean_sql.count(";") > 1:
+             # 如果有多条 SQL，只取第一条
              clean_sql = clean_sql.split(";")[0] + ";"
              
         return clean_sql
@@ -223,7 +230,7 @@ async def process_chat(
     # 1. 验证会话权限
     project_id = await _verify_session_ownership(db, session_id, user_id)
 
-    # 2. 获取 Session 对象
+    # 2. 获取 Session 对象以处理模型记忆逻辑
     stmt = select(SessionModel).where(SessionModel.session_id == session_id)
     result = await db.execute(stmt)
     session_obj = result.scalar_one_or_none()
@@ -234,15 +241,18 @@ async def process_chat(
     # =========================================================
     # 模型选择优先级策略
     # =========================================================
-    final_model_key = DEFAULT_MODEL
+    final_model_key = DEFAULT_MODEL # 兜底
+
     if selected_model:
+        # A. 如果用户本次明确指定了模型 -> 使用它，并更新到数据库（记忆）
         final_model_key = selected_model
         if session_obj.current_model != selected_model:
             session_obj.current_model = selected_model
             db.add(session_obj)
-            await db.commit()
+            await db.commit() # 保存记忆
             log.info(f"Session {session_id} model switched to: {selected_model}")
     elif session_obj.current_model:
+        # B. 如果用户没指定，但数据库里有记忆 -> 使用记忆的模型
         final_model_key = session_obj.current_model
         log.info(f"Session {session_id} using stored model: {final_model_key}")
     else:
@@ -254,13 +264,14 @@ async def process_chat(
     await crud_message.create_message(db, session_id, user_input, role="user")
 
     # 4. 获取 DDL 上下文
-    # 【符合需求】直接读取 project.ddl_statement，解决表名大小写敏感问题
+    # 直接读取 project.ddl_statement，不再使用 schema_definition 进行转换
     project = await crud_project.get(db, project_id)
     ddl_text = ""
     if project and project.ddl_statement:
         ddl_text = project.ddl_statement
         log.info(f"Using DDL for project {project_id} (Length: {len(ddl_text)})")
     else:
+        # 虽然假设 ddl_statement 一定不为空，但为了稳健性保留一个 Warning
         log.warning(f"Project {project_id} has empty ddl_statement!")
         ddl_text = "-- Error: No DDL found for this project."
 
@@ -305,8 +316,10 @@ async def process_chat(
             
             # 【同学的优化】统一数据格式为 List[Dict]
             if isinstance(raw_result, dict):
+            # 如果是 DML 返回的字典，包裹成列表
                 data = [raw_result]
             elif isinstance(raw_result, list):
+            # 如果是 DQL 返回的列表，直接使用
                 data = raw_result
             else:
                 data = []
