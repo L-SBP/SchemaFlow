@@ -152,6 +152,16 @@ export const ProjectWizard: React.FC<ProjectWizardProps> = ({ projectId, onCompl
         target = 0;
     }
 
+    // 修复：如果处于已完成阶段且进度为0（刚打开弹窗），直接显示100%，避免重新跑进度条
+    if (visualProgress === 0 && (
+      stage === CreationStageEnum.SCHEMA_GENERATED ||
+      stage === CreationStageEnum.DDL_GENERATED ||
+      stage === CreationStageEnum.COMPLETED
+    )) {
+      setVisualProgress(100);
+      return;
+    }
+
     const timer = setInterval(() => {
       setVisualProgress(prev => {
         if (prev >= target) return prev;
@@ -182,6 +192,10 @@ export const ProjectWizard: React.FC<ProjectWizardProps> = ({ projectId, onCompl
     try {
       setLoading(true);
       setVisualProgress(0); // Reset progress for next stage
+
+      // 乐观更新：立即切换到生成 DDL 状态，显示进度条
+      setProject(prev => prev ? { ...prev, creation_stage: CreationStageEnum.GENERATING_DDL } : null);
+
       await generateDDL(project.project_id, editedSchema, requirements);
       // State update will happen on next poll
     } catch (err) {
@@ -196,6 +210,10 @@ export const ProjectWizard: React.FC<ProjectWizardProps> = ({ projectId, onCompl
     try {
       setLoading(true);
       setVisualProgress(0); // Reset progress for next stage
+
+      // 乐观更新：立即切换到执行 DDL 状态，显示进度条
+      setProject(prev => prev ? { ...prev, creation_stage: CreationStageEnum.EXECUTING_DDL } : null);
+
       await deployProject(project.project_id, editedDDL);
       // State update will happen on next poll
     } catch (err) {
