@@ -75,6 +75,10 @@ export const Reports: React.FC<ReportsProps> = ({ projects }) => {
   const [step, setStep] = useState(0);
   const [selectedQueryId, setSelectedQueryId] = useState<string>('');
 
+  // Delete confirm modal
+  const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
+  const [deleteReportId, setDeleteReportId] = useState<string>('');
+
   // Form State
   const [reportName, setReportName] = useState('');
   const [reportType, setReportType] = useState<ReportType>('bar');
@@ -165,13 +169,19 @@ export const Reports: React.FC<ReportsProps> = ({ projects }) => {
 
   // --- API: Delete Report ---
   const handleDelete = async (id: string) => {
-    if (confirm('确定要删除此报表吗？')) {
-      try {
-        await reportApi.deleteReport(id);
-        setReports(prev => prev.filter(r => r.id !== id));
-      } catch (error) {
-        console.error("Delete failed", error);
-      }
+    setDeleteReportId(id);
+    setIsDeleteModalOpen(true);
+  };
+
+  const confirmDelete = async () => {
+    if (!deleteReportId) return;
+    try {
+      await reportApi.deleteReport(deleteReportId);
+      setReports(prev => prev.filter(r => r.id !== deleteReportId));
+      setIsDeleteModalOpen(false);
+      setDeleteReportId('');
+    } catch (error) {
+      console.error("Delete failed", error);
     }
   };
 
@@ -183,8 +193,30 @@ export const Reports: React.FC<ReportsProps> = ({ projects }) => {
     if (!data || data.length === 0) return <div className="text-center text-gray-400">无数据</div>;
 
     const CommonGrid = <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f0f0f0" />;
-    const CommonX = <XAxis dataKey={X} fontSize={11} tickLine={false} axisLine={{ stroke: '#e5e7eb' }} />;
-    const CommonY = <YAxis fontSize={11} tickLine={false} axisLine={false} />;
+    const xValue = (data?.[0] as any)?.[X];
+    const yValue = (data?.[0] as any)?.[Y];
+
+    const xIsNumber = typeof xValue === 'number';
+    const yIsNumber = typeof yValue === 'number';
+
+    const CommonX = (
+      <XAxis
+        dataKey={X}
+        type={xIsNumber ? 'number' : 'category'}
+        fontSize={11}
+        tickLine={false}
+        axisLine={{ stroke: '#e5e7eb' }}
+      />
+    );
+    const CommonY = (
+      <YAxis
+        dataKey={Y}
+        type={yIsNumber ? 'number' : 'category'}
+        fontSize={11}
+        tickLine={false}
+        axisLine={false}
+      />
+    );
     const CommonTooltip = <Tooltip cursor={{ fill: '#f9fafb' }} contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 12px rgba(0,0,0,0.1)' }} />;
 
     return (
@@ -207,11 +239,11 @@ export const Reports: React.FC<ReportsProps> = ({ projects }) => {
             <Tooltip />
           </RePieChart>
         ) : (
-          <ScatterChart>
+          <ReScatterChart>
             {CommonGrid} {CommonX} {CommonY} {CommonTooltip}
             <ZAxis type="number" range={[60, 400]} />
             <Scatter name={Y} data={data} fill="#1677ff" />
-          </ScatterChart>
+          </ReScatterChart>
         )}
       </ResponsiveContainer>
     );
@@ -468,6 +500,32 @@ export const Reports: React.FC<ReportsProps> = ({ projects }) => {
               </div>
             </div>
           )}
+        </div>
+      </Modal>
+
+      {/* Delete Confirm Modal */}
+      <Modal
+        isOpen={isDeleteModalOpen}
+        onClose={() => {
+          setIsDeleteModalOpen(false);
+          setDeleteReportId('');
+        }}
+        title="删除报表"
+        maxWidth="max-w-md"
+        footer={
+          <div className="flex justify-end gap-2 w-full">
+            <Button onClick={() => {
+              setIsDeleteModalOpen(false);
+              setDeleteReportId('');
+            }}>取消</Button>
+            <Button variant="primary" className="bg-red-500 hover:bg-red-600" onClick={confirmDelete}>
+              删除
+            </Button>
+          </div>
+        }
+      >
+        <div className="text-sm text-gray-600">
+          确定要删除此报表吗？该操作不可恢复。
         </div>
       </Modal>
     </div>
