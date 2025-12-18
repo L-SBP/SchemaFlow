@@ -185,7 +185,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ role, user, selectedProject, a
                 </div>
 
                 {/* 底部：当前用户信息（头像/名称/角色） + 菜单（个人设置/退出登录） */}
-                <div className="border-t border-gray-100 p-3" ref={userMenuRef}>
+                <div className="border-t border-gray-100 p-3 relative" ref={userMenuRef}>
                     <button
                         type="button"
                         onClick={() => setIsUserMenuOpen(v => !v)}
@@ -208,7 +208,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ role, user, selectedProject, a
 
                     {isUserMenuOpen && (
                         <div
-                            className={`mt-2 bg-white rounded-lg shadow-lg border border-gray-100 py-1 animate-in fade-in zoom-in-95 duration-100 origin-bottom ${isCollapsed ? 'md:absolute md:left-full md:bottom-3 md:ml-2 md:w-48' : 'w-full'}`}
+                            className={`${isCollapsed ? 'md:absolute md:left-full md:bottom-3 md:ml-2 md:w-48' : 'absolute left-0 bottom-full mb-2 w-full'} bg-white rounded-lg shadow-lg border border-gray-100 py-1 animate-in fade-in zoom-in-95 duration-100 origin-top z-50`}
                         >
                             <button
                                 onClick={() => {

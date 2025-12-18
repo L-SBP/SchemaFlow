@@ -15,7 +15,8 @@
     "mermaid": "^11.12.2",
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
-    "recharts": "^3.4.1"
+    "recharts": "^3.4.1",
+    "html-to-image": "^1.10.11"
   },
   "devDependencies": {
     "@types/node": "^22.14.0",

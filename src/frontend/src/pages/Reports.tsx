@@ -5,6 +5,7 @@ import { Plus, BarChart2, PieChart, TrendingUp, Download, Trash2, Edit2, Filter,
 import { BarChart, Bar, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart as RePieChart, Pie, Cell, ScatterChart as ReScatterChart, Scatter, ZAxis } from 'recharts';
 import { reportApi, HistoryQuery } from '../api/reports.ts'; // 导入 API
 import { fetchProjects, ProjectDTO } from '../api/project.ts';
+import { toPng } from 'html-to-image';
 
 interface ReportsProps {
   projects?: Project[];
@@ -69,6 +70,12 @@ export const Reports: React.FC<ReportsProps> = ({ projects }) => {
   const [historyQueries, setHistoryQueries] = useState<HistoryQuery[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+
+  // Export image
+  const [isExportModalOpen, setIsExportModalOpen] = useState(false);
+  const [exportImageUrl, setExportImageUrl] = useState<string>('');
+  const [exportImageName, setExportImageName] = useState<string>('');
+  const [exportingReportId, setExportingReportId] = useState<string>('');
 
   // State: UI
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -184,6 +191,42 @@ export const Reports: React.FC<ReportsProps> = ({ projects }) => {
     } catch (error) {
       console.error("Delete failed", error);
     }
+  };
+
+  // 导出报表为图片
+  const exportReportAsImage = async (reportId: string, name?: string) => {
+    const el = document.getElementById(`report-chart-${reportId}`);
+    if (!el) {
+      alert('未找到图表元素，导出失败');
+      return;
+    }
+
+    try {
+      setExportingReportId(reportId);
+      const dataUrl = await toPng(el, {
+        cacheBust: true,
+        backgroundColor: '#ffffff',
+        pixelRatio: 2,
+      });
+
+      const safeName = (name || 'report').replace(/[^a-zA-Z0-9-_\.\u4e00-\u9fa5]/g, '_');
+      setExportImageUrl(dataUrl);
+      setExportImageName(safeName);
+      setIsExportModalOpen(true);
+    } catch (err) {
+      console.error('Export failed', err);
+      alert('导出失败，请在控制台查看错误信息');
+    } finally {
+      setExportingReportId('');
+    }
+  };
+
+  const downloadExportedImage = () => {
+    if (!exportImageUrl) return;
+    const link = document.createElement('a');
+    link.href = exportImageUrl;
+    link.download = `${exportImageName || 'report'}.png`;
+    link.click();
   };
 
   const renderDynamicChart = (report: Partial<Report>, height: number | string = "100%") => {
@@ -303,6 +346,13 @@ export const Reports: React.FC<ReportsProps> = ({ projects }) => {
                   <div className="flex gap-2">
                     <Button
                       variant="text"
+                      className="h-8 text-xs px-2 text-gray-700 hover:bg-gray-50"
+                      icon={exportingReportId === report.id ? <Loader2 className="animate-spin" size={14} /> : <Download size={14} />}
+                      disabled={exportingReportId === report.id}
+                      onClick={() => exportReportAsImage(report.id, report.name)}
+                    />
+                    <Button
+                      variant="text"
                       className="h-8 text-xs px-2 text-red-500 hover:bg-red-50"
                       icon={<Trash2 size={14} />}
                       onClick={() => handleDelete(report.id)}
@@ -311,7 +361,7 @@ export const Reports: React.FC<ReportsProps> = ({ projects }) => {
                 </div>
 
                 <div className="p-6 flex flex-col gap-4">
-                  <div className="h-[400px] w-full">
+                  <div id={`report-chart-${report.id}`} className="h-[400px] w-full bg-white">
                     {renderDynamicChart(report)}
                   </div>
                 </div>
@@ -320,6 +370,34 @@ export const Reports: React.FC<ReportsProps> = ({ projects }) => {
           ))}
         </div>
       )}
+
+      {/* Export Preview Modal */}
+      <Modal
+        isOpen={isExportModalOpen}
+        onClose={() => {
+          setIsExportModalOpen(false);
+          setExportImageUrl('');
+          setExportImageName('');
+        }}
+        title="导出图片预览"
+        maxWidth="max-w-4xl"
+        footer={
+          <div className="flex justify-end gap-2 w-full">
+            <Button onClick={() => setIsExportModalOpen(false)}>关闭</Button>
+            <Button variant="primary" icon={<Download size={16} />} onClick={downloadExportedImage} disabled={!exportImageUrl}>
+              下载 PNG
+            </Button>
+          </div>
+        }
+      >
+        <div className="max-h-[70vh] overflow-auto bg-gray-50 border border-gray-200 rounded-lg p-3">
+          {exportImageUrl ? (
+            <img src={exportImageUrl} alt={exportImageName || 'report'} className="max-w-full h-auto mx-auto" />
+          ) : (
+            <div className="text-center text-gray-500 py-10">暂无预览</div>
+          )}
+        </div>
+      </Modal>
 
       {/* Creation Wizard Modal */}
       <Modal
