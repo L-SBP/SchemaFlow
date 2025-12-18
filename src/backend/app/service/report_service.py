@@ -150,15 +150,16 @@ async def get_history_queries_service(
     from models.message import Message
     from models.session import Session as SessionModel
 
-    # 构造查询：Query Result -> Statement -> Message -> Session
-    # 我们需要 Message.content (用户问题) 和 QueryResult (数据)
+    # 构造查询：Query Result -> Statement -> Message(assistant) -> Session
+    # 说明：AIGeneratedStatement.message_id 绑定的是 assistant 消息。
+    # 为了展示“用户的提问”，我们会再回查同会话中该 assistant 消息之前最近的一条 user 消息。
     stmt = (
         select(QueryResult, Message)
         .join(AIGeneratedStatement, QueryResult.statement_id == AIGeneratedStatement.statement_id)
         .join(Message, AIGeneratedStatement.message_id == Message.message_id)
         .join(SessionModel, Message.session_id == SessionModel.session_id)
         .where(SessionModel.project_id == project_id)
-        .where(Message.message_type == 'user')  # 确保我们取的是用户发的消息（提问）
+        .where(Message.message_type == 'assistant')
         .order_by(QueryResult.cached_at.desc())
     )
 
@@ -224,10 +225,29 @@ async def get_history_queries_service(
         columns = _extract_columns(normalized)
         fields = _infer_fields(normalized, columns)
 
+        # 回查用户提问：同 session 内，assistant 消息之前最近的一条 user 消息
+        query_text = msg_obj.content
+        try:
+            stmt_user = (
+                select(Message)
+                .where(Message.session_id == msg_obj.session_id)
+                .where(Message.message_type == 'user')
+                .where(Message.created_at <= msg_obj.created_at)
+                .order_by(Message.created_at.desc())
+                .limit(1)
+            )
+            user_res = await db.execute(stmt_user)
+            user_msg = user_res.scalar_one_or_none()
+            if user_msg and user_msg.content:
+                query_text = user_msg.content
+        except Exception:
+            # 兜底：保持 assistant 内容（不影响 rows 返回）
+            pass
+
         history.append(schemas.HistoryQuery(
             id=str(query_res.result_id),
             projectId=str(project_id),
-            queryText=msg_obj.content,
+            queryText=query_text,
             timestamp=query_res.cached_at.isoformat() if query_res.cached_at else 'N/A',
             result=schemas.HistoryQueryResult(columns=columns, fields=fields, data=normalized)
         ))
