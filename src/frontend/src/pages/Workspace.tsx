@@ -64,8 +64,12 @@ const mapBackendMessageToFrontend = (msg: ChatResponse): Message => {
   let displayText = msg.content || '';
   let sqlText = msg.sql_text;
 
+  // 判断是否是错误消息
+  const isError = displayText.trim().startsWith('❌');
+
   // --- 关键修复：如果后端未返回 sql_text (如历史记录)，尝试从文本提取 ---
-  if (!sqlText) {
+  // FIX: 如果是错误消息，不尝试提取 SQL，避免将错误详情中的 SQL 关键字误判为代码
+  if (!sqlText && !isError) {
     // 1. 尝试匹配 Markdown 代码块 (```sql ... ```)
     const markdownMatch = displayText.match(/```(sql)?\s*([\s\S]*?)\s*```/i);
     if (markdownMatch && markdownMatch[2]) {
@@ -502,8 +506,8 @@ export const Workspace: React.FC<WorkspaceProps> = ({ project, onBack }) => {
                     <div className={`max-w-[85%] lg:max-w-[75%] ${msg.role === 'user' ? 'order-2' : 'order-1'}`}>
                       <div className={`flex items-start gap-3 ${msg.role === 'user' ? 'flex-row-reverse' : 'flex-row'}`}>
                         {/* 头像 */}
-                        <div className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 text-xs shadow-sm ${msg.role === 'user' ? 'bg-primary text-white' : 
-                            isError ? 'bg-red-100 text-red-600 border border-red-200' : 'bg-white border border-gray-200 text-primary'
+                        <div className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 text-xs shadow-sm ${msg.role === 'user' ? 'bg-primary text-white' :
+                          isError ? 'bg-red-100 text-red-600 border border-red-200' : 'bg-white border border-gray-200 text-primary'
                           }`}>
                           {msg.role === 'user' ? '我' : isError ? <AlertTriangle size={14} /> : <Sparkles size={14} />}
                         </div>
