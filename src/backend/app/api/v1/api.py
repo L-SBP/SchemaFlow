@@ -12,7 +12,8 @@ from .endpoints import (
     knowledge,
     chat,
     session,
-    announcement # <--- 1. 导入新模块
+    announcement, # <--- 1. 导入新模块
+    database
 )
 
 api_router = APIRouter()
@@ -33,3 +34,4 @@ api_router.include_router(session.router, prefix="/sessions", tags=["VIII. 会�
 # 2. 注册公告模块
 # 这里的 prefix="/announcements" 完美对应了你文档中的 GET /announcements
 api_router.include_router(announcement.router, prefix="/announcements", tags=["IX. 系统公告"])
+api_router.include_router(database.router, prefix="/database", tags=["X. 数据库管理"])

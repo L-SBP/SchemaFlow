@@ -1,9 +1,10 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Project, Message, QueryResult, ChatSession, ChatResponse } from '../types';
 import { Button, message as GlobalMessage, Modal } from '../components/UI';
-import { Send, Plus, MessageSquare, Edit2, Trash2, Check, X, ChevronLeft, Loader2, Sparkles, AlertTriangle, Play, Ban, Table as TableIcon, Info, Bot } from 'lucide-react';
+import { Send, Plus, MessageSquare, Edit2, Trash2, Check, X, ChevronLeft, Loader2, Sparkles, AlertTriangle, Play, Ban, Table as TableIcon, Info, Bot, Database, PanelLeftClose, PanelLeftOpen, PanelRightClose, PanelRightOpen } from 'lucide-react';
 import { sessionApi } from '../api/session';
 import { ProjectWizard } from '../components/ProjectWizard';
+import DatabaseViewer from './DatabaseViewer';
 
 interface WorkspaceProps {
   project: Project;
@@ -131,6 +132,10 @@ export const Workspace: React.FC<WorkspaceProps> = ({ project, onBack }) => {
   const [loadingSessions, setLoadingSessions] = useState(false);
   // loadingMessages 未直接使用在 JSX 中，但可用于后续扩展 loading 骨架屏
   const [loadingMessages, setLoadingMessages] = useState(false);
+
+  // 布局状态：左右面板最小化/展开
+  const [isLeftPanelOpen, setIsLeftPanelOpen] = useState(true);
+  const [isRightPanelOpen, setIsRightPanelOpen] = useState(true);
 
   // 会话重命名状态
   const [editingSessionId, setEditingSessionId] = useState<string | null>(null);
@@ -393,92 +398,81 @@ export const Workspace: React.FC<WorkspaceProps> = ({ project, onBack }) => {
   };
 
   return (
-    <div className="h-full flex bg-white">
-      {/* 侧边栏: 会话列表 */}
-      <div className="w-64 bg-gray-50 border-r border-gray-200 flex flex-col shrink-0">
-        <div className="p-4 border-b border-gray-200">
-          <Button onClick={onBack} variant="text" className="mb-4 text-gray-500 hover:text-gray-800 -ml-2 text-sm">
-            <ChevronLeft size={16} className="mr-1" /> 返回项目列表
-          </Button>
-          <Button onClick={handleCreateSession} variant="primary" className="w-full justify-center" icon={<Plus size={16} />}>
-            新建会话
-          </Button>
+    <div className="h-full flex bg-white overflow-hidden">
+      {/* 左侧：数据库导航树 + 数据内容（可最小化） */}
+      <div
+        className={`${isLeftPanelOpen ? 'w-[420px]' : 'w-0'} transition-all duration-200 ease-in-out border-r border-gray-200 flex flex-col bg-white shrink-0 overflow-hidden`}
+      >
+        <div className="h-14 border-b border-gray-200 flex items-center justify-between px-4 bg-gray-50 shrink-0">
+          <div className="flex items-center gap-2 min-w-0">
+            <Database size={16} className="text-primary shrink-0" />
+            <span className="font-medium text-gray-700 truncate">数据库</span>
+          </div>
+          <button
+            onClick={() => setIsLeftPanelOpen(false)}
+            className="p-1.5 hover:bg-gray-200 rounded-md text-gray-500 transition-colors"
+            title="最小化数据库面板"
+            type="button"
+          >
+            <PanelLeftClose size={18} />
+          </button>
         </div>
-
-        <div className="flex-1 overflow-y-auto p-3 space-y-1">
-          {loadingSessions ? (
-            <div className="flex justify-center py-4"><Loader2 className="animate-spin text-gray-400" size={20} /></div>
-          ) : sessions.map(session => (
-            <div
-              key={session.id}
-              onClick={() => setActiveSessionId(session.id)}
-              className={`group flex items-center gap-3 px-3 py-3 rounded-lg text-sm cursor-pointer transition-colors border border-transparent ${activeSessionId === session.id
-                ? 'bg-white border-gray-200 shadow-sm text-primary'
-                : 'text-gray-600 hover:bg-gray-200/50'
-                }`}
-            >
-              <MessageSquare size={16} className="shrink-0" />
-
-              {editingSessionId === session.id ? (
-                <div className="flex-1 flex items-center gap-1 min-w-0">
-                  <input
-                    type="text"
-                    value={editName}
-                    onChange={(e) => setEditName(e.target.value)}
-                    onClick={(e) => e.stopPropagation()}
-                    onKeyDown={(e) => e.key === 'Enter' && saveRename(e)}
-                    className="w-full px-1 py-0.5 text-xs border border-primary rounded focus:outline-none"
-                    autoFocus
-                  />
-                  <button onClick={saveRename} className="p-1 hover:bg-green-100 text-green-600 rounded"><Check size={12} /></button>
-                  <button onClick={(e) => { e.stopPropagation(); setEditingSessionId(null); }} className="p-1 hover:bg-red-100 text-red-600 rounded"><X size={12} /></button>
-                </div>
-              ) : (
-                <>
-                  <span className="flex-1 truncate">{session.name}</span>
-                  <div className="hidden group-hover:flex items-center gap-1">
-                    <button
-                      onClick={(e) => startRenaming(e, session)}
-                      className="p-1 hover:bg-gray-200 rounded text-gray-400 hover:text-gray-600"
-                    >
-                      <Edit2 size={12} />
-                    </button>
-                    <button
-                      onClick={(e) => handleDeleteSession(e, session.id)}
-                      className="p-1 hover:bg-red-50 rounded text-gray-400 hover:text-red-500"
-                    >
-                      <Trash2 size={12} />
-                    </button>
-                  </div>
-                </>
-              )}
+        <div className="flex-1 min-h-0 overflow-hidden">
+          {activeSessionId ? (
+            <DatabaseViewer sessionId={Number(activeSessionId)} className="h-full w-full" />
+          ) : (
+            <div className="h-full flex flex-col items-center justify-center text-gray-400 p-6 text-center bg-gray-50/30">
+              <Database size={44} className="mb-3 opacity-20" />
+              <p className="text-sm">请选择/创建会话后查看数据库</p>
             </div>
-          ))}
-          {!loadingSessions && sessions.length === 0 && (
-            <div className="text-center text-xs text-gray-400 py-4">暂无会话，点击上方新建</div>
           )}
         </div>
       </div>
 
-      {/* 主区域: 聊天窗口 */}
+      {/* 中间：对话区 */}
       <div className="flex-1 flex flex-col min-w-0 bg-white">
         {/* 顶部标题栏 */}
         <div className="px-6 py-4 border-b border-gray-200 flex justify-between items-center bg-white sticky top-0 z-10 shadow-sm">
-          <div>
-            <div className="flex items-center gap-2 mb-1">
-              <h2 className="font-bold text-gray-800 text-lg">{project.name}</h2>
-              <span className="px-2 py-0.5 bg-gray-100 text-gray-500 text-xs rounded-full border border-gray-200">
-                {project.type}
-              </span>
+          <div className="flex items-center gap-3 min-w-0">
+            {!isLeftPanelOpen && (
+              <button
+                onClick={() => setIsLeftPanelOpen(true)}
+                className="p-1.5 hover:bg-gray-100 rounded-md text-gray-500 hover:text-gray-800 transition-colors"
+                title="展开数据库面板"
+                type="button"
+              >
+                <PanelLeftOpen size={18} />
+              </button>
+            )}
+
+            <div className="min-w-0">
+              <div className="flex items-center gap-2 mb-1">
+                <h2 className="font-bold text-gray-800 text-lg truncate">{project.name}</h2>
+                <span className="px-2 py-0.5 bg-gray-100 text-gray-500 text-xs rounded-full border border-gray-200 shrink-0">
+                  {project.type}
+                </span>
+              </div>
+              <p className="text-xs text-gray-400 flex items-center gap-2">
+                <span className={`w-2 h-2 rounded-full ${activeSessionId ? 'bg-green-500' : 'bg-gray-300'}`}></span>
+                当前会话: {activeSession?.name || '未选择'}
+              </p>
             </div>
-            <p className="text-xs text-gray-400 flex items-center gap-2">
-              <span className={`w-2 h-2 rounded-full ${activeSessionId ? 'bg-green-500' : 'bg-gray-300'}`}></span>
-              当前会话: {activeSession?.name || '未选择'}
-            </p>
           </div>
-          <Button variant="default" icon={<Info size={16} />} onClick={() => setIsInfoModalOpen(true)}>
-            项目详情
-          </Button>
+          <div className="flex gap-2 items-center">
+            <Button variant="default" icon={<Info size={16} />} onClick={() => setIsInfoModalOpen(true)}>
+              项目详情
+            </Button>
+            {!isRightPanelOpen && (
+              <button
+                onClick={() => setIsRightPanelOpen(true)}
+                className="p-1.5 hover:bg-gray-100 rounded-md text-gray-500 hover:text-gray-800 transition-colors"
+                title="展开会话列表"
+                type="button"
+              >
+                <PanelRightOpen size={18} />
+              </button>
+            )}
+          </div>
         </div>
 
         {/* 消息列表区 */}
@@ -687,6 +681,87 @@ export const Workspace: React.FC<WorkspaceProps> = ({ project, onBack }) => {
           <p className="text-center text-xs text-gray-400 mt-2">
             AI 内容仅供参考。涉及增删改操作时，系统会请求二次确认。
           </p>
+        </div>
+      </div>
+
+      {/* 右侧：会话列表（可最小化） */}
+      <div className={`${isRightPanelOpen ? 'w-64' : 'w-0'} transition-all duration-200 ease-in-out bg-gray-50 border-l border-gray-200 flex flex-col shrink-0 overflow-hidden`}>
+        <div className="h-14 border-b border-gray-200 flex items-center justify-between px-4 bg-gray-50 shrink-0">
+          <div className="flex items-center gap-2 min-w-0">
+            <MessageSquare size={16} className="text-gray-500 shrink-0" />
+            <span className="font-medium text-gray-700 truncate">会话</span>
+          </div>
+          <button
+            onClick={() => setIsRightPanelOpen(false)}
+            className="p-1.5 hover:bg-gray-200 rounded-md text-gray-500 transition-colors"
+            title="最小化会话列表"
+            type="button"
+          >
+            <PanelRightClose size={18} />
+          </button>
+        </div>
+
+        <div className="p-4 border-b border-gray-200">
+          <Button onClick={onBack} variant="text" className="mb-4 text-gray-500 hover:text-gray-800 -ml-2 text-sm">
+            <ChevronLeft size={16} className="mr-1" /> 返回项目列表
+          </Button>
+          <Button onClick={handleCreateSession} variant="primary" className="w-full justify-center" icon={<Plus size={16} />}>
+            新建会话
+          </Button>
+        </div>
+
+        <div className="flex-1 overflow-y-auto p-3 space-y-1">
+          {loadingSessions ? (
+            <div className="flex justify-center py-4"><Loader2 className="animate-spin text-gray-400" size={20} /></div>
+          ) : sessions.map(session => (
+            <div
+              key={session.id}
+              onClick={() => setActiveSessionId(session.id)}
+              className={`group flex items-center gap-3 px-3 py-3 rounded-lg text-sm cursor-pointer transition-colors border border-transparent ${activeSessionId === session.id
+                ? 'bg-white border-gray-200 shadow-sm text-primary'
+                : 'text-gray-600 hover:bg-gray-200/50'
+                }`}
+            >
+              <MessageSquare size={16} className="shrink-0" />
+
+              {editingSessionId === session.id ? (
+                <div className="flex-1 flex items-center gap-1 min-w-0">
+                  <input
+                    type="text"
+                    value={editName}
+                    onChange={(e) => setEditName(e.target.value)}
+                    onClick={(e) => e.stopPropagation()}
+                    onKeyDown={(e) => e.key === 'Enter' && saveRename(e)}
+                    className="w-full px-1 py-0.5 text-xs border border-primary rounded focus:outline-none"
+                    autoFocus
+                  />
+                  <button onClick={saveRename} className="p-1 hover:bg-green-100 text-green-600 rounded"><Check size={12} /></button>
+                  <button onClick={(e) => { e.stopPropagation(); setEditingSessionId(null); }} className="p-1 hover:bg-red-100 text-red-600 rounded"><X size={12} /></button>
+                </div>
+              ) : (
+                <>
+                  <span className="flex-1 truncate">{session.name}</span>
+                  <div className="hidden group-hover:flex items-center gap-1">
+                    <button
+                      onClick={(e) => startRenaming(e, session)}
+                      className="p-1 hover:bg-gray-200 rounded text-gray-400 hover:text-gray-600"
+                    >
+                      <Edit2 size={12} />
+                    </button>
+                    <button
+                      onClick={(e) => handleDeleteSession(e, session.id)}
+                      className="p-1 hover:bg-red-50 rounded text-gray-400 hover:text-red-500"
+                    >
+                      <Trash2 size={12} />
+                    </button>
+                  </div>
+                </>
+              )}
+            </div>
+          ))}
+          {!loadingSessions && sessions.length === 0 && (
+            <div className="text-center text-xs text-gray-400 py-4">暂无会话，点击上方新建</div>
+          )}
         </div>
       </div>
 

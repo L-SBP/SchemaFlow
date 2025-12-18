@@ -406,8 +406,8 @@ async def execute_sql_with_user_check(
         # 2. 执行 SQL
         if sql_type == "SELECT":
             result = await execute_dql_user(sql, instance_obj)
-            if not result:
-                raise HTTPException(status_code=400, detail="查询结果为空")
+            # if not result:
+            #     raise HTTPException(status_code=400, detail="查询结果为空")
             log.info(f"[MySQL] DQL executed successfully for instance {instance_obj.instance_id}")
             return result
         else:
