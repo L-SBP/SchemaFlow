@@ -215,11 +215,13 @@ const App: React.FC = () => {
 
       <Sidebar
         role={currentUser?.role || UserRole.USER}
+        user={currentUser}
+        selectedProject={selectedProject}
         activePage={activePage}
         isOpen={isSidebarOpen}
         onClose={() => setIsSidebarOpen(false)}
+        onLogout={handleLogout}
         onNavigate={(page) => {
-          if (page !== 'workspace') setSelectedProject(null);
           if (page !== 'admin_user_detail') setViewingUser(null);
           setActivePage(page);
           setIsSidebarOpen(false);
@@ -227,14 +229,7 @@ const App: React.FC = () => {
       />
       <main className="flex-1 flex flex-col min-w-0">
         <Header
-          user={currentUser}
-          onLogout={handleLogout}
           onToggleSidebar={() => setIsSidebarOpen(!isSidebarOpen)}
-          onNavigate={(page) => {
-            setSelectedProject(null);
-            setViewingUser(null);
-            setActivePage(page);
-          }}
         />
         <div className="flex-1 overflow-auto relative">
           {renderContent()}

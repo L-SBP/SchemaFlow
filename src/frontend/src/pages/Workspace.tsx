@@ -136,8 +136,13 @@ export const Workspace: React.FC<WorkspaceProps> = ({ project, onBack }) => {
   // 布局状态：左右面板最小化/展开
   const [isLeftPanelOpen, setIsLeftPanelOpen] = useState(true);
   const [isRightPanelOpen, setIsRightPanelOpen] = useState(true);
-  const [leftPanelWidth, setLeftPanelWidth] = useState(420);
+  const [leftPanelWidth, setLeftPanelWidth] = useState(800);
   const [isResizingLeftPanel, setIsResizingLeftPanel] = useState(false);
+
+  const workspaceRootRef = useRef<HTMLDivElement>(null);
+  const leftPanelWidthRef = useRef<number>(800);
+  const pendingLeftPanelWidthRef = useRef<number>(800);
+  const resizeRafIdRef = useRef<number | null>(null);
 
   // 记住上次拖拽宽度
   useEffect(() => {
@@ -145,13 +150,20 @@ export const Workspace: React.FC<WorkspaceProps> = ({ project, onBack }) => {
       const raw = localStorage.getItem('workspace.leftPanelWidth');
       const parsed = raw ? Number(raw) : NaN;
       if (Number.isFinite(parsed)) {
-        const clamped = Math.max(260, Math.min(960, parsed));
+        const clamped = Math.max(260, Math.min(1600, parsed));
         setLeftPanelWidth(clamped);
       }
     } catch {
       // ignore
     }
   }, []);
+
+  useEffect(() => {
+    leftPanelWidthRef.current = leftPanelWidth;
+    pendingLeftPanelWidthRef.current = leftPanelWidth;
+    // 同步 CSS 变量，确保非拖拽场景下也保持一致
+    workspaceRootRef.current?.style.setProperty('--workspace-left-panel-width', `${leftPanelWidth}px`);
+  }, [leftPanelWidth]);
 
   useEffect(() => {
     try {
@@ -191,20 +203,51 @@ export const Workspace: React.FC<WorkspaceProps> = ({ project, onBack }) => {
   useEffect(() => {
     if (!isResizingLeftPanel) return;
 
+    const prevUserSelect = document.body.style.userSelect;
+    const prevCursor = document.body.style.cursor;
+    document.body.style.userSelect = 'none';
+    document.body.style.cursor = 'col-resize';
+
+    const applyWidth = (width: number) => {
+      workspaceRootRef.current?.style.setProperty('--workspace-left-panel-width', `${width}px`);
+    };
+
     const handleMouseMove = (e: MouseEvent) => {
       const dx = e.clientX - leftResizeStartXRef.current;
       const nextWidth = leftResizeStartWidthRef.current + dx;
-      const clamped = Math.max(260, Math.min(960, nextWidth));
-      setLeftPanelWidth(clamped);
+      const clamped = Math.max(260, Math.min(1600, nextWidth));
+      pendingLeftPanelWidthRef.current = clamped;
+
+      if (resizeRafIdRef.current != null) return;
+      resizeRafIdRef.current = window.requestAnimationFrame(() => {
+        resizeRafIdRef.current = null;
+        applyWidth(pendingLeftPanelWidthRef.current);
+      });
     };
 
     const handleMouseUp = () => {
+      if (resizeRafIdRef.current != null) {
+        window.cancelAnimationFrame(resizeRafIdRef.current);
+        resizeRafIdRef.current = null;
+      }
+
+      document.body.style.userSelect = prevUserSelect;
+      document.body.style.cursor = prevCursor;
+
+      // mouseup 再提交 state，减少拖拽期间的 React 重渲染
+      setLeftPanelWidth(pendingLeftPanelWidthRef.current);
       setIsResizingLeftPanel(false);
     };
 
     window.addEventListener('mousemove', handleMouseMove);
     window.addEventListener('mouseup', handleMouseUp);
     return () => {
+      if (resizeRafIdRef.current != null) {
+        window.cancelAnimationFrame(resizeRafIdRef.current);
+        resizeRafIdRef.current = null;
+      }
+      document.body.style.userSelect = prevUserSelect;
+      document.body.style.cursor = prevCursor;
       window.removeEventListener('mousemove', handleMouseMove);
       window.removeEventListener('mouseup', handleMouseUp);
     };
@@ -446,7 +489,11 @@ export const Workspace: React.FC<WorkspaceProps> = ({ project, onBack }) => {
   };
 
   return (
-    <div className="h-full flex bg-white overflow-hidden">
+    <div
+      ref={workspaceRootRef}
+      className="h-full flex bg-white overflow-hidden"
+      style={{ ['--workspace-left-panel-width' as any]: `${leftPanelWidth}px` }}
+    >
       {/* 左侧收起后：最左侧展开把手 */}
       {!isLeftPanelOpen && (
         <div className="w-10 border-r border-gray-200 bg-white shrink-0 flex items-start justify-center pt-3">
@@ -464,7 +511,7 @@ export const Workspace: React.FC<WorkspaceProps> = ({ project, onBack }) => {
       {/* 左侧：数据库导航树 + 数据内容（可最小化） */}
       <div
         className={`${isLeftPanelOpen ? '' : 'w-0'} transition-[width] duration-200 ease-in-out border-r border-gray-200 flex flex-col bg-white shrink-0 overflow-hidden`}
-        style={isLeftPanelOpen ? { width: leftPanelWidth } : undefined}
+        style={isLeftPanelOpen ? { width: 'var(--workspace-left-panel-width)' } : undefined}
       >
         <div className="h-14 border-b border-gray-200 flex items-center justify-between px-4 bg-gray-50 shrink-0">
           <div className="flex items-center gap-2 min-w-0">
@@ -498,10 +545,10 @@ export const Workspace: React.FC<WorkspaceProps> = ({ project, onBack }) => {
           className={`w-1 bg-transparent hover:bg-gray-200 ${isResizingLeftPanel ? 'bg-gray-200' : ''} cursor-col-resize shrink-0`}
           onMouseDown={(e) => {
             leftResizeStartXRef.current = e.clientX;
-            leftResizeStartWidthRef.current = leftPanelWidth;
+            leftResizeStartWidthRef.current = leftPanelWidthRef.current;
             setIsResizingLeftPanel(true);
           }}
-          onDoubleClick={() => setLeftPanelWidth(420)}
+          onDoubleClick={() => setLeftPanelWidth(800)}
           title="拖拽调整宽度（双击重置）"
         />
       )}
