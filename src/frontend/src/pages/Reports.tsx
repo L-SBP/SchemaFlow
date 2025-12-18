@@ -4,15 +4,65 @@ import { Card, Button, Modal, Input, Tag, Steps } from '../components/UI.tsx';
 import { Plus, BarChart2, PieChart, TrendingUp, Download, Trash2, Edit2, Filter, Database, Table as TableIcon, ScatterChart, ArrowRight, ArrowLeft, Save, Loader2 } from 'lucide-react'; // 引入 Loader2
 import { BarChart, Bar, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart as RePieChart, Pie, Cell, ScatterChart as ReScatterChart, Scatter, ZAxis } from 'recharts';
 import { reportApi, HistoryQuery } from '../api/reports.ts'; // 导入 API
+import { fetchProjects, ProjectDTO } from '../api/project.ts';
 
 interface ReportsProps {
-  projects: Project[];
+  projects?: Project[];
 }
 
 const COLORS = ['#1677ff', '#52c41a', '#faad14', '#ff4d4f', '#722ed1', '#13c2c2'];
 
 export const Reports: React.FC<ReportsProps> = ({ projects }) => {
-  const [selectedProjectId, setSelectedProjectId] = useState<string>(projects[0]?.id || '');
+  const [availableProjects, setAvailableProjects] = useState<Project[]>(projects || []);
+  const [selectedProjectId, setSelectedProjectId] = useState<string>((projects || [])[0]?.id || '');
+
+  const mapProjectDTOToProject = (projectDTO: ProjectDTO): Project => {
+    const dbTypeMap: Record<string, 'MySQL' | 'PostgreSQL' | 'SQLite'> = {
+      mysql: 'MySQL',
+      postgresql: 'PostgreSQL',
+      sqlite: 'SQLite'
+    };
+
+    const statusMap: Record<string, 'active' | 'deploying' | 'error' | 'deleted'> = {
+      initializing: 'deploying',
+      pending_confirmation: 'deploying',
+      active: 'active',
+      deleted: 'deleted',
+      error: 'error'
+    };
+
+    return {
+      id: projectDTO.project_id.toString(),
+      name: projectDTO.project_name,
+      type: dbTypeMap[(projectDTO.db_type || '').toLowerCase()] || 'MySQL',
+      description: projectDTO.description,
+      status: statusMap[(projectDTO.project_status || '').toLowerCase()] || 'active',
+      createdAt: projectDTO.created_at
+    };
+  };
+
+  // 若未传入项目（或为空），从后端拉取用户真实项目列表
+  useEffect(() => {
+    const ensureProjects = async () => {
+      if (projects && projects.length > 0) {
+        setAvailableProjects(projects);
+        if (!selectedProjectId) setSelectedProjectId(projects[0].id);
+        return;
+      }
+
+      try {
+        const dtos = await fetchProjects();
+        const mapped = (dtos || []).map(mapProjectDTOToProject);
+        setAvailableProjects(mapped);
+        if (!selectedProjectId && mapped.length > 0) setSelectedProjectId(mapped[0].id);
+      } catch (error) {
+        console.error('Failed to load projects for reports:', error);
+      }
+    };
+
+    ensureProjects();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [projects]);
 
   // State: API Data
   const [reports, setReports] = useState<Report[]>([]);
@@ -64,10 +114,16 @@ export const Reports: React.FC<ReportsProps> = ({ projects }) => {
   useMemo(() => {
     if (selectedQueryObj) {
       if (!reportName) setReportName(selectedQueryObj.queryText + ' 报表');
-      const firstStringCol = selectedQueryObj.result.columns.find(c => typeof selectedQueryObj.result.data[0][c] === 'string');
-      const firstNumberCol = selectedQueryObj.result.columns.find(c => typeof selectedQueryObj.result.data[0][c] === 'number');
-      setXAxisKey(firstStringCol || selectedQueryObj.result.columns[0]);
-      setYAxisKey(firstNumberCol || selectedQueryObj.result.columns[1]);
+
+      const columns = selectedQueryObj.result?.columns || [];
+      const fields = selectedQueryObj.result?.fields || [];
+
+      // X：优先 string/date；Y：仅 number（避免图表数值轴报错）
+      const xCandidate = fields.find(f => f.type === 'string' || f.type === 'date')?.name;
+      const yCandidate = fields.find(f => f.type === 'number')?.name;
+
+      setXAxisKey(xCandidate || columns[0] || '');
+      setYAxisKey(yCandidate || columns[1] || columns[0] || '');
     }
   }, [selectedQueryObj]);
 
@@ -92,10 +148,8 @@ export const Reports: React.FC<ReportsProps> = ({ projects }) => {
         name: reportName,
         type: reportType,
         description: `源自查询: ${selectedQueryObj.queryText}`,
-        data: selectedQueryObj.result.data,
         chartConfig: { xAxisKey, yAxisKey },
-        sourceQueryId: selectedQueryObj.id,
-        sourceQueryText: selectedQueryObj.queryText
+        sourceQueryId: selectedQueryObj.id
       });
 
       // 刷新列表
@@ -163,7 +217,7 @@ export const Reports: React.FC<ReportsProps> = ({ projects }) => {
     );
   };
 
-  if (projects.length === 0) {
+  if (availableProjects.length === 0) {
     return <div className="p-8 text-center text-gray-500">请先在仪表盘创建数据库项目。</div>;
   }
 
@@ -180,7 +234,7 @@ export const Reports: React.FC<ReportsProps> = ({ projects }) => {
               value={selectedProjectId}
               onChange={(e) => setSelectedProjectId(e.target.value)}
             >
-              {projects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+              {availableProjects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
             </select>
           </div>
           <Button variant="primary" icon={<Plus size={16} />} onClick={handleOpenModal}>
@@ -304,13 +358,15 @@ export const Reports: React.FC<ReportsProps> = ({ projects }) => {
                     {/* Data Preview */}
                     <div className="bg-white/60 rounded border border-gray-200 overflow-hidden text-xs">
                       <div className="flex border-b border-gray-100 bg-gray-50 text-gray-500">
-                        {q.result.columns.slice(0, 4).map((c: string) => (
+                        {(q.result?.columns || []).slice(0, 4).map((c: string) => (
                           <div key={c} className="flex-1 px-2 py-1 truncate">{c}</div>
                         ))}
                       </div>
                       <div className="flex text-gray-700">
-                        {q.result.columns.slice(0, 4).map((c: string) => (
-                          <div key={c} className="flex-1 px-2 py-1 truncate">{q.result.data[0][c]}</div>
+                        {(q.result?.columns || []).slice(0, 4).map((c: string) => (
+                          <div key={c} className="flex-1 px-2 py-1 truncate">
+                            {q.result?.data?.[0]?.[c] ?? ''}
+                          </div>
                         ))}
                       </div>
                     </div>
@@ -364,8 +420,11 @@ export const Reports: React.FC<ReportsProps> = ({ projects }) => {
                     value={xAxisKey}
                     onChange={(e) => setXAxisKey(e.target.value)}
                   >
-                    {selectedQueryObj.result.columns.map((col: string) => (
-                      <option key={col} value={col}>{col}</option>
+                    {(selectedQueryObj.result?.fields?.length
+                      ? selectedQueryObj.result.fields
+                      : (selectedQueryObj.result?.columns || []).map((c: string) => ({ name: c, type: 'string' as const }))
+                    ).map((f: any) => (
+                      <option key={f.name} value={f.name}>{f.name}</option>
                     ))}
                   </select>
                 </div>
@@ -377,9 +436,18 @@ export const Reports: React.FC<ReportsProps> = ({ projects }) => {
                     value={yAxisKey}
                     onChange={(e) => setYAxisKey(e.target.value)}
                   >
-                    {selectedQueryObj.result.columns.map((col: string) => (
-                      <option key={col} value={col}>{col}</option>
-                    ))}
+                    {(
+                      (selectedQueryObj.result?.fields || []).filter((f: any) => f.type === 'number')
+                    ).length > 0 ? (
+                      (selectedQueryObj.result?.fields || []).filter((f: any) => f.type === 'number').map((f: any) => (
+                        <option key={f.name} value={f.name}>{f.name}</option>
+                      ))
+                    ) : (
+                      // 兜底：没有 number 字段时仍允许选择列，但预期用户换成折线/柱状会无效
+                      (selectedQueryObj.result?.columns || []).map((col: string) => (
+                        <option key={col} value={col}>{col}</option>
+                      ))
+                    )}
                   </select>
                 </div>
               </div>

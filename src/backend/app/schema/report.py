@@ -7,7 +7,7 @@
 # backend/app/schema/report.py
 
 from pydantic import BaseModel, ConfigDict
-from typing import List, Optional, Any, Dict
+from typing import List, Optional, Any, Dict, Literal
 from datetime import datetime
 
 # 图表配置
@@ -80,6 +80,7 @@ class Report(BaseModel):
 
     # 以下数据来自关联的 QueryResult
     data: List[Dict[str, Any]]
+    sourceQueryId: Optional[str] = None
     sourceQueryText: Optional[str]
 
     chartConfig: Optional[ChartConfig]
@@ -87,7 +88,18 @@ class Report(BaseModel):
 
     model_config = ConfigDict(from_attributes=True)
 
-# 4. 历史查询 (保持不变)
+class HistoryQueryField(BaseModel):
+    name: str
+    type: Literal['string', 'number', 'date', 'bool', 'object']
+
+
+class HistoryQueryResult(BaseModel):
+    columns: List[str]
+    fields: List[HistoryQueryField]
+    data: List[Dict[str, Any]]
+
+
+# 4. 历史查询
 class HistoryQuery(BaseModel):
     """
     历史查询记录 Schema。
@@ -97,10 +109,10 @@ class HistoryQuery(BaseModel):
         projectId (str): 项目 ID。
         queryText (str): 查询文本。
         timestamp (str): 时间戳。
-        result (Optional[Any]): 查询结果。
+        result (Optional[HistoryQueryResult]): 查询结果（包含 data/columns/fields）。
     """
     id: str
     projectId: str
     queryText: str
     timestamp: str
-    result: Optional[Any] = None
+    result: Optional[HistoryQueryResult] = None

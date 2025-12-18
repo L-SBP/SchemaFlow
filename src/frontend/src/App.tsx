@@ -19,12 +19,6 @@ import { getUserProfile } from './api/user.ts'; // 新增：引入获取用户�
 import { ProjectDTO } from './api/project.ts';
 import { Loader2 } from 'lucide-react'; // 新增：引入 Loading 图标
 
-// Mock initial projects (仅保留用于 Reports 的兜底显示)
-const INITIAL_PROJECTS: Project[] = [
-  { id: '1', name: '电商订单系统', type: 'MySQL', description: '处理用户订单和库存', status: 'active', createdAt: '2025-10-20' },
-  { id: '2', name: 'CRM客户管理', type: 'PostgreSQL', description: '销售线索跟踪', status: 'active', createdAt: '2025-10-25' },
-];
-
 const App: React.FC = () => {
   // 新增：isLoading 状态，用于在检查 Token 时显示加载动画，防止登录页闪烁
   const [isLoading, setIsLoading] = useState(true);
@@ -34,7 +28,7 @@ const App: React.FC = () => {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
 
   // Shared State
-  const [projects, setProjects] = useState<Project[]>(INITIAL_PROJECTS);
+  const [projects, setProjects] = useState<Project[]>([]);
   const [selectedProject, setSelectedProject] = useState<Project | null>(null);
   const [viewingUser, setViewingUser] = useState<User | null>(null);
 

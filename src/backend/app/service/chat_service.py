@@ -31,6 +31,7 @@ from models.session import Session as SessionModel
 from schema.chat import ChatResponse, MessageType
 from service.mysql_service import execute_sql_with_user_check
 from models.ai_generated_statement import AIGeneratedStatement
+from models.query_result import QueryResult
 
 # 必须导入这些模型类，否则确认接口无法运行
 from models.message import Message as MessageModel 
@@ -313,6 +314,7 @@ async def process_chat(
     # 8. 尝试执行 SQL (针对 DQL 查询)
     data = []
     execution_status = "pending"
+    exec_type = "SELECT"
     
     if not requires_confirm:
         try:
@@ -346,6 +348,19 @@ async def process_chat(
         statement_order=1
     )
     db.add(new_statement)
+
+    # 9.1 先 flush 拿到 statement_id，再写 QueryResult（报表/历史查询的数据源）
+    await db.flush()
+
+    # 仅对“成功的查询类语句”落库 QueryResult，避免把 DML/失败结果作为报表数据源
+    if execution_status == "success" and exec_type == "SELECT":
+        query_result = QueryResult(
+            statement_id=new_statement.statement_id,
+            result_data=safe_data,
+            data_summary=None,
+            chart_type="table",
+        )
+        db.add(query_result)
     
     # 最后统一 commit 事务，保证数据一致性
     await db.commit() 
