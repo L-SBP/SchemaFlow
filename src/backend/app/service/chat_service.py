@@ -446,7 +446,33 @@ async def confirm_and_execute_sql(
 
     except Exception as e:
         log.error(f"Execution failed: {e}")
-        raise HTTPException(status_code=500, detail=f"Execution failed: {str(e)}")
+        
+        # 1. 提取错误信息
+        error_msg = str(e)
+        if isinstance(e, HTTPException):
+            error_msg = e.detail
+            
+        # 2. 构造错误提示内容
+        content = f"❌ 执行失败：\n{error_msg}"
+        
+        # 3. 创建一条新的系统消息记录错误
+        error_message = await crud_message.create_message(
+            db=db, 
+            session_id=message.session_id,
+            content=content,
+            role=MessageType.ASSISTANT
+        )
+        
+        # 4. 返回这条错误消息，让前端显示
+        return ChatResponse(
+            message_id=error_message.message_id,
+            content=error_message.content,
+            message_type=MessageType.ASSISTANT,
+            sql_text=None,
+            sql_type="ERROR",
+            requires_confirmation=False,
+            data=None
+        )
 
     # 6. 返回结果
     return ChatResponse(

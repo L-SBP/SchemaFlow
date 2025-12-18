@@ -494,20 +494,26 @@ export const Workspace: React.FC<WorkspaceProps> = ({ project, onBack }) => {
                 // 判断是否是高危 SQL (包含 UPDATE/DELETE/DROP/TRUNCATE)
                 const isHighRisk = msg.sql && /^\s*(UPDATE|DELETE|DROP|TRUNCATE)/i.test(msg.sql);
 
+                // 判断是否是错误消息
+                const isError = msg.text?.startsWith('❌');
+
                 return (
                   <div key={msg.id} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
                     <div className={`max-w-[85%] lg:max-w-[75%] ${msg.role === 'user' ? 'order-2' : 'order-1'}`}>
                       <div className={`flex items-start gap-3 ${msg.role === 'user' ? 'flex-row-reverse' : 'flex-row'}`}>
                         {/* 头像 */}
-                        <div className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 text-xs shadow-sm ${msg.role === 'user' ? 'bg-primary text-white' : 'bg-white border border-gray-200 text-primary'
+                        <div className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 text-xs shadow-sm ${msg.role === 'user' ? 'bg-primary text-white' : 
+                            isError ? 'bg-red-100 text-red-600 border border-red-200' : 'bg-white border border-gray-200 text-primary'
                           }`}>
-                          {msg.role === 'user' ? '我' : <Sparkles size={14} />}
+                          {msg.role === 'user' ? '我' : isError ? <AlertTriangle size={14} /> : <Sparkles size={14} />}
                         </div>
 
                         {/* 气泡内容 */}
                         <div className={`rounded-2xl px-5 py-4 shadow-sm ${msg.role === 'user'
                           ? 'bg-primary text-white rounded-tr-none'
-                          : 'bg-white border border-gray-200 text-gray-800 rounded-tl-none'
+                          : isError
+                            ? 'bg-red-50 border border-red-200 text-red-800 rounded-tl-none'
+                            : 'bg-white border border-gray-200 text-gray-800 rounded-tl-none'
                           }`}>
                           {/* 文本内容: 仅当文本非空时显示 */}
                           {msg.text && (
