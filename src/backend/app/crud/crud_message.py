@@ -45,20 +45,15 @@ class CRUDMessage:
         await db.refresh(db_obj)
         return db_obj
 
+    # backend/app/crud/crud_message.py
+
+# backend/app/crud/crud_message.py
+
     async def get_recent_messages(self, db: AsyncSession, session_id: int, limit: int = 50) -> List[Message]:
         """
-        获取最近的历史记录。
-
-        Args:
-            db (AsyncSession): 数据库会话。
-            session_id (int): 会话 ID。
-            limit (int): 返回的消息数量限制。
-
-        Returns:
-            List[Message]: 消息列表 (包含关联的 AI 生成语句)。
+        获取最近的历史记录，并直接映射 SQL 执行结果。
         """
-        #  第一步：先只查消息表
-        # 注意：这里去掉了 .options(selectinload(...))，解决了报错
+        # 1. 查消息基础信息
         query = select(Message)\
             .filter(Message.session_id == session_id)\
             .order_by(desc(Message.created_at))\
@@ -70,39 +65,41 @@ class CRUDMessage:
         if not messages:
             return []
 
-        # 第二步：收集所有消息的 ID
-        # 兼容处理：队友的模型主键可能叫 id，也可能叫 message_id
-        message_ids = []
-        for m in messages:
-            # 优先取 message_id，如果没有就取 id
-            mid = getattr(m, "message_id", getattr(m, "id", None))
-            if mid:
-                message_ids.append(mid)
+        # 2. 收集消息 ID
+        message_ids = [getattr(m, "message_id", getattr(m, "id", None)) for m in messages]
 
-        # 第三步：去查 SQL 语句表 (如果找到了消息ID)
-        ai_statements = []
+        # 3. 查关联的 SQL 详情和结果 (来自 ai_generated_statement 表)
+        stmt_map = {}
         if message_ids:
+            # 获取 SQL 文本、类型和执行结果 [cite: 638, 811-820]
             stmt_query = select(AIGeneratedStatement).where(
                 AIGeneratedStatement.message_id.in_(message_ids)
             )
             stmt_result = await db.execute(stmt_query)
             ai_statements = stmt_result.scalars().all()
+            
+            # 建立 ID 映射
+            for stmt in ai_statements:
+                stmt_map[stmt.message_id] = stmt
 
-        #第四步：手动拼装 (把查到的 SQL 塞进消息对象里)
-        # 制作一个字典方便查找： {message_id: [statement1, statement2]}
-        stmt_map = {}
-        for stmt in ai_statements:
-            if stmt.message_id not in stmt_map:
-                stmt_map[stmt.message_id] = []
-            stmt_map[stmt.message_id].append(stmt)
-
-        # 把 SQL 挂载到 Message 对象上 (临时属性)
+        # 4. 【核心修复】：直接映射到 ChatResponse 需要的字段
         for m in messages:
             mid = getattr(m, "message_id", getattr(m, "id", None))
-            # 我们给对象动态添加一个属性叫 ai_statement，这样 Endpoint 那边就不用改代码了
-            m.ai_statement = stmt_map.get(mid, [])
+            stmt = stmt_map.get(mid)
+            
+            if stmt:
+                # 直接给对象赋值，名称必须与 ChatResponse 中的定义一致
+                m.sql_text = stmt.sql_text
+                m.sql_type = stmt.statement_type
+                # 这里的 .data 对应 ai_generated_statement 表的 execution_result 字段 [cite: 818, 830]
+                m.data = stmt.execution_result 
+            else:
+                # 对于 user 消息或没有 SQL 的消息，设为空
+                m.sql_text = None
+                m.sql_type = "UNKNOWN"
+                m.data = None
 
-        # 将倒序查询结果翻转为正序
+        # 5. 返回正序列表，满足历史加载需求
         return list(reversed(messages))
 
 # 实例化对象
