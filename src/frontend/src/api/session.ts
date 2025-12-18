@@ -50,6 +50,7 @@ export const sessionApi = {
    */
   update: (sessionId: number, name: string) => {
     return client.put<any, SessionItem>(`/v1/sessions/${sessionId}`, {
+      session_id: sessionId,
       session_name: name
     });
   },
