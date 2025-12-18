@@ -49,6 +49,17 @@ export interface RegisterResponse {
   created_at: string;
 }
 
+export interface ForgotPasswordRequest {
+  email: string;
+}
+
+export interface ResetPasswordWithCodeRequest {
+  email: string;
+  verification_code: string;
+  new_password: string;
+  confirm_password: string;
+}
+
 // --- API 方法定义 ---
 
 export const authApi = {
@@ -82,5 +93,20 @@ export const authApi = {
    */
   logout: () => {
     return client.post<void, void>('/v1/auth/logout');
+  },
+
+  /**
+   * 忘记密码：发送重置验证码（若账号存在）
+   */
+  sendPasswordResetCode: (email: string) => {
+    const payload: ForgotPasswordRequest = { email };
+    return client.post<void, void>('/v1/auth/forgot-password', payload);
+  },
+
+  /**
+   * 重置密码：输入邮箱验证码后直接重置
+   */
+  resetPasswordWithCode: (data: ResetPasswordWithCodeRequest) => {
+    return client.post<void, void>('/v1/auth/reset-password', data);
   },
 };

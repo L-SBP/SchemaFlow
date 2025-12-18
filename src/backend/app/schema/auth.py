@@ -52,3 +52,24 @@ class UserLogin(BaseModel):
     """
     username: str = Field(..., min_length=3, max_length=50)
     password: str = Field(..., min_length=6, max_length=50)
+
+
+class ForgotPasswordRequest(BaseModel):
+    """忘记密码：请求发送重置验证码邮件。"""
+
+    email: str = Field(..., min_length=3, max_length=50)
+
+
+class ResetPasswordRequest(BaseModel):
+    """重置密码：输入邮箱验证码后直接重置。"""
+
+    email: str = Field(..., min_length=3, max_length=50)
+    verification_code: str = Field(..., min_length=6, max_length=6)
+    new_password: str = Field(..., min_length=6, max_length=50)
+    confirm_password: str = Field(..., min_length=6, max_length=50)
+
+    @validator('confirm_password')
+    def password_match(cls, v, values):
+        if 'new_password' in values and v != values['new_password']:
+            raise ValueError('Password do not match')
+        return v
