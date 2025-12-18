@@ -136,6 +136,30 @@ export const Workspace: React.FC<WorkspaceProps> = ({ project, onBack }) => {
   // 布局状态：左右面板最小化/展开
   const [isLeftPanelOpen, setIsLeftPanelOpen] = useState(true);
   const [isRightPanelOpen, setIsRightPanelOpen] = useState(true);
+  const [leftPanelWidth, setLeftPanelWidth] = useState(420);
+  const [isResizingLeftPanel, setIsResizingLeftPanel] = useState(false);
+
+  // 记住上次拖拽宽度
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem('workspace.leftPanelWidth');
+      const parsed = raw ? Number(raw) : NaN;
+      if (Number.isFinite(parsed)) {
+        const clamped = Math.max(260, Math.min(960, parsed));
+        setLeftPanelWidth(clamped);
+      }
+    } catch {
+      // ignore
+    }
+  }, []);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('workspace.leftPanelWidth', String(leftPanelWidth));
+    } catch {
+      // ignore
+    }
+  }, [leftPanelWidth]);
 
   // 会话重命名状态
   const [editingSessionId, setEditingSessionId] = useState<string | null>(null);
@@ -151,6 +175,8 @@ export const Workspace: React.FC<WorkspaceProps> = ({ project, onBack }) => {
   const [selectedModel, setSelectedModel] = useState<string>('xiyan-sql'); // 模型选择
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const leftResizeStartXRef = useRef<number>(0);
+  const leftResizeStartWidthRef = useRef<number>(420);
   const activeSession = sessions.find(s => s.id === activeSessionId);
 
   // 自动滚动到底部
@@ -161,6 +187,28 @@ export const Workspace: React.FC<WorkspaceProps> = ({ project, onBack }) => {
   useEffect(() => {
     scrollToBottom();
   }, [activeSession?.messages, isSending, isTyping]);
+
+  useEffect(() => {
+    if (!isResizingLeftPanel) return;
+
+    const handleMouseMove = (e: MouseEvent) => {
+      const dx = e.clientX - leftResizeStartXRef.current;
+      const nextWidth = leftResizeStartWidthRef.current + dx;
+      const clamped = Math.max(260, Math.min(960, nextWidth));
+      setLeftPanelWidth(clamped);
+    };
+
+    const handleMouseUp = () => {
+      setIsResizingLeftPanel(false);
+    };
+
+    window.addEventListener('mousemove', handleMouseMove);
+    window.addEventListener('mouseup', handleMouseUp);
+    return () => {
+      window.removeEventListener('mousemove', handleMouseMove);
+      window.removeEventListener('mouseup', handleMouseUp);
+    };
+  }, [isResizingLeftPanel]);
 
   // --- 1. 初始化: 加载会话列表 (真实 API) ---
   useEffect(() => {
@@ -399,9 +447,24 @@ export const Workspace: React.FC<WorkspaceProps> = ({ project, onBack }) => {
 
   return (
     <div className="h-full flex bg-white overflow-hidden">
+      {/* 左侧收起后：最左侧展开把手 */}
+      {!isLeftPanelOpen && (
+        <div className="w-10 border-r border-gray-200 bg-white shrink-0 flex items-start justify-center pt-3">
+          <button
+            onClick={() => setIsLeftPanelOpen(true)}
+            className="p-1.5 hover:bg-gray-100 rounded-md text-gray-500 hover:text-gray-800 transition-colors"
+            title="展开数据库面板"
+            type="button"
+          >
+            <PanelLeftOpen size={18} />
+          </button>
+        </div>
+      )}
+
       {/* 左侧：数据库导航树 + 数据内容（可最小化） */}
       <div
-        className={`${isLeftPanelOpen ? 'w-[420px]' : 'w-0'} transition-all duration-200 ease-in-out border-r border-gray-200 flex flex-col bg-white shrink-0 overflow-hidden`}
+        className={`${isLeftPanelOpen ? '' : 'w-0'} transition-[width] duration-200 ease-in-out border-r border-gray-200 flex flex-col bg-white shrink-0 overflow-hidden`}
+        style={isLeftPanelOpen ? { width: leftPanelWidth } : undefined}
       >
         <div className="h-14 border-b border-gray-200 flex items-center justify-between px-4 bg-gray-50 shrink-0">
           <div className="flex items-center gap-2 min-w-0">
@@ -429,22 +492,25 @@ export const Workspace: React.FC<WorkspaceProps> = ({ project, onBack }) => {
         </div>
       </div>
 
+      {/* 拖拽条：调整左侧数据库面板宽度 */}
+      {isLeftPanelOpen && (
+        <div
+          className={`w-1 bg-transparent hover:bg-gray-200 ${isResizingLeftPanel ? 'bg-gray-200' : ''} cursor-col-resize shrink-0`}
+          onMouseDown={(e) => {
+            leftResizeStartXRef.current = e.clientX;
+            leftResizeStartWidthRef.current = leftPanelWidth;
+            setIsResizingLeftPanel(true);
+          }}
+          onDoubleClick={() => setLeftPanelWidth(420)}
+          title="拖拽调整宽度（双击重置）"
+        />
+      )}
+
       {/* 中间：对话区 */}
       <div className="flex-1 flex flex-col min-w-0 bg-white">
         {/* 顶部标题栏 */}
         <div className="px-6 py-4 border-b border-gray-200 flex justify-between items-center bg-white sticky top-0 z-10 shadow-sm">
           <div className="flex items-center gap-3 min-w-0">
-            {!isLeftPanelOpen && (
-              <button
-                onClick={() => setIsLeftPanelOpen(true)}
-                className="p-1.5 hover:bg-gray-100 rounded-md text-gray-500 hover:text-gray-800 transition-colors"
-                title="展开数据库面板"
-                type="button"
-              >
-                <PanelLeftOpen size={18} />
-              </button>
-            )}
-
             <div className="min-w-0">
               <div className="flex items-center gap-2 mb-1">
                 <h2 className="font-bold text-gray-800 text-lg truncate">{project.name}</h2>

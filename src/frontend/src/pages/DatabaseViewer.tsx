@@ -89,17 +89,32 @@ const DatabaseViewer: React.FC<DatabaseViewerProps> = ({ sessionId, className })
     <div className={`flex h-full bg-white border-r border-gray-200 ${className}`}>
       {/* Sidebar */}
       <div className={`${isSidebarCollapsed ? 'w-10' : 'w-64'} border-r border-gray-200 bg-gray-50 flex flex-col transition-all duration-300 relative`}>
-        <div className={`p-4 border-b border-gray-200 font-semibold text-gray-700 flex items-center gap-2 ${isSidebarCollapsed ? 'justify-center' : ''}`}>
-          <Database className="w-5 h-5 shrink-0" />
-          {!isSidebarCollapsed && <span>Explorer</span>}
+        <div className={`p-4 border-b border-gray-200 font-semibold text-gray-700 flex items-center ${isSidebarCollapsed ? 'justify-center' : 'justify-between'}`}>
+          <div className={`flex items-center gap-2 min-w-0 ${isSidebarCollapsed ? 'justify-center' : ''}`}>
+            <Database className="w-5 h-5 shrink-0" />
+            {!isSidebarCollapsed && <span className="truncate">Explorer</span>}
+          </div>
+          {!isSidebarCollapsed && (
+            <button
+              onClick={() => setIsSidebarCollapsed(true)}
+              className="p-1 hover:bg-gray-200 rounded text-gray-500 transition-colors"
+              title="最小化侧边栏"
+              type="button"
+            >
+              <ChevronLeft size={16} />
+            </button>
+          )}
+          {isSidebarCollapsed && (
+            <button
+              onClick={() => setIsSidebarCollapsed(false)}
+              className="p-1 hover:bg-gray-200 rounded text-gray-500 transition-colors"
+              title="展开侧边栏"
+              type="button"
+            >
+              <ChevronRight size={16} />
+            </button>
+          )}
         </div>
-
-        <button
-          onClick={() => setIsSidebarCollapsed(!isSidebarCollapsed)}
-          className="absolute -right-3 top-14 bg-white border border-gray-200 rounded-full p-0.5 shadow-sm hover:bg-gray-50 z-10"
-        >
-          {isSidebarCollapsed ? <ChevronRight size={14} /> : <ChevronLeft size={14} />}
-        </button>
 
         <div className="flex-1 overflow-y-auto p-2 overflow-x-hidden">
           {!isSidebarCollapsed ? (
