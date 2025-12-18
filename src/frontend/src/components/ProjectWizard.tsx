@@ -82,6 +82,12 @@ export const ProjectWizard: React.FC<ProjectWizardProps> = ({ projectId, onCompl
   // Progress animation state
   const [visualProgress, setVisualProgress] = useState(0);
 
+  const progressSnapshotRef = useRef<{ stage: CreationStageEnum | null; progress: number }>({
+    stage: null,
+    progress: 0,
+  });
+  const restoredSnapshotRef = useRef<{ stage: CreationStageEnum | null; progress: number } | null>(null);
+
   // Polling
   useEffect(() => {
     let intervalId: NodeJS.Timeout;
@@ -120,6 +126,44 @@ export const ProjectWizard: React.FC<ProjectWizardProps> = ({ projectId, onCompl
     };
   }, [projectId, editedSchema, editedDDL, viewOnly]);
 
+  useEffect(() => {
+    progressSnapshotRef.current = {
+      stage: (project?.creation_stage ?? null) as CreationStageEnum | null,
+      progress: visualProgress,
+    };
+  }, [project?.creation_stage, visualProgress]);
+
+  useEffect(() => {
+    if (viewOnly) return;
+
+    const storageKey = `projectWizard.visualProgress.${projectId}`;
+    try {
+      const raw = localStorage.getItem(storageKey);
+      if (raw) {
+        const parsed = JSON.parse(raw) as { stage?: string; progress?: number };
+        const stage = (parsed.stage ?? null) as CreationStageEnum | null;
+        const progress = Number(parsed.progress);
+        if (Number.isFinite(progress) && progress > 0) {
+          const clamped = Math.max(0, Math.min(100, progress));
+          restoredSnapshotRef.current = { stage, progress: clamped };
+          setVisualProgress(clamped);
+        }
+      }
+    } catch {
+      // ignore
+    }
+
+    return () => {
+      try {
+        const snapshot = progressSnapshotRef.current;
+        if (!snapshot.stage) return;
+        localStorage.setItem(storageKey, JSON.stringify({ stage: snapshot.stage, progress: snapshot.progress }));
+      } catch {
+        // ignore
+      }
+    };
+  }, [projectId, viewOnly]);
+
   // Progress Bar Animation Logic
   useEffect(() => {
     if (!project || viewOnly) return;
@@ -152,6 +196,15 @@ export const ProjectWizard: React.FC<ProjectWizardProps> = ({ projectId, onCompl
         target = 0;
     }
 
+    // 如果是同一阶段从弹窗关闭后恢复，尽量从上次的进度继续增长（不从 0 重来）
+    if (
+      restoredSnapshotRef.current &&
+      restoredSnapshotRef.current.stage === stage &&
+      visualProgress < restoredSnapshotRef.current.progress
+    ) {
+      setVisualProgress(restoredSnapshotRef.current.progress);
+    }
+
     // 修复：如果处于已完成阶段且进度为0（刚打开弹窗），直接显示100%，避免重新跑进度条
     if (visualProgress === 0 && (
       stage === CreationStageEnum.SCHEMA_GENERATED ||
@@ -182,7 +235,20 @@ export const ProjectWizard: React.FC<ProjectWizardProps> = ({ projectId, onCompl
     if (project?.creation_stage === CreationStageEnum.GENERATING_SCHEMA ||
       project?.creation_stage === CreationStageEnum.GENERATING_DDL ||
       project?.creation_stage === CreationStageEnum.EXECUTING_DDL) {
+      const restored = restoredSnapshotRef.current;
+      if (restored && restored.stage === project.creation_stage && restored.progress > 0) return;
       setVisualProgress(0);
+    }
+
+    if (project?.creation_stage === CreationStageEnum.COMPLETED) {
+      restoredSnapshotRef.current = null;
+      if (!viewOnly) {
+        try {
+          localStorage.removeItem(`projectWizard.visualProgress.${projectId}`);
+        } catch {
+          // ignore
+        }
+      }
     }
   }, [project?.creation_stage]);
 

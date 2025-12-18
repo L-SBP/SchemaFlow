@@ -186,19 +186,43 @@ export const Workspace: React.FC<WorkspaceProps> = ({ project, onBack }) => {
   const [isTyping, setIsTyping] = useState(false);   // 打字机效果进行中
   const [selectedModel, setSelectedModel] = useState<string>('xiyan-sql'); // 模型选择
 
+  const messagesContainerRef = useRef<HTMLDivElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const leftResizeStartXRef = useRef<number>(0);
   const leftResizeStartWidthRef = useRef<number>(420);
   const activeSession = sessions.find(s => s.id === activeSessionId);
 
+  // 是否在消息底部附近（用于决定是否自动滚动）
+  const isNearBottomRef = useRef(true);
+  // 首次进入页面 / 切换会话时，使用非动画滚动，避免“返回工作区时”出现错误滑动
+  const initialAutoScrollDoneRef = useRef(false);
+
   // 自动滚动到底部
-  const scrollToBottom = () => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  const scrollToBottom = (behavior: ScrollBehavior) => {
+    messagesEndRef.current?.scrollIntoView({ behavior });
   };
 
   useEffect(() => {
-    scrollToBottom();
-  }, [activeSession?.messages, isSending, isTyping]);
+    // 切换会话时，重置首次滚动标记
+    initialAutoScrollDoneRef.current = false;
+    isNearBottomRef.current = true;
+  }, [activeSessionId]);
+
+  useEffect(() => {
+    if (!activeSessionId) return;
+
+    // 首次进入/切换会话：直接跳到底部，不做平滑动画，避免回到页面时“滑动一下”
+    if (!initialAutoScrollDoneRef.current) {
+      scrollToBottom('auto');
+      initialAutoScrollDoneRef.current = true;
+      return;
+    }
+
+    // 后续更新：仅当用户已经在底部附近（或正在发送/打字）时才自动滚动
+    if (isNearBottomRef.current || isSending || isTyping) {
+      scrollToBottom('smooth');
+    }
+  }, [activeSessionId, activeSession?.messages.length, isSending, isTyping]);
 
   useEffect(() => {
     if (!isResizingLeftPanel) return;
@@ -589,7 +613,16 @@ export const Workspace: React.FC<WorkspaceProps> = ({ project, onBack }) => {
         </div>
 
         {/* 消息列表区 */}
-        <div className="flex-1 overflow-y-auto p-6 space-y-6 bg-gray-50/30">
+        <div
+          ref={messagesContainerRef}
+          onScroll={() => {
+            const el = messagesContainerRef.current;
+            if (!el) return;
+            const distanceToBottom = el.scrollHeight - el.scrollTop - el.clientHeight;
+            isNearBottomRef.current = distanceToBottom < 80;
+          }}
+          className="flex-1 overflow-y-auto p-6 space-y-6 bg-gray-50/30"
+        >
           {!activeSessionId ? (
             <div className="h-full flex flex-col items-center justify-center text-gray-400">
               <Sparkles size={48} className="mb-4 text-gray-300" />
