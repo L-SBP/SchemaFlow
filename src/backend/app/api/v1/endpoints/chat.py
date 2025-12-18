@@ -21,51 +21,42 @@ from api.v1.deps import get_current_active_user, get_db
 
 router = APIRouter()
 
-# src/backend/app/api/v1/endpoints/chat.py
+# backend/app/api/v1/endpoints/chat.py
+
+# backend/app/api/v1/endpoints/chat.py
 
 def _format_history_response(raw_messages: List[Any]) -> List[ChatResponse]:
     clean_history = []
     for msg in raw_messages:
-        sql_text = None
-        sql_type = "UNKNOWN"
-        data = None
-        
-        # 1. 提取 SQL 和 Data (这部分你写得是对的)
-        if hasattr(msg, 'ai_statement') and msg.ai_statement:
-            stmt = msg.ai_statement[0] if isinstance(msg.ai_statement, list) else msg.ai_statement
-            if stmt:
-                sql_text = getattr(stmt, 'sql_text', None)
-                sql_type = getattr(stmt, 'statement_type', "UNKNOWN")
-                data = getattr(stmt, 'execution_result', None)
+        # 1. 直接获取在 CRUD 中挂载好的持久化数据
+        # 我们不再依赖 ai_statement，而是直接拿映射好的值
+        sql_text = getattr(msg, 'sql_text', None)
+        sql_type = getattr(msg, 'sql_type', 'UNKNOWN')
+        data = getattr(msg, 'data', None) # <--- 获取持久化结果
 
-        # 2. 【核心修复】精确判定消息类型
-        # 尝试获取 message_type 或 role 字段，并统一转为小写比较
-        raw_role = getattr(msg, 'message_type', getattr(msg, 'role', '')).lower()
-        
-        if raw_role == "assistant":
-            msg_type = MessageType.ASSISTANT
-        else:
-            msg_type = MessageType.USER
+        msg_type = MessageType.ASSISTANT if msg.message_type == "assistant" else MessageType.USER
 
-        # 3. 如果是 AI 消息但没有 SQL，进行解析 (保持你原来的逻辑)
+        # 2. 如果 SQL 信息还没挂载上（比如某些异常情况），再尝试兜底解析
         if msg_type == MessageType.ASSISTANT and not sql_text and msg.content:
-            # 这里写你原有的正则解析逻辑
-            pass
+            try:
+                # 你的原始兜底逻辑保持不变，但增加安全性
+                content = msg.content
+                if "已生成查询语句" in content:
+                    sql_text = content.split("：")[-1].strip()
+            except: pass
 
-        # 4. 确认逻辑
         requires_conf = sql_type in ["INSERT", "UPDATE", "DELETE", "DROP", "ALTER", "TRUNCATE"]
-        if getattr(msg, 'user_confirmed', False): 
-            requires_conf = False
+        if msg.user_confirmed: requires_conf = False
 
-        # 5. 组装返回
+        # 3. 核心修复：把 data 传进去！
         clean_history.append(ChatResponse(
-            message_id=msg.message_id if hasattr(msg, 'message_id') else msg.id,
-            content=msg.content,
-            message_type=msg_type,
-            sql_text=sql_text,
+            message_id=msg.message_id,
+            content=msg.content, 
+            message_type=msg_type, 
+            sql_text=sql_text, 
             sql_type=sql_type,
-            requires_confirmation=requires_conf,
-            data=data
+            requires_confirmation=requires_conf, 
+            data=data  # <--- 修改这里：不再是 None，而是 msg.data
         ))
     return clean_history
 

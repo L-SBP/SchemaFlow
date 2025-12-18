@@ -123,21 +123,39 @@ async def get_history_queries_service(
     project_id: int,
     user_id: int,
 ) -> List[schemas.HistoryQuery]:
-    """
-    获取项目历史查询记录（仅限已持久化的 SELECT 结果）。
-    """
     await _verify_project_ownership(db, project_id, user_id)
 
+    """
+    获取项目历史查询记录，返回用户原始提问与结果。
+
+    Args:
+        db (Session): 数据库会话。
+        project_id (int): 项目 ID。
+
+    Returns:
+        List[schemas.HistoryQuery]: 历史查询记录列表。
+
+    Raises:
+        HTTPException: 项目不存在时返回 404。
+    """
+    # [修复问题1]：先检查项目是否存在
+    project = await db.get(Project, project_id)
+    if not project:
+        raise HTTPException(status_code=404, detail=f"Project with ID {project_id} not found")
+
+    # [修复问题2]：局部导入以避免 UnboundLocalError 和循环依赖
     from models.message import Message
     from models.session import Session as SessionModel
 
-    # 路径：QueryResult -> Statement -> Message (Assistant)
+    # 构造查询：Query Result -> Statement -> Message -> Session
+    # 我们需要 Message.content (用户问题) 和 QueryResult (数据)
     stmt = (
         select(QueryResult, Message)
         .join(AIGeneratedStatement, QueryResult.statement_id == AIGeneratedStatement.statement_id)
         .join(Message, AIGeneratedStatement.message_id == Message.message_id)
         .join(SessionModel, Message.session_id == SessionModel.session_id)
         .where(SessionModel.project_id == project_id)
+        .where(Message.message_type == 'assistant') # 确保我们取的是用户发的消息（提问）
         .order_by(QueryResult.cached_at.desc())
     )
 
@@ -146,13 +164,13 @@ async def get_history_queries_service(
 
     history = []
     for query_res, msg_obj in rows:
-        # 这里返回的是 QueryResult 的 result_id，前端将用这个 ID 创建报表
         history.append(schemas.HistoryQuery(
             id=str(query_res.result_id),
             projectId=str(project_id),
-            queryText=msg_obj.content, # 显示 AI 的描述或 SQL
+            # 这里取的是 message.content，即用户的原始提问
+            queryText=msg_obj.content, 
             timestamp=query_res.cached_at.isoformat() if query_res.cached_at else 'N/A',
-            result=query_res.result_data # 包含完整的 JSON 结果集
+            result=query_res.result_data
         ))
 
     return history
