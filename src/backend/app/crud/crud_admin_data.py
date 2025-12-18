@@ -76,6 +76,8 @@ class CRUDAdminData:
 
             # 3. 应用筛选条件
             filters = []
+            # 需求：管理员“用户列表”只展示普通用户（不包含管理员账号）
+            filters.append(UserAccount.is_admin == False)
             if status != "all":
                 filters.append(UserAccount.status == status)
 

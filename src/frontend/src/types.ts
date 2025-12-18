@@ -217,6 +217,38 @@ export interface AdminUserListResponse {
   items: AdminUserListItem[];
 }
 
+export interface AdminUserProjectItem {
+  project_id: number;
+  project_name: string;
+  db_type: string | null;
+  project_status: string;
+  created_at: string;
+  description: string | null;
+}
+
+export interface AdminUserLoginHistoryItem {
+  login_id: number;
+  login_time: string;
+  logout_time: string | null;
+  ip_address: string;
+  user_agent: string | null;
+  login_status: string;
+  failure_reason: string | null;
+}
+
+export interface AdminUserDetailResponse {
+  user_id: number;
+  username: string;
+  email: string;
+  status: 'normal' | 'suspended' | 'banned';
+  max_databases: number;
+  project_count: number;
+  last_login_at: string | null;
+  created_at: string | null;
+  projects: AdminUserProjectItem[];
+  login_history: AdminUserLoginHistoryItem[];
+}
+
 export interface AdminListItem {
   user_id: number;
   username: string;

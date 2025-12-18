@@ -158,9 +158,14 @@ class CRUDLoginHistory:
             DatabaseOperationFailedException: 查询失败时抛出。
         """
         try:
+            # 过滤登出类记录：只展示真正的登录结果（success/failed）。
+            # 这里采用排除法，避免未来新增状态时意外被隐藏。
+            excluded_statuses = ["forced_logout", "expired"]
+
             # 1. 查询总数
             count_query = select(func.count(UserLoginHistory.login_id)).where(
-                UserLoginHistory.user_id == user_id
+                UserLoginHistory.user_id == user_id,
+                UserLoginHistory.login_status.not_in(excluded_statuses)
             )
             total_result = await db.execute(count_query)
             total = total_result.scalar_one()
@@ -168,7 +173,10 @@ class CRUDLoginHistory:
             # 2. 查询列表数据 (按登录时间倒序)
             query = (
                 select(UserLoginHistory)
-                .where(UserLoginHistory.user_id == user_id)
+                .where(
+                    UserLoginHistory.user_id == user_id,
+                    UserLoginHistory.login_status.not_in(excluded_statuses)
+                )
                 .order_by(desc(UserLoginHistory.login_time))
                 .offset(skip)
                 .limit(limit)

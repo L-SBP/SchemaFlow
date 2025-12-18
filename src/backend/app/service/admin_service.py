@@ -30,11 +30,16 @@ from schema.admin import (
     AdminListItem,
     ViolationLogListResponse,
     ViolationLogListItem,
-    AdminStatsResponse
+    AdminStatsResponse,
+    AdminUserDetailResponse,
+    AdminUserProjectItem,
+    AdminUserLoginHistoryItem
 )
 from crud.crud_user_account import crud_user_account
 from crud.crud_announcement import crud_announcement
 from crud.crud_admin_data import crud_admin_data
+from crud.crud_project import crud_project
+from crud.crud_user_login_history import crud_login_history
 
 
 # ----------------------------------------------------------------------
@@ -64,6 +69,63 @@ async def get_admin_user_list_service(
     items_data, total = await crud_admin_data.get_user_list_with_stats(db, page, page_size, search, status)
     items_dto = [AdminUserListItem(**data) for data in items_data]
     return AdminUserListResponse(total=total, page=page, page_size=page_size, items=items_dto)
+
+
+async def get_admin_user_detail_service(
+    db: AsyncSession,
+    user_id: int,
+    project_limit: int = 100,
+    login_limit: int = 20,
+) -> AdminUserDetailResponse:
+    """获取管理员视角的用户详情（额度、已创建项目、登录历史）。"""
+
+    user_obj = await crud_user_account.get(db, user_id)
+    if not user_obj:
+        raise ItemNotFoundException(f"User with ID {user_id} not found.")
+
+    project_limit = max(0, min(project_limit, 500))
+    login_limit = max(0, min(login_limit, 200))
+
+    project_count = await crud_project.get_total_count_by_user(db, user_id)
+    projects = await crud_project.get_by_user(db, user_id, skip=0, limit=project_limit)
+
+    login_history_items, _total_login = await crud_login_history.get_multi_by_user(
+        db, user_id, skip=0, limit=login_limit
+    )
+
+    return AdminUserDetailResponse(
+        user_id=user_obj.user_id,
+        username=user_obj.username,
+        email=user_obj.email,
+        status=user_obj.status,
+        max_databases=user_obj.max_databases,
+        project_count=project_count,
+        last_login_at=user_obj.last_login_at,
+        created_at=getattr(user_obj, "created_at", None),
+        projects=[
+            AdminUserProjectItem(
+                project_id=p.project_id,
+                project_name=p.project_name,
+                db_type=getattr(p, "db_type", None),
+                project_status=p.project_status,
+                created_at=p.created_at,
+                description=p.description,
+            )
+            for p in projects
+        ],
+        login_history=[
+            AdminUserLoginHistoryItem(
+                login_id=lh.login_id,
+                login_time=lh.login_time,
+                logout_time=lh.logout_time,
+                ip_address=lh.ip_address,
+                user_agent=lh.user_agent,
+                login_status=lh.login_status,
+                failure_reason=lh.failure_reason,
+            )
+            for lh in login_history_items
+        ],
+    )
 
 
 # 在参数列表中添加 admin_user_id: int
