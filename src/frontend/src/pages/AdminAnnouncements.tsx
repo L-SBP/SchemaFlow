@@ -31,12 +31,13 @@ export const AdminAnnouncements: React.FC = () => {
                 announcementApi.getList(1, 100, 'draft')
             ]);
 
-            // 合并并按创建时间倒序
-            const allItems = [...publishedRes.items, ...draftRes.items].sort((a, b) =>
-                new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
-            );
+            // 合并并按 announcement_id 去重，再按创建时间倒序
+            const merged = [...publishedRes.items, ...draftRes.items];
+            const uniqueById = Array.from(
+                new Map(merged.map(a => [a.announcement_id, a])).values()
+            ).sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
 
-            setAnnouncements(allItems);
+            setAnnouncements(uniqueById);
         } catch (error) {
             console.error("Failed to fetch announcements", error);
         } finally {
