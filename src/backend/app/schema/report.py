@@ -116,3 +116,5 @@ class HistoryQuery(BaseModel):
     queryText: str
     timestamp: str
     result: Optional[HistoryQueryResult] = None
+    reportable: bool = True
+    unreportableReason: Optional[str] = None

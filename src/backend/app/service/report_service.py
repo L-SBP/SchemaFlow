@@ -22,6 +22,83 @@ from models.ai_generated_statement import AIGeneratedStatement
 from models.project import Project
 # 注意：Message 和 Session 我们将在函数内部导入，或者你可以尝试在这里导入
 # 如果报错循环依赖，请保持函数内导入
+
+
+def _looks_like_iso_date(value: str) -> bool:
+    # 支持 YYYY-MM-DD 或 YYYY-MM-DDThh:mm:ss(含可选时区)
+    if not isinstance(value, str):
+        return False
+    if not re.match(r"^\d{4}-\d{2}-\d{2}(?:[T\s]\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:?\d{2})?)?$", value):
+        return False
+    try:
+        # 兼容 'Z'
+        datetime.fromisoformat(value.replace('Z', '+00:00'))
+        return True
+    except Exception:
+        return False
+
+
+def _infer_field_type(values: List[Any]) -> str:
+    non_null = [v for v in values if v is not None]
+    if not non_null:
+        return 'string'
+
+    # object 优先级最高
+    if any(isinstance(v, (dict, list)) for v in non_null):
+        return 'object'
+    if any(isinstance(v, bool) for v in non_null):
+        return 'bool'
+    if all(isinstance(v, (int, float)) and not isinstance(v, bool) for v in non_null):
+        return 'number'
+    if all(isinstance(v, str) for v in non_null) and all(_looks_like_iso_date(v) for v in non_null):
+        return 'date'
+    # 混合或不确定：保守降级为 string
+    return 'string'
+
+
+def _extract_columns(data: List[Dict[str, Any]]) -> List[str]:
+    if not data:
+        return []
+    # 尽量保持首行字段顺序
+    first = data[0]
+    cols = list(first.keys())
+    # 补齐后续行新增字段
+    for row in data[1:]:
+        for k in row.keys():
+            if k not in cols:
+                cols.append(k)
+    return cols
+
+
+def _infer_fields(
+    data: List[Dict[str, Any]],
+    columns: List[str],
+    sample_size: int = 50,
+) -> List[schemas.HistoryQueryField]:
+    sample = data[:sample_size]
+    fields: List[schemas.HistoryQueryField] = []
+    for col in columns:
+        col_values = [r.get(col) for r in sample if isinstance(r, dict)]
+        fields.append(schemas.HistoryQueryField(name=col, type=_infer_field_type(col_values)))
+    return fields
+
+
+def _reportability_from_fields(
+    columns: List[str],
+    fields: List[schemas.HistoryQueryField],
+) -> tuple[bool, Optional[str]]:
+    if len(columns) < 2:
+        return False, '该查询结果只有一列，无法生成报表。'
+
+    has_number = any(f.type == 'number' for f in fields)
+    if not has_number:
+        return False, '该查询结果缺少数值字段，无法作为 Y 轴绘图。'
+
+    has_dimension = any(f.type in ('string', 'date') for f in fields)
+    if not has_dimension:
+        return False, '该查询结果缺少维度字段（文本/日期），无法作为 X 轴绘图。'
+
+    return True, None
 async def _verify_project_ownership(
     db: Session,
     project_id: int,
@@ -166,57 +243,6 @@ async def get_history_queries_service(
     result = await db.execute(stmt)
     rows = result.all()
 
-    def _looks_like_iso_date(value: str) -> bool:
-        # 支持 YYYY-MM-DD 或 YYYY-MM-DDThh:mm:ss(含可选时区)
-        if not isinstance(value, str):
-            return False
-        if not re.match(r"^\d{4}-\d{2}-\d{2}(?:[T\s]\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:?\d{2})?)?$", value):
-            return False
-        try:
-            # 兼容 'Z'
-            datetime.fromisoformat(value.replace('Z', '+00:00'))
-            return True
-        except Exception:
-            return False
-
-    def _infer_field_type(values: List[Any]) -> str:
-        non_null = [v for v in values if v is not None]
-        if not non_null:
-            return 'string'
-
-        # object 优先级最高
-        if any(isinstance(v, (dict, list)) for v in non_null):
-            return 'object'
-        if any(isinstance(v, bool) for v in non_null):
-            return 'bool'
-        if all(isinstance(v, (int, float)) and not isinstance(v, bool) for v in non_null):
-            return 'number'
-        if all(isinstance(v, str) for v in non_null) and all(_looks_like_iso_date(v) for v in non_null):
-            return 'date'
-        # 混合或不确定：保守降级为 string
-        return 'string'
-
-    def _extract_columns(data: List[Dict[str, Any]]) -> List[str]:
-        if not data:
-            return []
-        # 尽量保持首行字段顺序
-        first = data[0]
-        cols = list(first.keys())
-        # 补齐后续行新增字段
-        for row in data[1:]:
-            for k in row.keys():
-                if k not in cols:
-                    cols.append(k)
-        return cols
-
-    def _infer_fields(data: List[Dict[str, Any]], columns: List[str], sample_size: int = 50) -> List[schemas.HistoryQueryField]:
-        sample = data[:sample_size]
-        fields: List[schemas.HistoryQueryField] = []
-        for col in columns:
-            col_values = [r.get(col) for r in sample if isinstance(r, dict)]
-            fields.append(schemas.HistoryQueryField(name=col, type=_infer_field_type(col_values)))
-        return fields
-
     history: List[schemas.HistoryQuery] = []
     for query_res, msg_obj in rows:
         data = query_res.result_data if isinstance(query_res.result_data, list) else []
@@ -224,6 +250,7 @@ async def get_history_queries_service(
         normalized: List[Dict[str, Any]] = [r for r in data if isinstance(r, dict)]
         columns = _extract_columns(normalized)
         fields = _infer_fields(normalized, columns)
+        reportable, reason = _reportability_from_fields(columns, fields)
 
         # 回查用户提问：同 session 内，assistant 消息之前最近的一条 user 消息
         query_text = msg_obj.content
@@ -249,7 +276,9 @@ async def get_history_queries_service(
             projectId=str(project_id),
             queryText=query_text,
             timestamp=query_res.cached_at.isoformat() if query_res.cached_at else 'N/A',
-            result=schemas.HistoryQueryResult(columns=columns, fields=fields, data=normalized)
+            result=schemas.HistoryQueryResult(columns=columns, fields=fields, data=normalized),
+            reportable=reportable,
+            unreportableReason=reason,
         ))
 
     return history
@@ -288,6 +317,14 @@ async def create_report_service(
     if not result_exists:
         raise HTTPException(status_code=404, detail="Query result (Data Source) not found")
 
+    data = result_exists.result_data if isinstance(result_exists.result_data, list) else []
+    normalized = [r for r in data if isinstance(r, dict)]
+    columns = _extract_columns(normalized)
+    fields = _infer_fields(normalized, columns)
+    reportable, reason = _reportability_from_fields(columns, fields)
+    if not reportable:
+        raise HTTPException(status_code=400, detail=reason or '该查询结果不适合生成报表。')
+
     # 3. 创建 AnalysisReport 对象
     new_report = AnalysisReport(
         project_id=project_id,
@@ -304,9 +341,6 @@ async def create_report_service(
 
     # 4. 获取关联 SQL 文本用于返回
     stmt_obj = await db.get(AIGeneratedStatement, result_exists.statement_id)
-
-    data = result_exists.result_data if isinstance(result_exists.result_data, list) else []
-    normalized = [r for r in data if isinstance(r, dict)]
 
     return schemas.Report(
         id=str(new_report.report_id),

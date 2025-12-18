@@ -30,6 +30,8 @@ export interface HistoryQuery {
   queryText: string;
   timestamp: string;
   result: HistoryQueryResult;
+  reportable?: boolean;
+  unreportableReason?: string | null;
 }
 
 export const reportApi = {

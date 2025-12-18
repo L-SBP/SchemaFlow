@@ -113,6 +113,7 @@ export const Reports: React.FC<ReportsProps> = ({ projects }) => {
   }, [isModalOpen, selectedProjectId]);
 
   const selectedQueryObj = historyQueries.find(q => q.id === selectedQueryId);
+  const isSelectedQueryReportable = selectedQueryObj?.reportable !== false;
 
   // Initialize form when query changes
   useMemo(() => {
@@ -339,7 +340,7 @@ export const Reports: React.FC<ReportsProps> = ({ projects }) => {
                 <Button
                   variant="primary"
                   onClick={() => setStep(1)}
-                  disabled={!selectedQueryId}
+                  disabled={!selectedQueryId || !isSelectedQueryReportable}
                   icon={<ArrowRight size={16} />}
                 >
                   下一步: 配置图表
@@ -348,7 +349,7 @@ export const Reports: React.FC<ReportsProps> = ({ projects }) => {
                 <Button
                   variant="primary"
                   onClick={handleCreateReport}
-                  disabled={!reportName || !xAxisKey || !yAxisKey || isSaving}
+                  disabled={!reportName || !xAxisKey || !yAxisKey || isSaving || !isSelectedQueryReportable}
                   icon={isSaving ? <Loader2 className="animate-spin" size={16} /> : <Save size={16} />}
                 >
                   {isSaving ? '创建中...' : '完成并创建'}
@@ -371,38 +372,57 @@ export const Reports: React.FC<ReportsProps> = ({ projects }) => {
               <p className="text-sm text-gray-600">请从历史查询记录中选择一条作为报表的数据来源。</p>
               <div className="space-y-3">
                 {historyQueries.map(q => (
-                  <div
-                    key={q.id}
-                    onClick={() => setSelectedQueryId(q.id)}
-                    className={`p-4 border rounded-xl cursor-pointer transition-all hover:shadow-md ${selectedQueryId === q.id
-                      ? 'border-primary bg-blue-50 ring-1 ring-primary'
-                      : 'border-gray-200 bg-white hover:border-blue-200'
-                      }`}
-                  >
-                    <div className="flex justify-between items-center mb-2">
-                      <span className="font-bold text-gray-800 flex items-center gap-2">
-                        <Database size={14} className="text-primary" />
-                        {q.queryText}
-                      </span>
-                      <span className="text-xs text-gray-400">{q.timestamp}</span>
-                    </div>
+                  (() => {
+                    const reportable = q.reportable !== false;
+                    const isSelected = selectedQueryId === q.id;
+                    return (
+                      <div
+                        key={q.id}
+                        onClick={() => {
+                          if (reportable) setSelectedQueryId(q.id);
+                        }}
+                        className={`p-4 border rounded-xl transition-all ${reportable ? 'cursor-pointer hover:shadow-md' : 'cursor-not-allowed opacity-60'} ${isSelected
+                          ? 'border-primary bg-blue-50 ring-1 ring-primary'
+                          : 'border-gray-200 bg-white'
+                          } ${reportable ? 'hover:border-blue-200' : ''}`}
+                      >
+                        <div className="flex justify-between items-center mb-2">
+                          <span className="font-bold text-gray-800 flex items-center gap-2">
+                            <Database size={14} className="text-primary" />
+                            {q.queryText}
+                            {reportable ? null : (
+                              <span className="ml-2 inline-flex items-center rounded-full bg-gray-100 text-gray-600 px-2 py-0.5 text-[11px] border border-gray-200">
+                                不可用于报表
+                              </span>
+                            )}
+                          </span>
+                          <span className="text-xs text-gray-400">{q.timestamp}</span>
+                        </div>
 
-                    {/* Data Preview */}
-                    <div className="bg-white/60 rounded border border-gray-200 overflow-hidden text-xs">
-                      <div className="flex border-b border-gray-100 bg-gray-50 text-gray-500">
-                        {(q.result?.columns || []).slice(0, 4).map((c: string) => (
-                          <div key={c} className="flex-1 px-2 py-1 truncate">{c}</div>
-                        ))}
-                      </div>
-                      <div className="flex text-gray-700">
-                        {(q.result?.columns || []).slice(0, 4).map((c: string) => (
-                          <div key={c} className="flex-1 px-2 py-1 truncate">
-                            {q.result?.data?.[0]?.[c] ?? ''}
+                        {!reportable && q.unreportableReason && (
+                          <div className="text-xs text-gray-500 mb-2">
+                            原因：{q.unreportableReason}
                           </div>
-                        ))}
+                        )}
+
+                        {/* Data Preview */}
+                        <div className="bg-white/60 rounded border border-gray-200 overflow-hidden text-xs">
+                          <div className="flex border-b border-gray-100 bg-gray-50 text-gray-500">
+                            {(q.result?.columns || []).slice(0, 4).map((c: string) => (
+                              <div key={c} className="flex-1 px-2 py-1 truncate">{c}</div>
+                            ))}
+                          </div>
+                          <div className="flex text-gray-700">
+                            {(q.result?.columns || []).slice(0, 4).map((c: string) => (
+                              <div key={c} className="flex-1 px-2 py-1 truncate">
+                                {q.result?.data?.[0]?.[c] ?? ''}
+                              </div>
+                            ))}
+                          </div>
+                        </div>
                       </div>
-                    </div>
-                  </div>
+                    );
+                  })()
                 ))}
                 {historyQueries.length === 0 && (
                   <div className="text-center py-10 text-gray-400 border border-dashed rounded-lg">
