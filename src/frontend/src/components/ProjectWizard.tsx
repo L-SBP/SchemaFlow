@@ -330,14 +330,7 @@ export const ProjectWizard: React.FC<ProjectWizardProps> = ({ projectId, onCompl
               />
             </div>
 
-            <div className="space-y-2">
-              <label className="text-sm font-medium text-gray-700">额外需求 (可选)</label>
-              <Input
-                value={requirements}
-                onChange={(e) => setRequirements(e.target.value)}
-                placeholder="例如：在用户邮箱上添加索引..."
-              />
-            </div>
+
 
             <div className="flex justify-end gap-3 pt-4">
               <Button variant="default" onClick={onClose}>取消</Button>
