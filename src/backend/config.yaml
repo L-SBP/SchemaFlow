@@ -23,6 +23,8 @@ dev:
   #新增ai配置
   ai:
     modelscope_api_key: "ms-5990c475-35aa-444d-80eb-01c7f0d5719b"
+    # mermaid的api-key
+    mermaid_api_key: "sk-VwmLWgJlhLpNCyrP5IcTfvsBZp9VfhQqXfqcz7LH35xn5lhn"
 
   # 业务数据库配置(PostgresSQL)
   db:
