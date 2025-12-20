@@ -115,10 +115,10 @@ class AIService:
 
     # --- Mermaid ER 图生成逻辑 ---
     @classmethod
-    def generate_mermaid_code(schema_text: str, ai_model: str = "gpt4") -> str:
+    def generate_mermaid_code(cls,schema_text: str, ai_model: str = "gpt4") -> str:
         # 1. API Key 配置
         # TODO:后续不能写死
-        api_key = settings.mermaid_api_key
+        api_key = settings.ai.mermaid_api_key
         base_url = "https://ai.nengyongai.cn/v1"
 
         if not api_key:

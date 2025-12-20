@@ -124,6 +124,7 @@ class SMTP(BaseSettings):
 
 class AIConfig(BaseSettings):
     modelscope_api_key: str = "dummy_key"
+    mermaid_api_key: str = ""
 
 class MySQLConfig(BaseSettings):
     """
