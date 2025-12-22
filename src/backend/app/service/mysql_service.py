@@ -379,7 +379,7 @@ async def ensure_user_and_engine(
         raise
 
 
-async def execute_sql_with_user_check(
+async def execute_mysql_sql_with_user_check(
     sql: str,
     sql_type: str,
     instance_obj: DatabaseInstance,

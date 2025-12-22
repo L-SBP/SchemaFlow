@@ -41,6 +41,21 @@ services:
       networks:
         - app-network
 
+  postgres-user:
+      image: postgres:15
+      container_name: user_postgres
+      restart: always
+      ports:
+          - "2345:5432"
+      environment:
+        TZ: Asia/Shanghai
+        POSTGRES_PASSWORD: root_secure_2025
+      volumes:
+        - postgres_user_data:/var/lib/postgresql_user/data
+      networks:
+        - app-network
+
+
   # Redis (缓存 & 消息队列)
   redis:
     image: redis:7-alpine
@@ -153,6 +168,7 @@ services:
 volumes:
   postgres_data:
   mysql_data:
+  postgres_user_data:
   redis_data:
 
 

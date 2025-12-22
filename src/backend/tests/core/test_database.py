@@ -31,7 +31,7 @@ class TestPsqlHelper:
             "username": "testuser",
             "password": "testpassword",
             "database": "testdb",
-            "driver": "postgresql+asyncpg",
+            "driver": "postgresql_database+asyncpg",
             "echo": True,
             "max_overflow": 10,
             "pool_size": 50,

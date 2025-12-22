@@ -163,6 +163,35 @@ class MySQLConfig(BaseSettings):
             port=self.port
         )
 
+class PostgresConfig(BaseSettings):
+    # 数据库主机
+    host: str
+    # 端口
+    port: int
+    # 用户名
+    username: str
+    # 密码
+    password: str
+    # 数据库连接驱动
+    driver: str
+    # 显示执行SQL
+    echo: bool
+    # sqlalchemy连接池配置
+    max_overflow: int
+    pool_size: int
+    pool_recycle: int
+    pool_timeout: int
+
+    @property
+    def sqlalchemy_database_url(self) -> URL:
+        return URL.create(
+            drivername=self.driver,
+            username=self.username,
+            password=self.password,
+            host=self.host,
+            port=self.port
+        )
+
 class UserSQLPermissions(BaseModel):
     allowed_operations: List[str]
     forbidden_operations: List[str]
@@ -204,5 +233,7 @@ class BaseConfig(BaseSettings):
     password_reset_request_limit_per_ip_per_hour: int = 20
     # MySQL数据库配置
     mysql: MySQLConfig
+    # Postgres数据库配置
+    postgresql: PostgresConfig
     # SQL权限配置
     sql_permissions: SQLPermissions

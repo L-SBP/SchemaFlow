@@ -118,6 +118,25 @@ dev:
     # sqlalchemy连接池空闲时间
     pool_timeout: 30
 
+  postgresql:
+    # 数据库主机
+    host: 127.0.0.1
+    # 端口
+    port: 2345
+    # 用户名
+    username: postgres
+    # 密码
+    password: root_secure_2025
+    # 数据库连接驱动
+    driver: postgresql+asyncpg
+    # 显示执行SQL
+    echo: true
+    # sqlalchemy连接池配置
+    max_overflow: 5
+    pool_size: 5
+    pool_recycle: 3600
+    pool_timeout: 30
+
   # SQL权限
   sql_permissions:
     # MySQL Root 用户权限
@@ -235,6 +254,18 @@ prod:
     driver: mysql+aiomysql
     max_overflow: 10
     pool_size: 50
+    pool_recycle: 3600
+    pool_timeout: 30
+
+  postgresql:
+    host: localhost
+    port: 2345
+    username: root
+    password: root_secure_2025
+    driver: postgresql+asyncpg
+    echo: false
+    max_overflow: 5
+    pool_size: 5
     pool_recycle: 3600
     pool_timeout: 30
 

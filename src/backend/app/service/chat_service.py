@@ -29,7 +29,7 @@ from crud.crud_message import crud_message
 from crud.crud_project import crud_project
 from models.session import Session as SessionModel
 from schema.chat import ChatResponse, MessageType
-from service.mysql_service import execute_sql_with_user_check
+from service.mysql_service import execute_mysql_sql_with_user_check
 from models.ai_generated_statement import AIGeneratedStatement
 from models.query_result import QueryResult
 
@@ -320,7 +320,7 @@ async def process_chat(
         try:
             database_instance = await crud_database_instance.get(db, project.instance_id)
             exec_type = sql_type if sql_type != "UNKNOWN" else "SELECT"
-            raw_result = await execute_sql_with_user_check(sql_text, exec_type, database_instance)
+            raw_result = await execute_mysql_sql_with_user_check(sql_text, exec_type, database_instance)
             
             # 统一数据格式为 List[Dict]
             if isinstance(raw_result, list): data = raw_result
@@ -438,7 +438,7 @@ async def confirm_and_execute_sql(
     try:
         database_instance = await crud_database_instance.get(db, project.instance_id)
         # 真正执行 DML
-        result = await execute_sql_with_user_check(sql_text, "UPDATE", database_instance)
+        result = await execute_mysql_sql_with_user_check(sql_text, "UPDATE", database_instance)
         execute_res = [result] if isinstance(result, dict) else result
         
         # 1. 更新消息确认状态

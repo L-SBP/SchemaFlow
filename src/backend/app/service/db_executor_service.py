@@ -4,6 +4,7 @@ from core.sql_sort import sort_ddl_by_dependency
 from core.exceptions import ValidationException
 from mysql.mysql_execute import deploy_mysql_ddl
 from core.log import log
+from postgresql.postgres_execute import deploy_postgres_ddl
 
 
 class DBExecutorService:
@@ -31,7 +32,7 @@ class DBExecutorService:
         if db_type == 'mysql':
             await deploy_mysql_ddl(db_name, execution_statements)
         elif db_type == 'postgresql':
-            # await deploy_postgresql_ddl(db_name, execution_statements)
+            await deploy_postgres_ddl(db_name, execution_statements)
             raise NotImplementedError("PostgreSQL support coming soon")
         elif db_type == 'sqlite':
             # await deploy_sqlite_ddl(db_name, execution_statements)
