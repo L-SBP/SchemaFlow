@@ -2,6 +2,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import { ProjectDTO, fetchProjects, createProject, getProjectDetail, updateProject, confirmDeleteProject, deleteProject } from '../api/project';
 import { Card, Button, Tag, Modal, Input, ProgressBar, Steps } from '../components/UI';
 import { Plus, Database, Server, Clock, ArrowRight, Loader2, CheckCircle2, BrainCircuit, Code2, PlayCircle, Sparkles, RefreshCw, Edit3, Save, Trash2, AlertTriangle } from 'lucide-react';
+import { ProjectWizard } from '../components/ProjectWizard';
 
 // 常量定义
 const DEPLOYMENT_STEPS = [
@@ -31,42 +32,6 @@ const formatDbType = (type?: string) => {
   }
 };
 
-// 流式文本展示组件 (模拟打字机效果)
-const StreamingViewer: React.FC<{ text?: string; placeholder?: React.ReactNode }> = ({ text, placeholder }) => {
-  const [displayedText, setDisplayedText] = useState('');
-
-  useEffect(() => {
-    if (!text) {
-      setDisplayedText('');
-      return;
-    }
-    if (displayedText === text) return;
-
-    const target = text;
-    if (!target.startsWith(displayedText) && displayedText.length > 0) {
-      setDisplayedText('');
-      return;
-    }
-
-    const timer = setInterval(() => {
-      setDisplayedText(current => {
-        if (current.length < target.length) {
-          return target.slice(0, current.length + 5); // 加快一点速度
-        } else {
-          clearInterval(timer);
-          return target;
-        }
-      });
-    }, 10);
-
-    return () => clearInterval(timer);
-  }, [text]);
-
-  if (!text && !displayedText) return <>{placeholder}</>;
-
-  return <div className="whitespace-pre-wrap animate-in fade-in duration-500">{displayedText}</div>;
-};
-
 interface DashboardProps {
   onProjectSelect?: (project: ProjectDTO) => void;
 }
@@ -77,14 +42,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ onProjectSelect }) => {
 
   // 部署状态管理
   const [isDeploying, setIsDeploying] = useState(false);
-  const [currentProjectId, setCurrentProjectId] = useState<string | null>(null);
-  const [isRefining, setIsRefining] = useState(false);
-  const [refineDesc, setRefineDesc] = useState('');
-
-  // 详情数据
-  const [deploymentData, setDeploymentData] = useState<ProjectDTO | null>(null);
-  // 视觉进度条状态
-  const [visualProgress, setVisualProgress] = useState(0);
+  const [currentProjectId, setCurrentProjectId] = useState<string | number | null>(null);
 
   // 创建表单状态
   // 更新：增加 SQLite 类型支持
@@ -102,9 +60,6 @@ export const Dashboard: React.FC<DashboardProps> = ({ onProjectSelect }) => {
   const [editDesc, setEditDesc] = useState('');
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
 
-  const analysisScrollRef = useRef<HTMLDivElement>(null);
-  const ddlScrollRef = useRef<HTMLDivElement>(null);
-
   // 1. 初始化加载
   const loadProjects = async () => {
     try {
@@ -119,99 +74,11 @@ export const Dashboard: React.FC<DashboardProps> = ({ onProjectSelect }) => {
     loadProjects();
   }, []);
 
-  // 2. 进度条动画控制逻辑
-  useEffect(() => {
-    let timer: NodeJS.Timeout;
-
-    // 动态计算进度上限
-    // 逻辑：如果没有拿到 schema_definition，卡在 45% (Schema 设计阶段)
-    // 只有当 schema_definition 存在时，才允许进度条突破 45% 继续向 90% 迈进
-    const hasSchemaData = !!deploymentData?.schema_definition?.schema;
-    const progressCap = hasSchemaData ? 90 : 45;
-
-    if (isDeploying && visualProgress < progressCap) {
-      timer = setInterval(() => {
-        setVisualProgress((prev) => {
-          // 动态速度：前期快，接近 Cap 时变慢
-          let increment = 0.5;
-          if (progressCap - prev < 10) increment = 0.1;
-
-          const next = prev + increment;
-          return next >= progressCap ? progressCap : next;
-        });
-      }, 100);
-    }
-
-    return () => clearInterval(timer);
-  }, [isDeploying, visualProgress, deploymentData]);
-
-  // 3. 轮询逻辑：获取实时进度 (GET /projects/{id})
-  useEffect(() => {
-    let intervalId: NodeJS.Timeout;
-
-    if (isDeploying && currentProjectId) {
-      // 立即执行一次
-      const poll = async () => {
-        try {
-          const data = await getProjectDetail(currentProjectId);
-          setDeploymentData(data);
-
-          // 如果后端返回了进度，同步到视觉进度（取最大值，防止倒退）
-          if (data.progress_percentage !== undefined) {
-            setVisualProgress(prev => {
-              const backendProgress = data.progress_percentage!;
-              // 如果后端完成了，直接 100
-              if (data.project_status === 'active') return 100;
-              // 否则取较大值，确保进度条不会因为重新生成而突然跳回
-              return Math.max(prev, backendProgress);
-            });
-          }
-
-          if (!isRefining) {
-            setRefineDesc(data.description);
-          }
-
-          // 检查是否完成
-          if (data.project_status === 'active') {
-            setVisualProgress(100);
-            setIsDeploying(false);
-            loadProjects();
-          }
-        } catch (error) {
-          console.error("Polling error:", error);
-        }
-      };
-
-      poll();
-      // 轮询间隔 10 秒
-      intervalId = setInterval(poll, 10000);
-    }
-
-    return () => {
-      if (intervalId) clearInterval(intervalId);
-    };
-  }, [isDeploying, currentProjectId, isRefining]);
-
   // 创建项目 (POST)
   const handleCreateProject = async () => {
     if (!newProjectName || !newProjectDesc) return;
 
     setIsDeploying(true);
-    setVisualProgress(5); // 初始进度
-
-    setDeploymentData({
-      project_id: 'temp_pending_id',
-      project_name: newProjectName,
-      // @ts-ignore
-      db_type: newProjectType.toLowerCase(),
-      description: newProjectDesc,
-      project_status: 'initializing',
-      created_at: new Date().toISOString(),
-      creation_stage: 'analyzing',
-      progress_percentage: 5,
-      analysis_result: '正在连接 AI 引擎进行初步需求分析...\n>>> 载入领域知识库...',
-      ddl_result: '',
-    });
 
     try {
       const res = await createProject({
@@ -223,50 +90,20 @@ export const Dashboard: React.FC<DashboardProps> = ({ onProjectSelect }) => {
     } catch (e) {
       console.error("Failed to create project:", e);
       setIsDeploying(false);
-      setDeploymentData(null);
+      setCurrentProjectId(null);
       alert("创建失败，请检查网络或重试");
     }
   };
 
-  // 需求微调更新
-  const handleUpdateProjectRefine = async () => {
-    if (!currentProjectId || !refineDesc) return;
-
-    setIsRefining(false);
-    setIsDeploying(true);
-    setVisualProgress(10); // 重置进度条
-
-    setDeploymentData(prev => prev ? ({
-      ...prev,
-      analysis_result: prev.analysis_result + '\n\n>>> 用户更新需求，重新分析中...',
-      schema_definition: undefined, // 关键：清空 Schema，使进度条重新受制于 45% 卡点
-      ddl_result: '',
-      creation_stage: 'analyzing',
-      progress_percentage: 10
-    }) : null);
-
-    try {
-      await updateProject(currentProjectId, {
-        description: refineDesc,
-      });
-    } catch (e) {
-      console.error("Failed to update project:", e);
-      alert("更新失败，请重试");
-    }
-  };
-
   const handleCloseModal = () => {
-    // 直接关闭，不弹出确认框，停止前端轮询即视为终止当前部署流程的监控
     setIsModalOpen(false);
     setTimeout(() => {
       setNewProjectName('');
       setNewProjectDesc('');
       setIsDeploying(false);
       setCurrentProjectId(null);
-      setDeploymentData(null);
-      setVisualProgress(0);
-      setIsRefining(false);
     }, 300);
+    loadProjects();
   };
 
   // --- 项目管理操作 ---
@@ -315,15 +152,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ onProjectSelect }) => {
     }
   };
 
-  // 渲染变量
-  const progress = visualProgress;
-  const currentStep = Math.min(Math.floor(progress / 25), 3);
-
-  const analysisText = deploymentData?.schema_definition?.schema || deploymentData?.analysis_result;
-  const ddlText = deploymentData?.schema_definition?.ddl || deploymentData?.ddl_result;
-
-  const canRefine = deploymentData?.project_status !== 'active';
-  const showProgressView = isDeploying || !!currentProjectId;
+  const showProgressView = isDeploying && !!currentProjectId;
 
   return (
     // 修改: p-8 -> p-4 sm:p-8，优化移动端间距
@@ -381,7 +210,16 @@ export const Dashboard: React.FC<DashboardProps> = ({ onProjectSelect }) => {
                 </div>
               }
             >
-              <div className="flex flex-col h-full" onClick={() => onProjectSelect?.(project)}>
+              <div className="flex flex-col h-full" onClick={() => {
+                if (project.project_status === 'active') {
+                  onProjectSelect?.(project);
+                } else {
+                  // Resume deployment
+                  setCurrentProjectId(project.project_id);
+                  setIsDeploying(true);
+                  setIsModalOpen(true);
+                }
+              }}>
                 <p className="text-gray-600 text-sm line-clamp-2 h-10 leading-relaxed mb-4">
                   {project.description}
                 </p>
@@ -410,8 +248,17 @@ export const Dashboard: React.FC<DashboardProps> = ({ onProjectSelect }) => {
                   </div>
 
                   <div className="flex justify-end pt-2 opacity-0 group-hover:opacity-100 transition-all duration-300 transform translate-y-2 group-hover:translate-y-0 h-6">
-                    <Button variant="text" className="text-primary text-xs hover:bg-blue-50 px-0" onClick={(e) => { e.stopPropagation(); onProjectSelect?.(project); }}>
-                      进入工作台 <ArrowRight size={12} className="ml-1" />
+                    <Button variant="text" className="text-primary text-xs hover:bg-blue-50 px-0" onClick={(e) => {
+                      e.stopPropagation();
+                      if (project.project_status === 'active') {
+                        onProjectSelect?.(project);
+                      } else {
+                        setCurrentProjectId(project.project_id);
+                        setIsDeploying(true);
+                        setIsModalOpen(true);
+                      }
+                    }}>
+                      {project.project_status === 'active' ? '进入工作台' : '继续部署'} <ArrowRight size={12} className="ml-1" />
                     </Button>
                   </div>
                 </div>
@@ -434,25 +281,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ onProjectSelect }) => {
                 开始智能部署
               </Button>
             </>
-          ) : (
-            <div className="w-full flex justify-between items-center">
-              <div className="text-xs text-gray-500 flex items-center gap-2">
-                {isDeploying && <Loader2 size={14} className="animate-spin text-primary" />}
-                {isDeploying ? 'AI 正在实时构建中，请稍候...' : '部署操作已就绪'}
-              </div>
-              <div className="flex gap-2">
-                {deploymentData?.project_status === 'active' ? (
-                  <Button variant="primary" onClick={handleCloseModal} icon={<CheckCircle2 size={16} />}>
-                    完成并进入工作台
-                  </Button>
-                ) : (
-                  <Button disabled className="opacity-50 cursor-not-allowed bg-gray-100 text-gray-400 border-gray-200">
-                    正在部署中...
-                  </Button>
-                )}
-              </div>
-            </div>
-          )
+          ) : null
         }
       >
         {!showProgressView ? (
@@ -487,87 +316,11 @@ export const Dashboard: React.FC<DashboardProps> = ({ onProjectSelect }) => {
             </div>
           </div>
         ) : (
-          <div className="flex flex-col h-[650px] -m-2">
-            <div className="mb-4 px-6 pt-2">
-              <Steps steps={DEPLOYMENT_STEPS} current={currentStep} />
-              <div className="mt-4 px-1">
-                <ProgressBar progress={progress} />
-              </div>
-            </div>
-
-            <div className="flex-1 flex gap-6 min-h-0 px-2 pb-2">
-              <div className="flex-1 flex flex-col border border-gray-200 rounded-xl overflow-hidden shadow-sm bg-white relative">
-                <div className="bg-gray-50 px-4 py-3 border-b border-gray-200 flex justify-between items-center">
-                  <div className="flex items-center gap-2.5">
-                    <div className="p-1.5 bg-white rounded-md shadow-sm text-purple-600">
-                      <BrainCircuit size={16} />
-                    </div>
-                    <span className="text-sm font-semibold text-gray-700">Generated Schema</span>
-                  </div>
-                  {canRefine && !isRefining && (
-                    <Button variant="text" className="h-6 px-2 text-xs text-primary" onClick={() => setIsRefining(true)} icon={<Edit3 size={12} />}>
-                      调整需求
-                    </Button>
-                  )}
-                </div>
-
-                {isRefining ? (
-                  <div className="flex-1 p-4 flex flex-col animate-in fade-in slide-in-from-bottom-2">
-                    <div className="flex-1">
-                      <label className="text-xs font-bold text-gray-500 mb-2 block">修正业务描述 (Prompt)</label>
-                      <textarea
-                        className="w-full h-[90%] p-3 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary resize-none"
-                        value={refineDesc}
-                        onChange={(e) => setRefineDesc(e.target.value)}
-                        placeholder="请输入新的需求描述，AI 将基于此重新生成 Schema..."
-                      />
-                    </div>
-                    <div className="flex justify-end gap-2 mt-2">
-                      <Button variant="default" onClick={() => setIsRefining(false)}>取消</Button>
-                      <Button variant="primary" onClick={handleUpdateProjectRefine} icon={<RefreshCw size={14} />}>
-                        更新并重新生成
-                      </Button>
-                    </div>
-                  </div>
-                ) : (
-                  <div ref={analysisScrollRef} className="flex-1 p-5 overflow-y-auto text-sm leading-7 text-gray-700 font-sans prose prose-sm max-w-none relative">
-                    <StreamingViewer
-                      text={analysisText}
-                      placeholder={
-                        <div className="h-full flex flex-col items-center justify-center text-gray-400 gap-2">
-                          <Loader2 size={32} className="animate-spin opacity-20" />
-                          {/* 修改：添加 text-sm 和 font-sans 以确保样式统一 */}
-                          <p className="text-sm font-sans">Waiting for Schema stream...</p>
-                        </div>
-                      }
-                    />
-                  </div>
-                )}
-              </div>
-
-              <div className="flex-1 flex flex-col border border-gray-200 rounded-xl overflow-hidden shadow-sm bg-white">
-                <div className="bg-gray-50 px-4 py-3 border-b border-gray-200 flex items-center gap-2.5">
-                  <div className="p-1.5 bg-white rounded-md shadow-sm text-blue-600">
-                    <Code2 size={16} />
-                  </div>
-                  <span className="text-sm font-semibold text-gray-700">Generated DDL</span>
-                </div>
-                <div ref={ddlScrollRef} className="flex-1 p-5 overflow-y-auto font-mono text-xs leading-6 bg-white text-gray-700">
-                  {ddlText ? (
-                    <pre className="whitespace-pre-wrap"><code className="language-sql">
-                      <StreamingViewer text={ddlText} />
-                    </code></pre>
-                  ) : (
-                    <div className="h-full flex flex-col items-center justify-center text-gray-400 gap-2">
-                      <Loader2 size={32} className="animate-spin opacity-20" />
-                      {/* 修改：添加 text-sm 和 font-sans，覆盖父级的 font-mono 和 text-xs */}
-                      <p className="text-sm font-sans">Waiting for DDL stream...</p>
-                    </div>
-                  )}
-                </div>
-              </div>
-            </div>
-          </div>
+          <ProjectWizard
+            projectId={currentProjectId!}
+            onComplete={handleCloseModal}
+            onClose={handleCloseModal}
+          />
         )}
       </Modal>
 
@@ -601,7 +354,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ onProjectSelect }) => {
             <Input
               value={deleteConfirmation}
               onChange={(e) => setDeleteConfirmation(e.target.value)}
-              placeholder="在此输入项目名称"
+              placeholder=""
               className="border-red-300 focus:border-red-500 focus:ring-red-100"
             />
           </div>

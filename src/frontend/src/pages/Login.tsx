@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { Button, Input } from '../components/UI';
+import { message } from '../components/UI';
 import { UserRole } from '../types';
 import { authApi } from '../api/auth'; // 引入 API 模块
 
@@ -8,19 +9,29 @@ interface LoginProps {
 }
 
 export const Login: React.FC<LoginProps> = ({ onLogin }) => {
+  type AuthView = 'login' | 'register' | 'forgot';
+
+  const [authView, setAuthView] = useState<AuthView>('login');
+
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
+
+  // register / forgot
   const [email, setEmail] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [verificationCode, setVerificationCode] = useState('');
 
-  const [isRegister, setIsRegister] = useState(false);
+  // forgot: reset password by email code
+  const [resetNewPassword, setResetNewPassword] = useState('');
+  const [resetConfirmNewPassword, setResetConfirmNewPassword] = useState('');
+
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
-  const [countdown, setCountdown] = useState(0);
+  const [registerCountdown, setRegisterCountdown] = useState(0);
+  const [resetCountdown, setResetCountdown] = useState(0);
 
-  // 发送验证码逻辑
-  const handleSendCode = async () => {
+  // 发送注册验证码
+  const handleSendRegisterCode = async () => {
     if (!email) {
       setError('请先输入邮箱地址');
       return;
@@ -33,12 +44,42 @@ export const Login: React.FC<LoginProps> = ({ onLogin }) => {
 
     try {
       await authApi.sendRegisterCode(email);
-      alert('验证码已发送，请查收邮件');
+      message.success('验证码已发送，请查收邮件');
 
       // 开启60秒倒计时
-      setCountdown(60);
+      setRegisterCountdown(60);
       const timer = setInterval(() => {
-        setCountdown((prev) => {
+        setRegisterCountdown((prev) => {
+          if (prev <= 1) {
+            clearInterval(timer);
+            return 0;
+          }
+          return prev - 1;
+        });
+      }, 1000);
+    } catch (err: any) {
+      setError(err.message || '发送验证码失败');
+    }
+  };
+
+  // 发送重置密码验证码
+  const handleSendResetCode = async () => {
+    if (!email) {
+      setError('请先输入邮箱地址');
+      return;
+    }
+    if (!/\S+@\S+\.\S+/.test(email)) {
+      setError('请输入有效的邮箱地址');
+      return;
+    }
+
+    try {
+      await authApi.sendPasswordResetCode(email);
+      message.success('若账号存在，验证码已发送，请查收邮件。');
+
+      setResetCountdown(60);
+      const timer = setInterval(() => {
+        setResetCountdown((prev) => {
           if (prev <= 1) {
             clearInterval(timer);
             return 0;
@@ -55,7 +96,7 @@ export const Login: React.FC<LoginProps> = ({ onLogin }) => {
     e.preventDefault();
     setError('');
 
-    if (isRegister) {
+    if (authView === 'register') {
       // --- 注册逻辑 ---
       if (!username || !email || !password || !confirmPassword || !verificationCode) {
         setError('请填写所有必填项');
@@ -76,8 +117,8 @@ export const Login: React.FC<LoginProps> = ({ onLogin }) => {
           verification_code: verificationCode
         });
 
-        alert(`注册成功！欢迎，${username}。请直接登录。`);
-        setIsRegister(false);
+        message.success('注册成功！请直接登录。');
+        setAuthView('login');
         setPassword('');
         setConfirmPassword('');
         setVerificationCode('');
@@ -87,7 +128,7 @@ export const Login: React.FC<LoginProps> = ({ onLogin }) => {
         setIsLoading(false);
       }
 
-    } else {
+    } else if (authView === 'login') {
       // --- 登录逻辑 ---
       if (!username || !password) {
         setError('请输入用户名和密码');
@@ -113,17 +154,73 @@ export const Login: React.FC<LoginProps> = ({ onLogin }) => {
       } finally {
         setIsLoading(false);
       }
+
+    } else if (authView === 'forgot') {
+      if (!email) {
+        setError('请先输入邮箱地址');
+        return;
+      }
+      if (!/\S+@\S+\.\S+/.test(email)) {
+        setError('请输入有效的邮箱地址');
+        return;
+      }
+      if (!verificationCode) {
+        setError('请输入邮箱验证码');
+        return;
+      }
+      if (!resetNewPassword || !resetConfirmNewPassword) {
+        setError('请输入新密码并确认');
+        return;
+      }
+      if (resetNewPassword !== resetConfirmNewPassword) {
+        setError('两次输入的新密码不一致');
+        return;
+      }
+
+      setIsLoading(true);
+      try {
+        await authApi.resetPasswordWithCode({
+          email,
+          verification_code: verificationCode,
+          new_password: resetNewPassword,
+          confirm_password: resetConfirmNewPassword,
+        });
+        message.success('密码已重置，请使用新密码登录。');
+
+        setVerificationCode('');
+        setResetNewPassword('');
+        setResetConfirmNewPassword('');
+        setAuthView('login');
+      } catch (err: any) {
+        setError(err.message || '重置失败，请稍后重试');
+      } finally {
+        setIsLoading(false);
+      }
     }
   };
 
-  const toggleMode = () => {
-    setIsRegister(!isRegister);
+  const goToLogin = () => {
+    setAuthView('login');
     setError('');
-    if (!isRegister) {
-      setEmail('');
-      setConfirmPassword('');
-      setVerificationCode('');
-    }
+  };
+
+  const goToRegister = () => {
+    setAuthView('register');
+    setError('');
+    setEmail('');
+    setConfirmPassword('');
+    setVerificationCode('');
+    setRegisterCountdown(0);
+  };
+
+  const goToForgot = () => {
+    setAuthView('forgot');
+    setError('');
+    setEmail('');
+    setVerificationCode('');
+    setResetNewPassword('');
+    setResetConfirmNewPassword('');
+    setResetCountdown(0);
   };
 
   return (
@@ -141,25 +238,102 @@ export const Login: React.FC<LoginProps> = ({ onLogin }) => {
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-4">
-          <Input
-            label="用户名"
-            value={username}
-            onChange={e => setUsername(e.target.value)}
-            placeholder={isRegister ? "设置用户名" : "输入用户名或邮箱"}
-            disabled={isLoading}
-          />
 
-          {isRegister && (
-            <div className="animate-in fade-in slide-in-from-top-2 duration-200 space-y-4">
+          {authView === 'login' && (
+            <div className="space-y-4">
+              <Input
+                label="用户名"
+                value={username}
+                onChange={e => setUsername(e.target.value)}
+                placeholder="输入用户名或邮箱"
+                disabled={isLoading}
+              />
+
+              <Input
+                label="密码"
+                type="password"
+                value={password}
+                onChange={e => setPassword(e.target.value)}
+                placeholder="输入密码"
+                disabled={isLoading}
+              />
+            </div>
+          )}
+
+          {authView === 'register' && (
+            <div className="space-y-4">
+              <Input
+                label="用户名"
+                value={username}
+                onChange={e => setUsername(e.target.value)}
+                placeholder="设置用户名"
+                disabled={isLoading}
+              />
+
+              <div className="animate-in fade-in slide-in-from-top-2 duration-200 space-y-4">
+                <Input
+                  label="邮箱地址"
+                  type="email"
+                  value={email}
+                  onChange={e => setEmail(e.target.value)}
+                  placeholder="example@email.com"
+                  disabled={isLoading}
+                />
+
+                <div className="flex items-end gap-2">
+                  <div className="flex-1">
+                    <Input
+                      label="验证码"
+                      value={verificationCode}
+                      onChange={e => setVerificationCode(e.target.value)}
+                      placeholder="6位验证码"
+                      disabled={isLoading}
+                    />
+                  </div>
+                  <Button
+                    type="button"
+                    variant="default"
+                    className="mb-[2px] h-[42px] whitespace-nowrap w-28"
+                    onClick={handleSendRegisterCode}
+                    disabled={registerCountdown > 0 || isLoading}
+                  >
+                    {registerCountdown > 0 ? `${registerCountdown}s` : '发送验证码'}
+                  </Button>
+                </div>
+              </div>
+
+              <Input
+                label="密码"
+                type="password"
+                value={password}
+                onChange={e => setPassword(e.target.value)}
+                placeholder="设置密码"
+                disabled={isLoading}
+              />
+
+              <div className="animate-in fade-in slide-in-from-top-2 duration-200">
+                <Input
+                  label="确认密码"
+                  type="password"
+                  value={confirmPassword}
+                  onChange={e => setConfirmPassword(e.target.value)}
+                  placeholder="再次输入密码"
+                  disabled={isLoading}
+                />
+              </div>
+            </div>
+          )}
+
+          {authView === 'forgot' && (
+            <div className="space-y-4">
               <Input
                 label="邮箱地址"
                 type="email"
                 value={email}
                 onChange={e => setEmail(e.target.value)}
-                placeholder="example@email.com"
+                placeholder="输入注册邮箱"
                 disabled={isLoading}
               />
-
               <div className="flex items-end gap-2">
                 <div className="flex-1">
                   <Input
@@ -174,34 +348,32 @@ export const Login: React.FC<LoginProps> = ({ onLogin }) => {
                   type="button"
                   variant="default"
                   className="mb-[2px] h-[42px] whitespace-nowrap w-28"
-                  onClick={handleSendCode}
-                  disabled={countdown > 0 || isLoading}
+                  onClick={handleSendResetCode}
+                  disabled={resetCountdown > 0 || isLoading}
                 >
-                  {countdown > 0 ? `${countdown}s` : '发送验证码'}
+                  {resetCountdown > 0 ? `${resetCountdown}s` : '发送验证码'}
                 </Button>
               </div>
-            </div>
-          )}
 
-          <Input
-            label="密码"
-            type="password"
-            value={password}
-            onChange={e => setPassword(e.target.value)}
-            placeholder={isRegister ? "设置密码" : "输入密码"}
-            disabled={isLoading}
-          />
-
-          {isRegister && (
-            <div className="animate-in fade-in slide-in-from-top-2 duration-200">
               <Input
-                label="确认密码"
+                label="新密码"
                 type="password"
-                value={confirmPassword}
-                onChange={e => setConfirmPassword(e.target.value)}
-                placeholder="再次输入密码"
+                value={resetNewPassword}
+                onChange={e => setResetNewPassword(e.target.value)}
+                placeholder="设置新密码"
                 disabled={isLoading}
               />
+
+              <Input
+                label="确认新密码"
+                type="password"
+                value={resetConfirmNewPassword}
+                onChange={e => setResetConfirmNewPassword(e.target.value)}
+                placeholder="再次输入新密码"
+                disabled={isLoading}
+              />
+
+              <p className="text-xs text-gray-500">我们会向该邮箱发送验证码（若账号存在）。</p>
             </div>
           )}
 
@@ -214,14 +386,32 @@ export const Login: React.FC<LoginProps> = ({ onLogin }) => {
             disabled={isLoading}
           >
             {isLoading && <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></span>}
-            {isRegister ? '注册并登录' : '登录'}
+            {authView === 'register' ? '注册并登录' : authView === 'forgot' ? '重置密码' : '登录'}
           </Button>
 
           <div className="flex justify-between text-sm mt-4">
-            <span className="text-primary cursor-pointer hover:underline" onClick={!isLoading ? toggleMode : undefined}>
-              {isRegister ? '已有账号？去登录' : '注册新账号'}
-            </span>
-            {!isRegister && <span className="text-gray-400 cursor-not-allowed" title="请联系管理员重置">忘记密码？</span>}
+            {authView === 'login' && (
+              <>
+                <span className="text-primary cursor-pointer hover:underline" onClick={!isLoading ? goToRegister : undefined}>
+                  注册新账号
+                </span>
+                <span className="text-primary cursor-pointer hover:underline" onClick={!isLoading ? goToForgot : undefined}>
+                  忘记密码？
+                </span>
+              </>
+            )}
+
+            {authView === 'register' && (
+              <span className="text-primary cursor-pointer hover:underline" onClick={!isLoading ? goToLogin : undefined}>
+                已有账号？去登录
+              </span>
+            )}
+
+            {authView === 'forgot' && (
+              <span className="text-primary cursor-pointer hover:underline" onClick={!isLoading ? goToLogin : undefined}>
+                返回登录
+              </span>
+            )}
           </div>
         </form>
 

@@ -112,23 +112,39 @@ export interface CreateProjectParams {
   name: string;
   type: 'MySQL' | 'PostgreSQL' | 'SQLite';
   description: string;
+  ai_model?: string;
 }
 
-export type CreationStage = 'initializing' | 'analyzing' | 'generating_schema' | 'generating_ddl' | 'deploying' | 'completed';
+export enum ProjectStatusEnum {
+  INITIALIZING = 'initializing',
+  PENDING_CONFIRMATION = 'pending_confirmation',
+  ACTIVE = 'active',
+  DELETED = 'deleted'
+}
+
+export enum CreationStageEnum {
+  INITIALIZING = 'initializing',
+  GENERATING_SCHEMA = 'generating_schema',
+  SCHEMA_GENERATED = 'schema_generated',
+  GENERATING_DDL = 'generating_ddl',
+  DDL_GENERATED = 'ddl_generated',
+  EXECUTING_DDL = 'executing_ddl',
+  COMPLETED = 'completed'
+}
 
 export interface ProjectDTO {
-  project_id: string;
+  project_id: number;
   project_name: string;
-  db_type: 'MySQL' | 'PostgreSQL' | 'SQLite';
+  db_type: 'mysql' | 'postgresql' | 'sqlite';
   description: string;
-  project_status: 'initializing' | 'active' | 'error' | 'deleted';
+  project_status: ProjectStatusEnum;
   created_at: string;
   updated_at?: string;
-  creation_stage?: CreationStage;
+  creation_stage?: CreationStageEnum;
   progress_percentage?: number;
   schema_definition?: Record<string, any>;
-  analysis_result?: string;
-  ddl_result?: string;
+  ddl_statement?: string;
+  er_diagram_code?: string;
   deployment_logs?: string[];
 }
 
@@ -201,6 +217,38 @@ export interface AdminUserListResponse {
   items: AdminUserListItem[];
 }
 
+export interface AdminUserProjectItem {
+  project_id: number;
+  project_name: string;
+  db_type: string | null;
+  project_status: string;
+  created_at: string;
+  description: string | null;
+}
+
+export interface AdminUserLoginHistoryItem {
+  login_id: number;
+  login_time: string;
+  logout_time: string | null;
+  ip_address: string;
+  user_agent: string | null;
+  login_status: string;
+  failure_reason: string | null;
+}
+
+export interface AdminUserDetailResponse {
+  user_id: number;
+  username: string;
+  email: string;
+  status: 'normal' | 'suspended' | 'banned';
+  max_databases: number;
+  project_count: number;
+  last_login_at: string | null;
+  created_at: string | null;
+  projects: AdminUserProjectItem[];
+  login_history: AdminUserLoginHistoryItem[];
+}
+
 export interface AdminListItem {
   user_id: number;
   username: string;
@@ -230,4 +278,19 @@ export interface ViolationLogListResponse {
   page: number;
   page_size: number;
   items: ViolationLogListItem[];
+}
+
+export interface ChatRequest {
+  content: string;
+  model?: string;
+}
+
+export interface ChatResponse {
+  message_id: number;
+  content: string;
+  message_type: 'user' | 'assistant' | 'system';
+  sql_text?: string | null;
+  sql_type?: string;
+  requires_confirmation: boolean;
+  data?: any[] | null;
 }

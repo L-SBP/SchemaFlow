@@ -7,7 +7,9 @@
 
 # backend/app/service/report_service.py
 
-from typing import List
+from typing import List, Any, Dict, Optional
+import re
+from datetime import datetime
 from sqlalchemy.ext.asyncio import AsyncSession as Session
 from sqlalchemy import select
 from fastapi import HTTPException
@@ -20,6 +22,83 @@ from models.ai_generated_statement import AIGeneratedStatement
 from models.project import Project
 # 注意：Message 和 Session 我们将在函数内部导入，或者你可以尝试在这里导入
 # 如果报错循环依赖，请保持函数内导入
+
+
+def _looks_like_iso_date(value: str) -> bool:
+    # 支持 YYYY-MM-DD 或 YYYY-MM-DDThh:mm:ss(含可选时区)
+    if not isinstance(value, str):
+        return False
+    if not re.match(r"^\d{4}-\d{2}-\d{2}(?:[T\s]\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:?\d{2})?)?$", value):
+        return False
+    try:
+        # 兼容 'Z'
+        datetime.fromisoformat(value.replace('Z', '+00:00'))
+        return True
+    except Exception:
+        return False
+
+
+def _infer_field_type(values: List[Any]) -> str:
+    non_null = [v for v in values if v is not None]
+    if not non_null:
+        return 'string'
+
+    # object 优先级最高
+    if any(isinstance(v, (dict, list)) for v in non_null):
+        return 'object'
+    if any(isinstance(v, bool) for v in non_null):
+        return 'bool'
+    if all(isinstance(v, (int, float)) and not isinstance(v, bool) for v in non_null):
+        return 'number'
+    if all(isinstance(v, str) for v in non_null) and all(_looks_like_iso_date(v) for v in non_null):
+        return 'date'
+    # 混合或不确定：保守降级为 string
+    return 'string'
+
+
+def _extract_columns(data: List[Dict[str, Any]]) -> List[str]:
+    if not data:
+        return []
+    # 尽量保持首行字段顺序
+    first = data[0]
+    cols = list(first.keys())
+    # 补齐后续行新增字段
+    for row in data[1:]:
+        for k in row.keys():
+            if k not in cols:
+                cols.append(k)
+    return cols
+
+
+def _infer_fields(
+    data: List[Dict[str, Any]],
+    columns: List[str],
+    sample_size: int = 50,
+) -> List[schemas.HistoryQueryField]:
+    sample = data[:sample_size]
+    fields: List[schemas.HistoryQueryField] = []
+    for col in columns:
+        col_values = [r.get(col) for r in sample if isinstance(r, dict)]
+        fields.append(schemas.HistoryQueryField(name=col, type=_infer_field_type(col_values)))
+    return fields
+
+
+def _reportability_from_fields(
+    columns: List[str],
+    fields: List[schemas.HistoryQueryField],
+) -> tuple[bool, Optional[str]]:
+    if len(columns) < 2:
+        return False, '该查询结果只有一列，无法生成报表。'
+
+    has_number = any(f.type == 'number' for f in fields)
+    if not has_number:
+        return False, '该查询结果缺少数值字段，无法作为 Y 轴绘图。'
+
+    has_dimension = any(f.type in ('string', 'date') for f in fields)
+    if not has_dimension:
+        return False, '该查询结果缺少维度字段（文本/日期），无法作为 X 轴绘图。'
+
+    return True, None
 async def _verify_project_ownership(
     db: Session,
     project_id: int,
@@ -108,6 +187,7 @@ async def get_report_list(
             description=report_obj.description,
             data=result_obj.result_data if isinstance(result_obj.result_data, list) else [],
             chartConfig=c_config,
+            sourceQueryId=str(report_obj.result_id),
             sourceQueryText=stmt_obj.sql_text,
             updatedAt=report_obj.updated_at.isoformat() if report_obj.updated_at else report_obj.created_at.isoformat()
         ))
@@ -147,30 +227,58 @@ async def get_history_queries_service(
     from models.message import Message
     from models.session import Session as SessionModel
 
-    # 构造查询：Query Result -> Statement -> Message -> Session
-    # 我们需要 Message.content (用户问题) 和 QueryResult (数据)
+    # 构造查询：Query Result -> Statement -> Message(assistant) -> Session
+    # 说明：AIGeneratedStatement.message_id 绑定的是 assistant 消息。
+    # 为了展示“用户的提问”，我们会再回查同会话中该 assistant 消息之前最近的一条 user 消息。
     stmt = (
         select(QueryResult, Message)
         .join(AIGeneratedStatement, QueryResult.statement_id == AIGeneratedStatement.statement_id)
         .join(Message, AIGeneratedStatement.message_id == Message.message_id)
         .join(SessionModel, Message.session_id == SessionModel.session_id)
         .where(SessionModel.project_id == project_id)
-        .where(Message.message_type == 'assistant') # 确保我们取的是用户发的消息（提问）
+        .where(Message.message_type == 'assistant')
         .order_by(QueryResult.cached_at.desc())
     )
 
     result = await db.execute(stmt)
     rows = result.all()
 
-    history = []
+    history: List[schemas.HistoryQuery] = []
     for query_res, msg_obj in rows:
+        data = query_res.result_data if isinstance(query_res.result_data, list) else []
+        # 确保是 [{...}] 的结构，否则前端无法选轴
+        normalized: List[Dict[str, Any]] = [r for r in data if isinstance(r, dict)]
+        columns = _extract_columns(normalized)
+        fields = _infer_fields(normalized, columns)
+        reportable, reason = _reportability_from_fields(columns, fields)
+
+        # 回查用户提问：同 session 内，assistant 消息之前最近的一条 user 消息
+        query_text = msg_obj.content
+        try:
+            stmt_user = (
+                select(Message)
+                .where(Message.session_id == msg_obj.session_id)
+                .where(Message.message_type == 'user')
+                .where(Message.created_at <= msg_obj.created_at)
+                .order_by(Message.created_at.desc())
+                .limit(1)
+            )
+            user_res = await db.execute(stmt_user)
+            user_msg = user_res.scalar_one_or_none()
+            if user_msg and user_msg.content:
+                query_text = user_msg.content
+        except Exception:
+            # 兜底：保持 assistant 内容（不影响 rows 返回）
+            pass
+
         history.append(schemas.HistoryQuery(
             id=str(query_res.result_id),
             projectId=str(project_id),
-            # 这里取的是 message.content，即用户的原始提问
-            queryText=msg_obj.content, 
+            queryText=query_text,
             timestamp=query_res.cached_at.isoformat() if query_res.cached_at else 'N/A',
-            result=query_res.result_data
+            result=schemas.HistoryQueryResult(columns=columns, fields=fields, data=normalized),
+            reportable=reportable,
+            unreportableReason=reason,
         ))
 
     return history
@@ -209,6 +317,14 @@ async def create_report_service(
     if not result_exists:
         raise HTTPException(status_code=404, detail="Query result (Data Source) not found")
 
+    data = result_exists.result_data if isinstance(result_exists.result_data, list) else []
+    normalized = [r for r in data if isinstance(r, dict)]
+    columns = _extract_columns(normalized)
+    fields = _infer_fields(normalized, columns)
+    reportable, reason = _reportability_from_fields(columns, fields)
+    if not reportable:
+        raise HTTPException(status_code=400, detail=reason or '该查询结果不适合生成报表。')
+
     # 3. 创建 AnalysisReport 对象
     new_report = AnalysisReport(
         project_id=project_id,
@@ -232,8 +348,9 @@ async def create_report_service(
         name=new_report.name,
         type=new_report.chart_type,
         description=new_report.description,
-        data=result_exists.result_data,
+        data=normalized,
         chartConfig=payload.chartConfig,
+        sourceQueryId=str(new_report.result_id),
         sourceQueryText=stmt_obj.sql_text if stmt_obj else "",
         updatedAt=new_report.created_at.isoformat()
     )
@@ -312,14 +429,18 @@ async def update_report_service(
         if config_dict.get('xAxisKey') and config_dict.get('yAxisKey'):
             c_config = schemas.ChartConfig(**config_dict)
 
+    data = result_obj.result_data if isinstance(result_obj.result_data, list) else []
+    normalized = [r for r in data if isinstance(r, dict)]
+
     return schemas.Report(
         id=str(report_obj.report_id),
         projectId=str(report_obj.project_id),
         name=report_obj.name,
         type=report_obj.chart_type,
         description=report_obj.description,
-        data=result_obj.result_data,
+        data=normalized,
         chartConfig=c_config,
+        sourceQueryId=str(report_obj.result_id),
         sourceQueryText=stmt_obj.sql_text,
         updatedAt=report_obj.updated_at.isoformat() if report_obj.updated_at else ""
     )
@@ -332,6 +453,7 @@ async def export_report_service(
     db: Session,
     report_id: int,
     format: str,
+    user_id: int,
 ) -> dict:
     """
     导出报表，返回下载链接与过期时间。
@@ -347,10 +469,8 @@ async def export_report_service(
     Raises:
         HTTPException: 报表不存在。
     """
-    # 检查 report 是否存在
-    report_obj = await db.get(AnalysisReport, report_id)
-    if not report_obj:
-        raise HTTPException(status_code=404, detail="Report not found")
+    # 权限检查（避免路由传参不匹配导致运行时错误）
+    await _verify_report_ownership(db, report_id, user_id)
 
     return {
         "download_url": f"https://fake-cdn.example.com/reports/{report_id}.{format}",

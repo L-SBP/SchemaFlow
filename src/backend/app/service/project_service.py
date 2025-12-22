@@ -8,233 +8,33 @@
 # backend/app/service/project_service.py
 
 
-import requests
-import json
+
 import random
 import string
 import asyncio
-import os
-from bs4 import BeautifulSoup
 
 from typing import Optional, Dict, Any
 from sqlalchemy.ext.asyncio import AsyncSession as Session
 from datetime import datetime, timedelta, timezone
 from jose import jwt, JWTError
 from fastapi import BackgroundTasks
-from core.sql_sort import sort_ddl_by_dependency
+
 # 隐式绝对导入
 from crud.crud_project import crud_project
 from crud.crud_database_instance import crud_database_instance
 from crud.crud_user_account import crud_user_account
 from schema import project as schemas
-from core.exceptions import ItemNotFoundException, DatabaseOperationFailedException, OperationNotPermittedException, \
+from core.exceptions import ItemNotFoundException, OperationNotPermittedException, \
     ValidationException
 from core.auth import  create_access_token
 from core.config import config
 from core.database import PsqlHelper
-from mysql.mysql_database import MysqlHelper
 from core.log import log
 import re
-from sqlalchemy import text
 from pypinyin import lazy_pinyin, Style
-from openai import OpenAI
 
-# ==========================================
-# Schema 生成工具函数
-# ==========================================
-class SchemaGenerator:
-    """
-    项目 Schema 生成工具类。
-
-    Methods:
-        _parse_html_schema_only(html_content: str) -> str: 解析 HTML 获取 Schema。
-        _request_ddl_remote(...): 远程调用 DDL 生成接口。
-        run_generation(...): 执行 Schema 和 DDL 生成流程。
-    """
-    BASE_HOST = "http://43.154.73.48:5000"
-    DDL_API_URL = "https://schema2ddl.strangeloop.fun/generate/ddl"
-    @staticmethod
-    def _parse_html_schema_only(html_content: str) -> str:
-        """
-        仅解析 HTML 提取 Schema (Logical Design)，忽略 DDL
-        """
-        if not html_content:
-            return ""
-        soup = BeautifulSoup(html_content, 'html.parser')
-
-        # 1. 提取 Schema (Logical Design)
-        schema_text = []
-        # 使用模糊匹配找到 Logical Design 章节
-        start_node = soup.find(lambda tag: tag.name in ['h1', 'h2', 'h3', 'h4'] and 'Logical Design' in tag.get_text())
-        if start_node:
-            current = start_node.find_next_sibling()
-            while current:
-                # 遇到下一个大标题就停止
-                if current.name in ['h1', 'h2', 'h3', 'h4']:
-                    break
-                text = current.get_text(separator='\n', strip=True)
-                if text:
-                    schema_text.append(text)
-                current = current.find_next_sibling()
-
-        return "\n\n".join(schema_text)
-
-    @classmethod
-    def generate_schema(cls, requirements: str, db_name: str, db_type: str, ai_model: str = "gpt4") -> str:
-        """
-        仅生成 Schema (Logical Design)
-        """
-        session_hash = ''.join(random.choices(string.ascii_lowercase + string.digits, k=11))
-        inputs = [ai_model, db_name, requirements, db_type]
-        headers = {"Content-Type": "application/json"}
-        schema_res = ""
-
-        try:
-            resp = requests.post(
-                f"{cls.BASE_HOST}/gradio_api/queue/join",
-                json={"data": inputs, "session_hash": session_hash, "fn_index": 0},
-                headers=headers, timeout=10
-            )
-            if resp.status_code != 200:
-                log.error(f"[SchemaGen] Step 1 Submission failed: {resp.text}")
-                return ""
-
-            resp = requests.get(
-                f"{cls.BASE_HOST}/gradio_api/queue/data?session_hash={session_hash}",
-                headers=headers, stream=True, timeout=120
-            )
-
-            for line in resp.iter_lines():
-                if line:
-                    decoded = line.decode('utf-8')
-                    if decoded.startswith('data: '):
-                        try:
-                            msg = json.loads(decoded[6:])
-                            if msg.get('msg') == 'process_completed':
-                                output_data = msg.get('output', {}).get('data', [])
-                                if output_data:
-                                    schema_res = cls._parse_html_schema_only(output_data[0])
-                        except:
-                            continue
-            return schema_res
-        except Exception as e:
-            log.error(f"[SchemaGen] Step 1 Error: {e}")
-            return ""
-
-    @classmethod
-    def generate_ddl(cls, schema_text: str, requirements: str, db_type: str, ai_model: str = "gpt4") -> str:
-        """
-        根据 Schema 和需求生成 DDL
-        """
-        payload = {
-            "database_requirment": requirements,
-            "schema": schema_text,
-            "target_db_type": db_type,
-            "model": ai_model
-        }
-        try:
-            resp = requests.post(cls.DDL_API_URL, json=payload, timeout=120)
-            if resp.status_code == 200:
-                res_json = resp.json()
-                return res_json.get("ddl_statements", "")
-            else:
-                log.error(f"[SchemaGen] DDL API failed: {resp.status_code} - {resp.text}")
-                return ""
-        except Exception as e:
-            log.error(f"[SchemaGen] DDL API Exception: {e}")
-            return ""
-
-
-class ERDiagramGenerator:
-    """
-    ER 图生成工具类
-    """
-
-    @staticmethod
-    def generate_mermaid_code(schema_text: str, ai_model: str = "gpt4") -> str:
-        # 1. API Key 配置
-        # TODO:后续不能写死
-        api_key = "sk-VwmLWgJlhLpNCyrP5IcTfvsBZp9VfhQqXfqcz7LH35xn5lhn"
-        base_url = "https://ai.nengyongai.cn/v1"
-
-        if not api_key:
-            log.warning("[ERGen] No API Key found.")
-            return ""
-
-        # 2. 模型映射 (新增)
-        model_mapping = {
-            'gpt4': 'gpt-4o-2024-08-06',
-            'chatgpt': 'gpt-3.5-turbo',
-            'qwen': 'Qwen/Qwen3-32B',
-            'deepseek': 'deepseek-v3-241226'
-        }
-        real_model = model_mapping.get(ai_model, 'gpt-4o-2024-08-06')
-
-        try:
-            client = OpenAI(api_key=api_key, base_url=base_url)
-
-            # 3. 使用新的 Prompt (更新)
-            prompt = """You are a professional database designer.
-
-Given the following Entity Sets and Relationship Sets, please generate a complete and accurate Mermaid ER diagram code using `erDiagram` syntax. Follow these strict rules:
-
-1. Use `PK` and `FK` to mark primary and foreign keys in the entity or relationship tables.
-2. Use `||--o{`, `||--||`, `o{--o{` etc. to represent correct cardinality:
-   - `||--o{` means one-to-many
-   - `||--||` means one-to-one
-   - `o{--o{` means many-to-many
-3. For relationship sets, if needed, create a separate entity-like table to store relationship attributes and foreign keys.
-4. Do not include any extra explanation or markdown syntax like ```mermaid. Just return the raw ER diagram code.
-5. Use appropriate attribute types like `int`, `string`, `date`, `float`, etc., based on the names.
-6. **Attribute Order (CRITICAL)**: 
-   - You MUST follow the format: `Type Name Key`.
-   - The Key (PK/FK) must ALWAYS be at the **end** of the line.
-   - **Correct**: `string StudentID PK`
-   - **WRONG**: `string PK StudentID` (Never put PK/FK before the name)
-
-7. **Composite Keys (CRITICAL)**: 
-   - If an attribute is **BOTH** a Primary Key and a Foreign Key, you MUST separate them with a **COMMA**.
-   - **Correct**: `string course_id PK, FK`
-   - **WRONG**: `string course_id PK FK` (Missing comma causes error)
-    """
-
-            response = client.chat.completions.create(
-                model=real_model,
-                messages=[
-                    {
-                        "role": "user",
-                        "content": prompt + "\n\nRequirement:\n" + schema_text
-                    }
-                ],
-                temperature=0.1
-            )
-
-            content = response.choices[0].message.content
-            content = content.replace("```mermaid", "").replace("```", "").strip()
-
-            # 4. 拼接主题 (新增)
-            theme_config = {
-                "theme": "base",
-                "themeVariables": {
-                    "primaryColor": "#ffffff",
-                    "primaryTextColor": "#000000",
-                    "primaryBorderColor": "#3370ff",
-                    "lineColor": "#3370ff",
-                    "tertiaryColor": "#e6f7ff",
-                    "tertiaryBorderColor": "#3370ff",
-                    "tertiaryTextColor": "#000000",
-                    "mainBkg": "#ffffff",
-                    "edgeLabelBackground": "#fff"
-                }
-            }
-            init_directive = f"%%{{init: {json.dumps(theme_config)} }}%%\n"
-
-            return init_directive + content
-
-        except Exception as e:
-            log.error(f"[ERGen] Error generating mermaid code: {e}")
-            return ""
-
+from service.ai_service import AIService
+from service.db_executor_service import DBExecutorService
 
 
 # ==========================================
@@ -282,7 +82,7 @@ def generate_meaningful_db_name(project_name: str, user_id: int) -> str:
 # ==============================================================================
 # 后台任务：生成 Schema
 # ==============================================================================
-async def bg_generate_schema_task(
+async def task_step_1_generate_schema(
     project_id: int, 
     requirements: str, 
     db_name: str, 
@@ -302,9 +102,7 @@ async def bg_generate_schema_task(
     Returns:
         None
 
-
     """
-    log.info(f"[Task] Starting SCHEMA GENERATION ONLY for Project {project_id}...")
 
     # 1. 执行 AI 生成
     log.info(f"[Task] Starting SCHEMA GENERATION for Project {project_id}...")
@@ -312,18 +110,14 @@ async def bg_generate_schema_task(
 
     # 调用生成 Schema
     schema_res = await loop.run_in_executor(
-        None, SchemaGenerator.generate_schema, requirements, db_name, db_type, ai_model
+        None, AIService.generate_schema, requirements, db_name, db_type, ai_model
     )
 
-    # 2. 生成 ER 图代码
-    er_code = ""
-    if schema_res:
-        log.info(f"[Task] Generating ER Diagram for Project {project_id}...")
-        er_code = await loop.run_in_executor(
-            None, ERDiagramGenerator.generate_mermaid_code, schema_res, ai_model
-        )
+    if not schema_res:
+        log.error(f"[Task-Schema] Failed to generate schema for Project {project_id}")
+        return None
 
-    # 3. 存入 PostgreSQL 的 project.schema_definition 字段
+    # 2. 存入 PostgreSQL 的 project.schema_definition 字段
     # 使用独立的 Session，因为这是后台任务
     temp_engine = PsqlHelper._get_async_engine(config.db)
     async with PsqlHelper.get_session(temp_engine) as session:
@@ -331,28 +125,27 @@ async def bg_generate_schema_task(
             project = await crud_project.get(session, project_id)
             if project:
                 current_def = project.schema_definition or {}
-                if schema_res:
-                    # 存入 Schema，不再存入 DDL
-                    current_def['schema'] = schema_res
-                    current_def['generated_db_name'] = db_name
 
-                    project.schema_definition = current_def
-                    # 保存 ER 代码
-                    project.er_diagram_code = er_code
-                    project.creation_stage = schemas.CreationStageEnum.SCHEMA_GENERATED.value
-                else:
-                    log.error(f"[Task] Schema generation failed for Project {project_id}.")
-                    # 这里可以设置一个 failed 状态，或者保持原样让用户重试
+                # 存入 Schema，不再存入 DDL
+                current_def['schema'] = schema_res
+                current_def['generated_db_name'] = db_name
 
                 project.schema_definition = current_def
+
+                project.creation_stage = schemas.CreationStageEnum.SCHEMA_GENERATED.value
+                log.info(f"[Task-Schema] SUCCESS for Project {project_id}. Saved to DB.")
+
+
                 session.add(project)
     await temp_engine.dispose()
+
+    return schema_res
 
 
 # ==============================================================================
 # 后台任务：生成 DDL
 # ==============================================================================
-async def bg_generate_ddl_task(
+async def task_generate_ddl_only(
     project_id: int, 
     schema_text: str, 
     requirements: str, 
@@ -364,43 +157,57 @@ async def bg_generate_ddl_task(
     loop = asyncio.get_event_loop()
 
     # 调用生成 DDL
-    ddl_future =  loop.run_in_executor(
-        None, SchemaGenerator.generate_ddl, schema_text, requirements, db_type, ai_model
+    ddl_res =  await loop.run_in_executor(
+        None, AIService.generate_ddl, schema_text, requirements, db_type, ai_model
     )
-    er_future = loop.run_in_executor(
-        None, ERDiagramGenerator.generate_mermaid_code, schema_text, ai_model
-    )
-    ddl_res = await ddl_future
-    er_code = await er_future
+
 
     temp_engine = PsqlHelper._get_async_engine(config.db)
     async with PsqlHelper.get_session(temp_engine) as session:
-        async with session.begin():
-            project = await crud_project.get(session, project_id)
-            if project:
-                current_def = project.schema_definition or {}
-                # 更新 Mermaid 代码 ---
-                if er_code:
-                    log.info(f"[Task] ER Diagram updated for Project {project_id}")
-                    project.er_diagram_code = er_code
-                # ----------------------------------
-                if ddl_res:
-                    log.info(f"Generated DDL length: {len(ddl_res)}")
-                    # 拼接完整 DDL
-                    full_ddl_preview = f"CREATE DATABASE IF NOT EXISTS `{db_name}`;\nUSE `{db_name}`;\n\n{ddl_res}"
-
-                    # 存入新的独立字段 ddl_statement
-                    project.ddl_statement = full_ddl_preview
-
-                    project.creation_stage = schemas.CreationStageEnum.DDL_GENERATED.value
-                    project.project_status = schemas.ProjectStatusEnum.PENDING_CONFIRMATION.value
-                else:
-                    log.error(f"[Task] DDL generation failed for Project {project_id}.")
-
-                project.schema_definition = current_def
-                session.add(project)
+        # 移除 async with session.begin(): 这一行，直接使用 session:
+        full_ddl = f"CREATE DATABASE IF NOT EXISTS `{db_name}`;\nUSE `{db_name}`;\n\n{ddl_res}"
+        await crud_project.update(session, project_id,
+            ddl_statement=full_ddl,
+            creation_stage=schemas.CreationStageEnum.DDL_GENERATED.value,
+            project_status=schemas.ProjectStatusEnum.PENDING_CONFIRMATION.value
+            )
     await temp_engine.dispose()
 
+
+async def task_step_2_generate_er(project_id: int, schema_text: str, ai_model: str):
+    """
+    第二步：生成 ER 图 (廉价操作)
+    错误不应该影响第一步的结果
+    """
+    log.info(f"[Task-ER] Starting for Project {project_id}")
+    loop = asyncio.get_event_loop()
+
+    try:
+        er_code = await loop.run_in_executor(None, AIService.generate_mermaid_code, schema_text, ai_model)
+        if not er_code:
+            raise Exception("Empty ER code generated")
+
+        temp_engine = PsqlHelper._get_async_engine(config.db)
+        async with PsqlHelper.get_session(temp_engine) as session:
+            # 同样移除这里的 session.begin() async with session.begin():
+            await crud_project.update(session, project_id, er_diagram_code=er_code)
+        await temp_engine.dispose()
+        log.info(f"[Task-ER] SUCCESS for Project {project_id}")
+    except Exception as e:
+        # 核心逻辑：捕获异常，仅记录日志，不影响项目整体进度
+        log.error(f"[Task-ER] FAILED for Project {project_id}: {e}")
+
+
+async def task_pipeline_schema_flow(project_id, requirements, db_name, db_type, ai_model):
+    """
+    串联 Schema 和 ER，但保持物理独立
+    """
+    # 执行第一步：Schema (昂贵)
+    schema_text = await task_step_1_generate_schema(project_id, requirements, db_name, db_type, ai_model)
+
+    # 只有第一步成功了，才跑第二步
+    if schema_text:
+        await task_step_2_generate_er(project_id, schema_text, ai_model)
 
 # ==============================================================================
 # 创建项目：异步执行ddl语句
@@ -470,7 +277,7 @@ async def create_project_service(
 
     # 3. 调度“只生成”任务
     background_tasks.add_task(
-        bg_generate_schema_task,  # <--- 替换为新任务
+        task_pipeline_schema_flow, # 封装一个串联逻辑
         project_id=db_obj.project_id,
         requirements=requirements_text,
         db_name=temp_db_name,
@@ -523,7 +330,7 @@ async def request_ddl_generation_service(
 
     # 触发后台任务：生成 DDL
     background_tasks.add_task(
-        bg_generate_ddl_task,
+        task_generate_ddl_only,
         project_id=project.project_id,
         schema_text=data.confirmed_schema,
         requirements=project.description,  # 使用(可能更新过的)需求
@@ -573,125 +380,50 @@ async def deploy_project_service(
     接收用户确认的 DDL，执行建库和建表操作，将项目状态改为 Active。
     支持通过 use_smart_parse 参数控制是否启用方言转换和拓扑排序。
     """
+    # TODO: 后续支持多种数据库时，需要将执行逻辑抽离出project_service代码
     # 1. 校验项目
     project = await crud_project.get(db, project_id)
     if not project or project.user_id != user_id:
         raise ItemNotFoundException("Project not found")
 
-    # [修复] 更新状态为 EXECUTING_DDL (.value)
-    project.creation_stage = schemas.CreationStageEnum.EXECUTING_DDL.value
-    db.add(project)
-    await db.commit()
+    # 2. 更新状态为“执行中”
+    await crud_project.update(db, project_id, creation_stage=schemas.CreationStageEnum.EXECUTING_DDL.value)
 
-
-    # 获取关联的 Instance 信息
     instance = await crud_database_instance.get(db, project.instance_id)
-    db_name = instance.db_name
-    db_type = instance.db_type  # e.g. 'mysql'
-
-    # 优先使用前端传回的 confirmed_ddl，或者使用数据库存的 ddl_statement
     final_ddl = deploy_data.confirmed_ddl or project.ddl_statement
 
-    # 2. 准备执行语句列表
-    execution_statements = []
-
     try:
-        # =============================================================
-        # 预留接口逻辑：根据 use_smart_parse 决定处理方式
-        # =============================================================
-        if deploy_data.use_smart_parse:
-            log.info(f"[Deploy] Smart Parse ENABLED for Project {project_id}. Running cleanup & sort.")
+        # 3. 调用 DDL 执行服务 (关键解耦点)
+        await DBExecutorService.deploy(
+            db_type=instance.db_type,
+            db_name=instance.db_name,
+            ddl=final_ddl,
+            use_smart_parse=deploy_data.use_smart_parse
+        )
 
-            # 步骤 A: 清洗 DDL (去除 -- 注释，防止干扰解析器)
-            lines = final_ddl.splitlines()
-            cleaned_lines = [line for line in lines if not line.strip().startswith('--')]
-            cleaned_ddl = "\n".join(cleaned_lines)
-
-            # 步骤 B: 调用方言转换和拓扑排序
-            # sort_ddl_by_dependency 内部使用了 sqlglot，会自动处理方言转换并按依赖排序
-            try:
-                execution_statements = sort_ddl_by_dependency(cleaned_ddl, dialect=db_type)
-            except Exception as sort_err:
-                log.error(f"[Deploy] Smart Parse failed: {sort_err}")
-                raise ValidationException(f"SQL解析或排序失败: {str(sort_err)}。请检查DDL语法。")
-
-        else:
-            log.info(f"[Deploy] Smart Parse DISABLED for Project {project_id}. Running raw execution.")
-            # 简单分割，不做任何排序和转换 (适用于未来 DDL 已经完美的情况)
-            execution_statements = [s.strip() for s in final_ddl.split(';') if s.strip()]
-
-    except Exception as e:
-        # 恢复状态以便重试
-        project.creation_stage = schemas.CreationStageEnum.DDL_GENERATED
-        db.add(project)
-        await db.commit()
-        raise ValidationException(f"DDL Pre-processing failed: {str(e)}")
-
-    # 3. 执行物理建库操作
-    log.info(f"[Deploy] Starting deployment for Project {project_id}, DB: {db_name}")
-
-    try:
-        root_engine = await MysqlHelper.get_root_engine()
-
-        async with root_engine.connect() as conn:
-            # 3.1 重置数据库 (Drop & Create) - 确保环境干净
-            log.info(f"[{db_type}] Resetting Database: {db_name}")
-            await conn.execute(text(f"DROP DATABASE IF EXISTS `{db_name}`;"))
-            await conn.execute(text(f"CREATE DATABASE `{db_name}`;"))
-
-            # 3.2 切换上下文
-            await conn.execute(text(f"USE `{db_name}`;"))
-
-            # 3.3 执行语句
-            for stmt in execution_statements:
-                if not stmt.strip():
-                    continue
-
-                # 过滤掉 CREATE DATABASE (因为我们已经在 3.1 手动执行了)
-                if re.search(r'CREATE\s+DATABASE', stmt, re.IGNORECASE):
-                    continue
-
-                # 过滤掉 USE 语句 (避免上下文切换冲突)
-                if re.match(r'^\s*USE\s+', stmt, re.IGNORECASE):
-                    continue
-
-                log.info(f"[{db_type}] Executing: {stmt[:60]}...")
-                await conn.execute(text(stmt))
-
-            await conn.commit()
-
-
-        # 部署成功，准备更新数据
+        # 4. 更新部署成功后的业务状态
         update_data = {
             "project_status": "active",
             "creation_stage": schemas.CreationStageEnum.COMPLETED.value,
-            "ddl_statement": final_ddl  # 确保 DDL 被保存
+            "ddl_statement": final_ddl
         }
 
-        # 如果前端传回了新的 Schema，也一并更新
+        # TODO:后续更改顺序，先存储前端给的更新的schema，以免造成ddl执行失败导致schema也更新失败
         if deploy_data.confirmed_schema:
             current_def = project.schema_definition or {}
             current_def['schema'] = deploy_data.confirmed_schema
             update_data["schema_definition"] = current_def
 
-        # 执行更新
         await crud_project.update(db, project_id, **update_data)
-
-        # 更新 Instance 状态
         await crud_database_instance.update(db, instance, status='active')
 
-        log.info(f"[Deploy] Project {project_id} deployed successfully.")
-
-        # 重新获取最新数据返回
         refreshed_project = await crud_project.get(db, project_id)
         return schemas.ProjectResponse(data=schemas.ProjectDetailOut.model_validate(refreshed_project))
 
     except Exception as e:
-        log.error(f"[Deploy] Database Execution Error: {e}", exc_info=True)
-        # 部署失败，回退状态到 DDL_GENERATED 允许用户修改 DDL 重试
-        # 需要重新获取 session 中的对象，或者使用 update 方法
-        await crud_project.update(db, project_id, creation_stage=schemas.CreationStageEnum.DDL_GENERATED)
-        raise DatabaseOperationFailedException(f"Deployment failed: {str(e)}")
+        # 失败回滚业务状态
+        await crud_project.update(db, project_id, creation_stage=schemas.CreationStageEnum.DDL_GENERATED.value)
+        raise e
 
 
 
@@ -756,7 +488,7 @@ async def get_project_detail_service(
     if not db_obj or db_obj.user_id != user_id:
         raise ItemNotFoundException("Project not found or access denied.")
 
-    # <--- 修正点 2：使用 ProjectResponse 包装
+    # 使用 ProjectResponse 包装
     return schemas.ProjectResponse(data=schemas.ProjectDetailOut.model_validate(db_obj))
 
 
@@ -922,7 +654,7 @@ async def delete_project_service(
 
 
 # ==============================================================================
-# [新增] 重新生成 Schema 的 ER 图
+# 重新生成 Schema 的 ER 图
 # ==============================================================================
 async def regenerate_project_er_service(
         db: Session,
@@ -944,7 +676,7 @@ async def regenerate_project_er_service(
     loop = asyncio.get_event_loop()
     er_code = await loop.run_in_executor(
         None,
-        ERDiagramGenerator.generate_mermaid_code,
+        AIService.generate_mermaid_code,
         schema_text,
         ai_model
     )

@@ -38,6 +38,7 @@ class SessionUpdate(SessionBase):
     Attributes:
         session_name (Optional[str]): 会话名称。
     """
+    session_id: Optional[int] = None
     session_name: Optional[str] = None
     # last_activity 通常由后端自动维护，不通过 API 直接修改
 

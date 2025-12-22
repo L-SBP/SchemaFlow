@@ -130,6 +130,52 @@ class AdminUpdateUserQuotaResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
 
+# 4.1.4 用户详情 - Project DTO
+class AdminUserProjectItem(BaseModel):
+    """管理员视角的用户项目条目。"""
+
+    project_id: int
+    project_name: str
+    db_type: Optional[str] = None
+    project_status: str
+    created_at: datetime
+    description: Optional[str] = None
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+# 4.1.4 用户详情 - Login History DTO
+class AdminUserLoginHistoryItem(BaseModel):
+    """管理员视角的用户登录历史条目。"""
+
+    login_id: int
+    login_time: datetime
+    logout_time: Optional[datetime] = None
+    ip_address: str
+    user_agent: Optional[str] = None
+    login_status: str
+    failure_reason: Optional[str] = None
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+# 4.1.4 用户详情 - Response
+class AdminUserDetailResponse(BaseModel):
+    """管理员查看用户详情响应。"""
+
+    user_id: int
+    username: str
+    email: str
+    status: Literal["normal", "suspended", "banned"]
+    max_databases: int
+    project_count: int
+    last_login_at: Optional[datetime] = None
+    created_at: Optional[datetime] = None
+
+    projects: List[AdminUserProjectItem] = Field(default_factory=list)
+    login_history: List[AdminUserLoginHistoryItem] = Field(default_factory=list)
+
+
 # ----------------------------------------------------------------------
 # 4.2. 公告管理 Schemas
 # ----------------------------------------------------------------------

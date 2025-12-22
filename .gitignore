@@ -39,3 +39,4 @@ src/backend/venv/
 src/frontend/.vite/
 
 src/backend/app/static/
+node_modules

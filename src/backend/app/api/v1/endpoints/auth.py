@@ -9,7 +9,7 @@ from fastapi import APIRouter, Depends, HTTPException, status, Body, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 from typing import Any
 from schema.unified_response import NoContentResponse, UnifiedSuccessResponse, LoginData
-from schema.auth import UserSendCode, UserRegister, UserLogin
+from schema.auth import UserSendCode, UserRegister, UserLogin, ForgotPasswordRequest, ResetPasswordRequest
 from fastapi.security import OAuth2PasswordRequestForm
 from schema.token import Token # 记得导入这个
 from api.v1.deps import get_db
@@ -17,6 +17,7 @@ from core import exceptions
 from service import email_service
 from service.user_service import service_register_user, service_login, create_login_record, \
     check_email_exists, service_save_token_in_redis, service_logout,service_check_user_exists,service_save_token_in_redis
+from service.password_reset_service import service_send_password_reset_code, service_reset_password_with_code
 from core.auth import create_access_token
 # ：从 core.deps 导入 oauth2_scheme
 from core.deps import get_db, oauth2_scheme
@@ -351,3 +352,40 @@ async def logout(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="系统内部错误"
         ) from e
+
+
+@router.post("/forgot-password", response_model=NoContentResponse)
+async def forgot_password(
+    request: Request,
+    payload: ForgotPasswordRequest,
+    db: AsyncSession = Depends(get_db),
+):
+    """忘记密码：请求发送重置邮件。
+
+    为避免用户枚举，无论邮箱是否存在，对外均返回成功。
+    """
+
+    client_ip = request.client.host if request.client else None
+    try:
+        await service_send_password_reset_code(db, payload.email, client_ip=client_ip)
+    except Exception as e:
+        # 不向外暴露内部错误，避免泄露用户存在性
+        log.error(f"Forgot password failed internally: {str(e)}", exc_info=True)
+    return NoContentResponse()
+
+
+@router.post("/reset-password", response_model=NoContentResponse)
+async def reset_password(
+    payload: ResetPasswordRequest,
+    db: AsyncSession = Depends(get_db),
+):
+    """重置密码：校验邮箱验证码并设置新密码。"""
+
+    try:
+        await service_reset_password_with_code(db, payload.email, payload.verification_code, payload.new_password)
+        return NoContentResponse()
+    except exceptions.BusinessException as e:
+        raise HTTPException(status_code=e.code, detail=e.message)
+    except exceptions.AppException as e:
+        log.error(f"Reset password failed: {str(e)}", exc_info=True)
+        raise HTTPException(status_code=e.code, detail=e.message)

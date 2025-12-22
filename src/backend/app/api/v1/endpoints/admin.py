@@ -11,7 +11,8 @@ from schema.admin import (
     AdminUserListResponse, AdminUpdateUserStatusRequest, AdminUpdateUserStatusResponse,
     AdminUpdateUserQuotaRequest, AdminUpdateUserQuotaResponse,
     AnnouncementCreateRequest, AnnouncementUpdateRequest, AnnouncementResponse,
-    AdminListResponse, ViolationLogListResponse, AdminStatsResponse
+    AdminListResponse, ViolationLogListResponse, AdminStatsResponse,
+    AdminUserDetailResponse
 )
 from schema.user import UserMe
 # 导入依赖
@@ -131,6 +132,28 @@ async def update_user_quota(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
     except Exception as e:
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Failed to adjust quota: {e}")
+
+
+@router.get("/users/{user_id}", response_model=AdminUserDetailResponse, summary="4.1.4 获取用户详情")
+async def get_user_detail(
+    user_id: int = Path(..., description="目标用户ID"),
+    db: Session = Depends(get_db),
+    admin_user: UserMe = AdminDependency,
+    project_limit: int = Query(100, ge=0, le=500, description="返回的项目条目数量上限"),
+    login_limit: int = Query(20, ge=0, le=200, description="返回的登录历史条目数量上限"),
+) -> Any:
+    """管理员查看用户详情：额度、项目列表、登录历史。"""
+    try:
+        return await service.get_admin_user_detail_service(
+            db, user_id=user_id, project_limit=project_limit, login_limit=login_limit
+        )
+    except ItemNotFoundException as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to get user detail: {e}",
+        )
 
 # ----------------------------------------------------------------------
 # 4.2. 公告管理

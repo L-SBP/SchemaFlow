@@ -31,9 +31,9 @@ class Project(Base):
 
     # 表注释和约束
     __table_args__ = (
-        #在列表中加入 'pending_confirmation'
+        # 必须包含 'completed'，否则部署成功后改状态会报错
         CheckConstraint(
-            "project_status IN ('active', 'initializing', 'pending_confirmation', 'deleted')",
+            "project_status IN ('active', 'initializing', 'pending_confirmation', 'deleted', 'completed')",
             name='ck_project_status'
         ),
         Index('idx_projects_user_id', 'user_id'),
@@ -49,9 +49,10 @@ class Project(Base):
         primary_key=True,
         comment='项目ID'
     )
-    # 正向关联：让 Project 知道它下面有哪些 Sessions
-    # 这样以后你可以用 project.sessions 获取所有会话列表
+    
+    # 关联关系
     sessions = relationship("Session", back_populates="project", cascade="all, delete-orphan")
+    
     user_id = Column(
         Integer,
         ForeignKey('user_account.user_id', ondelete='CASCADE'),
@@ -67,7 +68,7 @@ class Project(Base):
     project_name = Column(
         String(100),
         nullable=False,
-        comment='项目名称，如"我的服装店"'
+        comment='项目名称'
     )
     description = Column(
         Text,
@@ -77,15 +78,16 @@ class Project(Base):
     schema_definition = Column(
         JSONB,
         nullable=True,
-        comment='AI生成的Schema结构（JSON格式，包含schema文本和元数据）'
+        comment='AI生成的Schema结构（JSON格式）'
     )
 
     ddl_statement = Column(
         Text,
         nullable=True,
-        comment='AI生成的DDL语句'
+        comment='AI生成的DDL建表语句'
     )
-    # ----------------
+
+    # 新字段，用于存 ER 图代码
     er_diagram_code = Column(
         Text,
         nullable=True,
@@ -98,10 +100,9 @@ class Project(Base):
         nullable=False,
         comment='创建进度阶段 (initializing, generating_schema, schema_generated, generating_ddl, ddl_generated, executing_ddl, completed)'
     )
-    # ----------------
 
     project_status = Column(
-        Text,
+        String(50), # 保留你的 String(50)，比 Text 更规范
         default='active',
         nullable=False,
         comment='项目状态'
@@ -118,5 +119,6 @@ class Project(Base):
         nullable=True,
         comment='最后更新时间'
     )
+    
     class Config:
         from_attributes = True

@@ -14,6 +14,7 @@ from mysql.mysql_database import MysqlHelper
 from mysql.mysql_secure import validate_safe_sql
 from core.sql_dialect_converter import SQLDialectConverter
 from mysql.mysql_converter import MySQLConverter
+from core.exceptions import DatabaseOperationFailedException
 
 # 初始化转换器
 generic_converter = SQLDialectConverter()
@@ -133,3 +134,32 @@ async def execute_dml_user(dml: str, database_instance: DatabaseInstance):
             "rowcount": result.rowcount,
             "lastrowid": result.lastrowid
         }
+
+
+async def deploy_mysql_ddl(db_name: str, statements: list[str]):
+    """
+    具体的 MySQL 部署物理实现。
+    """
+    try:
+        engine = await MysqlHelper.get_root_engine()
+        async with engine.connect() as conn:
+            # 1. 物理环境重置
+            log.info(f"[MySQL-Physical] Resetting database: {db_name}")
+            await conn.execute(text(f"DROP DATABASE IF EXISTS `{db_name}`;"))
+            await conn.execute(text(f"CREATE DATABASE `{db_name}`;"))
+            await conn.execute(text(f"USE `{db_name}`;"))
+
+            # 2. 批量执行语句
+            for stmt in statements:
+                stmt = stmt.strip()
+                if not stmt or any(x in stmt.upper() for x in ["CREATE DATABASE", "USE "]):
+                    continue
+
+                log.debug(f"[MySQL-Physical] Executing: {stmt[:50]}...")
+                await conn.execute(text(stmt))
+
+            await conn.commit()
+            log.info(f"[MySQL-Physical] Deployment for {db_name} completed.")
+    except Exception as e:
+        log.error(f"[MySQL-Physical] Critical Error: {e}")
+        raise DatabaseOperationFailedException(f"MySQL physical execution failed: {str(e)}")

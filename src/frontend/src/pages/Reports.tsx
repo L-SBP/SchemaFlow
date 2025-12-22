@@ -4,15 +4,66 @@ import { Card, Button, Modal, Input, Tag, Steps } from '../components/UI.tsx';
 import { Plus, BarChart2, PieChart, TrendingUp, Download, Trash2, Edit2, Filter, Database, Table as TableIcon, ScatterChart, ArrowRight, ArrowLeft, Save, Loader2 } from 'lucide-react'; // 引入 Loader2
 import { BarChart, Bar, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart as RePieChart, Pie, Cell, ScatterChart as ReScatterChart, Scatter, ZAxis } from 'recharts';
 import { reportApi, HistoryQuery } from '../api/reports.ts'; // 导入 API
+import { fetchProjects, ProjectDTO } from '../api/project.ts';
+import { toPng } from 'html-to-image';
 
 interface ReportsProps {
-  projects: Project[];
+  projects?: Project[];
 }
 
 const COLORS = ['#1677ff', '#52c41a', '#faad14', '#ff4d4f', '#722ed1', '#13c2c2'];
 
 export const Reports: React.FC<ReportsProps> = ({ projects }) => {
-  const [selectedProjectId, setSelectedProjectId] = useState<string>(projects[0]?.id || '');
+  const [availableProjects, setAvailableProjects] = useState<Project[]>(projects || []);
+  const [selectedProjectId, setSelectedProjectId] = useState<string>((projects || [])[0]?.id || '');
+
+  const mapProjectDTOToProject = (projectDTO: ProjectDTO): Project => {
+    const dbTypeMap: Record<string, 'MySQL' | 'PostgreSQL' | 'SQLite'> = {
+      mysql: 'MySQL',
+      postgresql: 'PostgreSQL',
+      sqlite: 'SQLite'
+    };
+
+    const statusMap: Record<string, 'active' | 'deploying' | 'error' | 'deleted'> = {
+      initializing: 'deploying',
+      pending_confirmation: 'deploying',
+      active: 'active',
+      deleted: 'deleted',
+      error: 'error'
+    };
+
+    return {
+      id: projectDTO.project_id.toString(),
+      name: projectDTO.project_name,
+      type: dbTypeMap[(projectDTO.db_type || '').toLowerCase()] || 'MySQL',
+      description: projectDTO.description,
+      status: statusMap[(projectDTO.project_status || '').toLowerCase()] || 'active',
+      createdAt: projectDTO.created_at
+    };
+  };
+
+  // 若未传入项目（或为空），从后端拉取用户真实项目列表
+  useEffect(() => {
+    const ensureProjects = async () => {
+      if (projects && projects.length > 0) {
+        setAvailableProjects(projects);
+        if (!selectedProjectId) setSelectedProjectId(projects[0].id);
+        return;
+      }
+
+      try {
+        const dtos = await fetchProjects();
+        const mapped = (dtos || []).map(mapProjectDTOToProject);
+        setAvailableProjects(mapped);
+        if (!selectedProjectId && mapped.length > 0) setSelectedProjectId(mapped[0].id);
+      } catch (error) {
+        console.error('Failed to load projects for reports:', error);
+      }
+    };
+
+    ensureProjects();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [projects]);
 
   // State: API Data
   const [reports, setReports] = useState<Report[]>([]);
@@ -20,10 +71,20 @@ export const Reports: React.FC<ReportsProps> = ({ projects }) => {
   const [isLoading, setIsLoading] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
 
+  // Export image
+  const [isExportModalOpen, setIsExportModalOpen] = useState(false);
+  const [exportImageUrl, setExportImageUrl] = useState<string>('');
+  const [exportImageName, setExportImageName] = useState<string>('');
+  const [exportingReportId, setExportingReportId] = useState<string>('');
+
   // State: UI
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [step, setStep] = useState(0);
   const [selectedQueryId, setSelectedQueryId] = useState<string>('');
+
+  // Delete confirm modal
+  const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
+  const [deleteReportId, setDeleteReportId] = useState<string>('');
 
   // Form State
   const [reportName, setReportName] = useState('');
@@ -59,15 +120,22 @@ export const Reports: React.FC<ReportsProps> = ({ projects }) => {
   }, [isModalOpen, selectedProjectId]);
 
   const selectedQueryObj = historyQueries.find(q => q.id === selectedQueryId);
+  const isSelectedQueryReportable = selectedQueryObj?.reportable !== false;
 
   // Initialize form when query changes
   useMemo(() => {
     if (selectedQueryObj) {
       if (!reportName) setReportName(selectedQueryObj.queryText + ' 报表');
-      const firstStringCol = selectedQueryObj.result.columns.find(c => typeof selectedQueryObj.result.data[0][c] === 'string');
-      const firstNumberCol = selectedQueryObj.result.columns.find(c => typeof selectedQueryObj.result.data[0][c] === 'number');
-      setXAxisKey(firstStringCol || selectedQueryObj.result.columns[0]);
-      setYAxisKey(firstNumberCol || selectedQueryObj.result.columns[1]);
+
+      const columns = selectedQueryObj.result?.columns || [];
+      const fields = selectedQueryObj.result?.fields || [];
+
+      // X：优先 string/date；Y：仅 number（避免图表数值轴报错）
+      const xCandidate = fields.find(f => f.type === 'string' || f.type === 'date')?.name;
+      const yCandidate = fields.find(f => f.type === 'number')?.name;
+
+      setXAxisKey(xCandidate || columns[0] || '');
+      setYAxisKey(yCandidate || columns[1] || columns[0] || '');
     }
   }, [selectedQueryObj]);
 
@@ -92,10 +160,8 @@ export const Reports: React.FC<ReportsProps> = ({ projects }) => {
         name: reportName,
         type: reportType,
         description: `源自查询: ${selectedQueryObj.queryText}`,
-        data: selectedQueryObj.result.data,
         chartConfig: { xAxisKey, yAxisKey },
-        sourceQueryId: selectedQueryObj.id,
-        sourceQueryText: selectedQueryObj.queryText
+        sourceQueryId: selectedQueryObj.id
       });
 
       // 刷新列表
@@ -111,14 +177,56 @@ export const Reports: React.FC<ReportsProps> = ({ projects }) => {
 
   // --- API: Delete Report ---
   const handleDelete = async (id: string) => {
-    if (confirm('确定要删除此报表吗？')) {
-      try {
-        await reportApi.deleteReport(id);
-        setReports(prev => prev.filter(r => r.id !== id));
-      } catch (error) {
-        console.error("Delete failed", error);
-      }
+    setDeleteReportId(id);
+    setIsDeleteModalOpen(true);
+  };
+
+  const confirmDelete = async () => {
+    if (!deleteReportId) return;
+    try {
+      await reportApi.deleteReport(deleteReportId);
+      setReports(prev => prev.filter(r => r.id !== deleteReportId));
+      setIsDeleteModalOpen(false);
+      setDeleteReportId('');
+    } catch (error) {
+      console.error("Delete failed", error);
     }
+  };
+
+  // 导出报表为图片
+  const exportReportAsImage = async (reportId: string, name?: string) => {
+    const el = document.getElementById(`report-chart-${reportId}`);
+    if (!el) {
+      alert('未找到图表元素，导出失败');
+      return;
+    }
+
+    try {
+      setExportingReportId(reportId);
+      const dataUrl = await toPng(el, {
+        cacheBust: true,
+        backgroundColor: '#ffffff',
+        pixelRatio: 2,
+      });
+
+      const safeName = (name || 'report').replace(/[^a-zA-Z0-9-_\.\u4e00-\u9fa5]/g, '_');
+      setExportImageUrl(dataUrl);
+      setExportImageName(safeName);
+      setIsExportModalOpen(true);
+    } catch (err) {
+      console.error('Export failed', err);
+      alert('导出失败，请在控制台查看错误信息');
+    } finally {
+      setExportingReportId('');
+    }
+  };
+
+  const downloadExportedImage = () => {
+    if (!exportImageUrl) return;
+    const link = document.createElement('a');
+    link.href = exportImageUrl;
+    link.download = `${exportImageName || 'report'}.png`;
+    link.click();
   };
 
   const renderDynamicChart = (report: Partial<Report>, height: number | string = "100%") => {
@@ -129,8 +237,30 @@ export const Reports: React.FC<ReportsProps> = ({ projects }) => {
     if (!data || data.length === 0) return <div className="text-center text-gray-400">无数据</div>;
 
     const CommonGrid = <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f0f0f0" />;
-    const CommonX = <XAxis dataKey={X} fontSize={11} tickLine={false} axisLine={{ stroke: '#e5e7eb' }} />;
-    const CommonY = <YAxis fontSize={11} tickLine={false} axisLine={false} />;
+    const xValue = (data?.[0] as any)?.[X];
+    const yValue = (data?.[0] as any)?.[Y];
+
+    const xIsNumber = typeof xValue === 'number';
+    const yIsNumber = typeof yValue === 'number';
+
+    const CommonX = (
+      <XAxis
+        dataKey={X}
+        type={xIsNumber ? 'number' : 'category'}
+        fontSize={11}
+        tickLine={false}
+        axisLine={{ stroke: '#e5e7eb' }}
+      />
+    );
+    const CommonY = (
+      <YAxis
+        dataKey={Y}
+        type={yIsNumber ? 'number' : 'category'}
+        fontSize={11}
+        tickLine={false}
+        axisLine={false}
+      />
+    );
     const CommonTooltip = <Tooltip cursor={{ fill: '#f9fafb' }} contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 12px rgba(0,0,0,0.1)' }} />;
 
     return (
@@ -153,17 +283,17 @@ export const Reports: React.FC<ReportsProps> = ({ projects }) => {
             <Tooltip />
           </RePieChart>
         ) : (
-          <ScatterChart>
+          <ReScatterChart>
             {CommonGrid} {CommonX} {CommonY} {CommonTooltip}
             <ZAxis type="number" range={[60, 400]} />
             <Scatter name={Y} data={data} fill="#1677ff" />
-          </ScatterChart>
+          </ReScatterChart>
         )}
       </ResponsiveContainer>
     );
   };
 
-  if (projects.length === 0) {
+  if (availableProjects.length === 0) {
     return <div className="p-8 text-center text-gray-500">请先在仪表盘创建数据库项目。</div>;
   }
 
@@ -180,7 +310,7 @@ export const Reports: React.FC<ReportsProps> = ({ projects }) => {
               value={selectedProjectId}
               onChange={(e) => setSelectedProjectId(e.target.value)}
             >
-              {projects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+              {availableProjects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
             </select>
           </div>
           <Button variant="primary" icon={<Plus size={16} />} onClick={handleOpenModal}>
@@ -216,6 +346,13 @@ export const Reports: React.FC<ReportsProps> = ({ projects }) => {
                   <div className="flex gap-2">
                     <Button
                       variant="text"
+                      className="h-8 text-xs px-2 text-gray-700 hover:bg-gray-50"
+                      icon={exportingReportId === report.id ? <Loader2 className="animate-spin" size={14} /> : <Download size={14} />}
+                      disabled={exportingReportId === report.id}
+                      onClick={() => exportReportAsImage(report.id, report.name)}
+                    />
+                    <Button
+                      variant="text"
                       className="h-8 text-xs px-2 text-red-500 hover:bg-red-50"
                       icon={<Trash2 size={14} />}
                       onClick={() => handleDelete(report.id)}
@@ -224,7 +361,7 @@ export const Reports: React.FC<ReportsProps> = ({ projects }) => {
                 </div>
 
                 <div className="p-6 flex flex-col gap-4">
-                  <div className="h-[400px] w-full">
+                  <div id={`report-chart-${report.id}`} className="h-[400px] w-full bg-white">
                     {renderDynamicChart(report)}
                   </div>
                 </div>
@@ -233,6 +370,34 @@ export const Reports: React.FC<ReportsProps> = ({ projects }) => {
           ))}
         </div>
       )}
+
+      {/* Export Preview Modal */}
+      <Modal
+        isOpen={isExportModalOpen}
+        onClose={() => {
+          setIsExportModalOpen(false);
+          setExportImageUrl('');
+          setExportImageName('');
+        }}
+        title="导出图片预览"
+        maxWidth="max-w-4xl"
+        footer={
+          <div className="flex justify-end gap-2 w-full">
+            <Button onClick={() => setIsExportModalOpen(false)}>关闭</Button>
+            <Button variant="primary" icon={<Download size={16} />} onClick={downloadExportedImage} disabled={!exportImageUrl}>
+              下载 PNG
+            </Button>
+          </div>
+        }
+      >
+        <div className="max-h-[70vh] overflow-auto bg-gray-50 border border-gray-200 rounded-lg p-3">
+          {exportImageUrl ? (
+            <img src={exportImageUrl} alt={exportImageName || 'report'} className="max-w-full h-auto mx-auto" />
+          ) : (
+            <div className="text-center text-gray-500 py-10">暂无预览</div>
+          )}
+        </div>
+      </Modal>
 
       {/* Creation Wizard Modal */}
       <Modal
@@ -253,7 +418,7 @@ export const Reports: React.FC<ReportsProps> = ({ projects }) => {
                 <Button
                   variant="primary"
                   onClick={() => setStep(1)}
-                  disabled={!selectedQueryId}
+                  disabled={!selectedQueryId || !isSelectedQueryReportable}
                   icon={<ArrowRight size={16} />}
                 >
                   下一步: 配置图表
@@ -262,7 +427,7 @@ export const Reports: React.FC<ReportsProps> = ({ projects }) => {
                 <Button
                   variant="primary"
                   onClick={handleCreateReport}
-                  disabled={!reportName || !xAxisKey || !yAxisKey || isSaving}
+                  disabled={!reportName || !xAxisKey || !yAxisKey || isSaving || !isSelectedQueryReportable}
                   icon={isSaving ? <Loader2 className="animate-spin" size={16} /> : <Save size={16} />}
                 >
                   {isSaving ? '创建中...' : '完成并创建'}
@@ -285,36 +450,57 @@ export const Reports: React.FC<ReportsProps> = ({ projects }) => {
               <p className="text-sm text-gray-600">请从历史查询记录中选择一条作为报表的数据来源。</p>
               <div className="space-y-3">
                 {historyQueries.map(q => (
-                  <div
-                    key={q.id}
-                    onClick={() => setSelectedQueryId(q.id)}
-                    className={`p-4 border rounded-xl cursor-pointer transition-all hover:shadow-md ${selectedQueryId === q.id
-                      ? 'border-primary bg-blue-50 ring-1 ring-primary'
-                      : 'border-gray-200 bg-white hover:border-blue-200'
-                      }`}
-                  >
-                    <div className="flex justify-between items-center mb-2">
-                      <span className="font-bold text-gray-800 flex items-center gap-2">
-                        <Database size={14} className="text-primary" />
-                        {q.queryText}
-                      </span>
-                      <span className="text-xs text-gray-400">{q.timestamp}</span>
-                    </div>
+                  (() => {
+                    const reportable = q.reportable !== false;
+                    const isSelected = selectedQueryId === q.id;
+                    return (
+                      <div
+                        key={q.id}
+                        onClick={() => {
+                          if (reportable) setSelectedQueryId(q.id);
+                        }}
+                        className={`p-4 border rounded-xl transition-all ${reportable ? 'cursor-pointer hover:shadow-md' : 'cursor-not-allowed opacity-60'} ${isSelected
+                          ? 'border-primary bg-blue-50 ring-1 ring-primary'
+                          : 'border-gray-200 bg-white'
+                          } ${reportable ? 'hover:border-blue-200' : ''}`}
+                      >
+                        <div className="flex justify-between items-center mb-2">
+                          <span className="font-bold text-gray-800 flex items-center gap-2">
+                            <Database size={14} className="text-primary" />
+                            {q.queryText}
+                            {reportable ? null : (
+                              <span className="ml-2 inline-flex items-center rounded-full bg-gray-100 text-gray-600 px-2 py-0.5 text-[11px] border border-gray-200">
+                                不可用于报表
+                              </span>
+                            )}
+                          </span>
+                          <span className="text-xs text-gray-400">{q.timestamp}</span>
+                        </div>
 
-                    {/* Data Preview */}
-                    <div className="bg-white/60 rounded border border-gray-200 overflow-hidden text-xs">
-                      <div className="flex border-b border-gray-100 bg-gray-50 text-gray-500">
-                        {q.result.columns.slice(0, 4).map((c: string) => (
-                          <div key={c} className="flex-1 px-2 py-1 truncate">{c}</div>
-                        ))}
+                        {!reportable && q.unreportableReason && (
+                          <div className="text-xs text-gray-500 mb-2">
+                            原因：{q.unreportableReason}
+                          </div>
+                        )}
+
+                        {/* Data Preview */}
+                        <div className="bg-white/60 rounded border border-gray-200 overflow-hidden text-xs">
+                          <div className="flex border-b border-gray-100 bg-gray-50 text-gray-500">
+                            {(q.result?.columns || []).slice(0, 4).map((c: string) => (
+                              <div key={c} className="flex-1 px-2 py-1 truncate">{c}</div>
+                            ))}
+                          </div>
+                          <div className="flex text-gray-700">
+                            {(q.result?.columns || []).slice(0, 4).map((c: string) => (
+                              <div key={c} className="flex-1 px-2 py-1 truncate">
+                                {q.result?.data?.[0]?.[c] ?? ''}
+                              </div>
+                            ))}
+                          </div>
+                        </div>
                       </div>
-                      <div className="flex text-gray-700">
-                        {q.result.columns.slice(0, 4).map((c: string) => (
-                          <div key={c} className="flex-1 px-2 py-1 truncate">{q.result.data[0][c]}</div>
-                        ))}
-                      </div>
-                    </div>
-                  </div>
+                    );
+                  })()
                 ))}
                 {historyQueries.length === 0 && (
                   <div className="text-center py-10 text-gray-400 border border-dashed rounded-lg">
@@ -364,8 +550,11 @@ export const Reports: React.FC<ReportsProps> = ({ projects }) => {
                     value={xAxisKey}
                     onChange={(e) => setXAxisKey(e.target.value)}
                   >
-                    {selectedQueryObj.result.columns.map((col: string) => (
-                      <option key={col} value={col}>{col}</option>
+                    {(selectedQueryObj.result?.fields?.length
+                      ? selectedQueryObj.result.fields
+                      : (selectedQueryObj.result?.columns || []).map((c: string) => ({ name: c, type: 'string' as const }))
+                    ).map((f: any) => (
+                      <option key={f.name} value={f.name}>{f.name}</option>
                     ))}
                   </select>
                 </div>
@@ -377,9 +566,18 @@ export const Reports: React.FC<ReportsProps> = ({ projects }) => {
                     value={yAxisKey}
                     onChange={(e) => setYAxisKey(e.target.value)}
                   >
-                    {selectedQueryObj.result.columns.map((col: string) => (
-                      <option key={col} value={col}>{col}</option>
-                    ))}
+                    {(
+                      (selectedQueryObj.result?.fields || []).filter((f: any) => f.type === 'number')
+                    ).length > 0 ? (
+                      (selectedQueryObj.result?.fields || []).filter((f: any) => f.type === 'number').map((f: any) => (
+                        <option key={f.name} value={f.name}>{f.name}</option>
+                      ))
+                    ) : (
+                      // 兜底：没有 number 字段时仍允许选择列，但预期用户换成折线/柱状会无效
+                      (selectedQueryObj.result?.columns || []).map((col: string) => (
+                        <option key={col} value={col}>{col}</option>
+                      ))
+                    )}
                   </select>
                 </div>
               </div>
@@ -400,6 +598,32 @@ export const Reports: React.FC<ReportsProps> = ({ projects }) => {
               </div>
             </div>
           )}
+        </div>
+      </Modal>
+
+      {/* Delete Confirm Modal */}
+      <Modal
+        isOpen={isDeleteModalOpen}
+        onClose={() => {
+          setIsDeleteModalOpen(false);
+          setDeleteReportId('');
+        }}
+        title="删除报表"
+        maxWidth="max-w-md"
+        footer={
+          <div className="flex justify-end gap-2 w-full">
+            <Button onClick={() => {
+              setIsDeleteModalOpen(false);
+              setDeleteReportId('');
+            }}>取消</Button>
+            <Button variant="primary" className="bg-red-500 hover:bg-red-600" onClick={confirmDelete}>
+              删除
+            </Button>
+          </div>
+        }
+      >
+        <div className="text-sm text-gray-600">
+          确定要删除此报表吗？该操作不可恢复。
         </div>
       </Modal>
     </div>

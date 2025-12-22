@@ -2,6 +2,7 @@ import client from './client.ts';
 import {
   AdminStats,
   AdminUserListResponse,
+  AdminUserDetailResponse,
   AdminListResponse,
   ViolationLogListResponse
 } from '../types.ts';
@@ -37,6 +38,19 @@ export const adminApi = {
         page_size: pageSize,
         search,
         status
+      }
+    });
+  },
+
+  /**
+   * 2.4 获取用户详情
+   * GET /api/v1/users/{user_id}
+   */
+  getUserDetail: (userId: number | string, projectLimit: number = 100, loginLimit: number = 20) => {
+    return client.get<any, AdminUserDetailResponse>(`/v1/users/${userId}`, {
+      params: {
+        project_limit: projectLimit,
+        login_limit: loginLimit
       }
     });
   },

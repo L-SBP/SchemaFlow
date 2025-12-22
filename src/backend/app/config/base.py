@@ -124,6 +124,7 @@ class SMTP(BaseSettings):
 
 class AIConfig(BaseSettings):
     modelscope_api_key: str = "dummy_key"
+    mermaid_api_key: str = ""
 
 class MySQLConfig(BaseSettings):
     """
@@ -193,6 +194,14 @@ class BaseConfig(BaseSettings):
     jwt: JWTConfig
     # SMTP配置
     smtp: SMTP
+
+    # 前端基础地址（用于拼接邮件内的密码重置链接）
+    frontend_base_url: str = "http://localhost:5173/"
+
+    # 忘记密码/重置密码配置
+    password_reset_token_expire_seconds: int = 900
+    password_reset_request_limit_per_email_per_hour: int = 3
+    password_reset_request_limit_per_ip_per_hour: int = 20
     # MySQL数据库配置
     mysql: MySQLConfig
     # SQL权限配置

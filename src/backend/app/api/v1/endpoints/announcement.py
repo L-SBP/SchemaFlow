@@ -1,10 +1,13 @@
-"""
-公告 API 端点。
+"""公告 API 端点。
 
-提供已发布公告的列表查询和详情获取接口，供登录用户使用。
+提供系统公告的列表查询和详情获取接口。
+
+- 普通登录用户：仅能获取已发布(published)公告
+- 管理员：可按 status 获取（含草稿等）
 """
 
-from typing import Any
+from typing import Any, Literal
+
 from fastapi import APIRouter, Depends, Query, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -32,6 +35,10 @@ async def read_announcements(
     current_user: UserMe = Depends(get_current_active_user),
     page: int = Query(1, ge=1, description="页码"),
     page_size: int = Query(10, ge=1, le=100, description="每页数量"),
+    status: Literal['draft', 'published', 'unpublished', 'expired'] | None = Query(
+        None,
+        description="公告状态筛选（仅管理员可用；普通用户固定为 published）",
+    ),
 ):
     """
     获取已发布的系统公告（仅限登录用户）。
@@ -45,11 +52,15 @@ async def read_announcements(
     Returns:
         AnnouncementListResponse: 公告列表响应。
     """
+    # 安全策略：普通用户强制仅可见已发布公告
+    # 管理员可按 status 查询；不传 status 时返回全部状态
+    effective_status = status if current_user.is_admin else "published"
+
     total, items = await crud_announcement.get_list(
         db=db,
-        status="published",
+        status=effective_status,
         page=page,
-        page_size=page_size
+        page_size=page_size,
     )
 
     return AnnouncementListResponse(

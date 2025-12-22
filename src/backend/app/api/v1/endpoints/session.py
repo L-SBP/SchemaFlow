@@ -5,7 +5,7 @@
 """
 from typing import List, Optional
 
-from fastapi import APIRouter, Depends, Query, Path
+from fastapi import APIRouter, Depends, Query, Path, Body
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.v1 import deps
@@ -101,7 +101,7 @@ async def update_session(
     db: AsyncSession = Depends(deps.get_db),
     current_user: UserMe = Depends(deps.get_current_active_user),
     session_id: int = Path(..., description="会话ID"),
-    session_in: SessionUpdate = Depends(),
+    session_in: SessionUpdate = Body(...),
 ):
     """
     更新会话信息（如重命名）。
