@@ -27,6 +27,7 @@ from core.log import log
 from crud.crud_database_instance import crud_database_instance
 from crud.crud_message import crud_message
 from crud.crud_project import crud_project
+from crud.crud_knowledge import crud_knowledge
 from models.session import Session as SessionModel
 from schema.chat import ChatResponse, MessageType
 from service.mysql_service import execute_sql_with_user_check
@@ -36,6 +37,7 @@ from models.query_result import QueryResult
 # 必须导入这些模型类，否则确认接口无法运行
 from models.message import Message as MessageModel 
 from models.project import Project as ProjectModel
+from models.domain_knowledge import DomainKnowledge
 
 # =========================================================
 # 1. 模型配置注册表
@@ -80,8 +82,23 @@ DEFAULT_MODEL = "my-finetuned-sql"
 # 2. 辅助函数
 # =========================================================
 
-def _build_ai_messages(model_config: Dict, schema_text: str, question: str) -> List[Dict]:
-    """构建高可读性、结构化的 Prompt 策略"""
+def _build_ai_messages(
+    model_config: Dict,
+    schema_text: str,
+    question: str,
+    history: List[MessageModel] = [],
+    knowledge: List[DomainKnowledge] = []
+) -> List[Dict]:
+    """
+    构建高可读性、结构化的 Prompt 策略。
+
+    Args:
+        model_config: 模型配置
+        schema_text: 数据库 DDL
+        question: 用户当前问题
+        history: 历史对话记录 [MessageModel]
+        knowledge: 领域知识列表 [DomainKnowledge]
+    """
     
     # 定义清晰的系统指令
     base_system_instruction = """You are a specialized SQL generation assistant.
@@ -93,7 +110,7 @@ Your ONLY task is to generate valid SQL queries based on the provided database s
 3. Use the exact table and column names from the schema.
 4. If the question cannot be answered with the schema, return SELECT 'ERROR: Cannot answer';
 5. Always use single quotes ('value') for string literals. NEVER use double quotes ("value").
-
+6. If a term is defined in [Domain Knowledge], you MUST use the exact definition and values provided there. Do NOT use general knowledge.
 IMPORTANT: 
 - For string literals, YOU MUST USE SINGLE QUOTES (').
 - DO NOT use double quotes (") or quotes(`).
@@ -102,8 +119,41 @@ Examples:
 Correct: SELECT * FROM users WHERE name = 'John';
 Wrong:   SELECT * FROM users WHERE name = "John";
 """
+
+    # --- 1. 处理领域知识 (Knowledge) ---
+    # TODO: [RAG Placeholder] 后续在此处接入向量检索，仅召回相关的 Term，避免 Context 溢出
+    knowledge_section = ""
+    if knowledge:
+        term_lines = [f"Strict Rule: '{k.term}' implies {k.definition}" for k in knowledge]
+        knowledge_content = "\n".join(term_lines)
+        knowledge_section = f"""
+[Domain Knowledge / Business Terms]
+Use these terms to understand the user's intent:
+{knowledge_content}
+"""
+
+
+    # --- 2. 处理历史对话 (History) ---
+    # TODO: [RAG Placeholder] 后续在此处接入向量检索，仅召回相关的历史对话
+    history_section = ""
+    if history:
+        history_lines = []
+        for msg in history:
+            role = "User" if msg.message_type == "user" else "Assistant"
+            # 简化内容，去除多余换行，防止Token浪费
+            content = msg.content.strip().replace("\n", " ")
+            history_lines.append(f"{role}: {content}")
+        history_content = "\n".join(history_lines)
+        history_section = f"""
+[Conversation History]
+The following is the previous conversation context:
+{history_content}"""
+
+    # --- 3. 组装 Context Block ---
     context_block = f"""[Database DDL]
-{schema_text}"""
+{schema_text}
+{knowledge_section}
+{history_section}"""
 
     if model_config["type"] == "local_finetune":
         # 微调模型通常对 User 消息中的上下文反应更好
@@ -149,7 +199,13 @@ async def _verify_session_ownership(db: AsyncSession, session_id: int, user_id: 
 
     return session.project_id
 
-async def call_ai_agent(ddl_text: str, question: str, model_key: str = None) -> str:
+async def call_ai_agent(
+    ddl_text: str,
+    question: str,
+    history: List[MessageModel] = [],
+    knowledge: List[DomainKnowledge] = [],
+    model_key: str = None
+) -> str:
     """调用 AI 接口生成 SQL"""
     
     # 1. 确定配置
@@ -159,7 +215,8 @@ async def call_ai_agent(ddl_text: str, question: str, model_key: str = None) -> 
     config = MODEL_REGISTRY[model_key]
     log.info(f"Using AI Model: {config['name']} ({config['model_id']})")
 
-    messages = _build_ai_messages(config, ddl_text, question)
+    # 传入历史和知识构建 Prompt
+    messages = _build_ai_messages(config, ddl_text, question, history, knowledge)
 
     # 2. 构建 Payload
     payload = {
@@ -260,6 +317,15 @@ async def process_chat(
     
     log.info(f"Session {session_id} using model: {final_model_key}")
 
+    # A. 获取历史记录 (拼接上下文)
+    # 在保存当前 User 消息 *之前* 获取，确保 History 块里是"之前的对话"，不包含当前问题（当前问题会单独放在 Prompt 结尾）
+    # Limit=20 暂时硬编码为拼接最近20条，足够覆盖一般场景
+    history_context = await crud_message.get_recent_messages(db, session_id, limit=20)
+
+    # B. 获取领域知识 (拼接用户术语)
+    # TODO: [RAG Placeholder] 预留 RAG 位置，目前是全量获取（Splice All），后续改为 Vector Search
+    knowledge_context = await crud_knowledge.get_all_by_project(db, project_id)
+
     # 4. 存用户发送的原始消息 (SF6 上下文记忆的基础)
     await crud_message.create_message(db, session_id, user_input, role="user")
 
@@ -276,8 +342,14 @@ async def process_chat(
             requires_confirmation=False,
             data=None
         )
-    # 执行 Text-to-SQL
-    sql_text = await call_ai_agent(ddl_text, user_input, model_key=final_model_key)
+    # 执行 Text-to-SQL (传入 history 和 knowledge)
+    sql_text = await call_ai_agent(
+        ddl_text,
+        user_input,
+        history=history_context,
+        knowledge=knowledge_context,
+        model_key=final_model_key
+    )
     is_meta_sql = any(kw in sql_text.upper() for kw in ["'CANCELED'", "'ERROR'"])
     
     if is_meta_sql:
