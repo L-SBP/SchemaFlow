@@ -137,6 +137,19 @@ dev:
     pool_recycle: 3600
     pool_timeout: 30
 
+  sqlite:
+    # 数据库连接驱动
+    driver: sqlite+aiosqlite
+    # 数据库文件基础路径
+    db_path: ./data/sqlite_dbs
+    # 显示执行SQL
+    echo: true
+    # sqlalchemy连接池配置
+    max_overflow: 5
+    pool_size: 5
+    pool_recycle: 3600
+    pool_timeout: 30
+
   # SQL权限
   sql_permissions:
     # MySQL Root 用户权限
@@ -263,6 +276,15 @@ prod:
     username: root
     password: root_secure_2025
     driver: postgresql+asyncpg
+    echo: false
+    max_overflow: 5
+    pool_size: 5
+    pool_recycle: 3600
+    pool_timeout: 30
+
+  sqlite:
+    driver: sqlite+aiosqlite
+    db_path: ./data/sqlite_dbs
     echo: false
     max_overflow: 5
     pool_size: 5

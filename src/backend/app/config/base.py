@@ -1,6 +1,6 @@
 # backend/app/config/base.py
 
-from typing import List
+from typing import List, Optional
 
 from pydantic_settings import BaseSettings
 from pydantic import SecretStr, BaseModel
@@ -192,6 +192,47 @@ class PostgresConfig(BaseSettings):
             port=self.port
         )
 
+
+class SQLiteConfig(BaseSettings):
+    # 数据库驱动
+    driver: str
+    # 数据库文件基础路径
+    db_path: str
+    # 显示执行SQL
+    echo: bool
+    # sqlalchemy连接池配置
+    max_overflow: int
+    pool_size: int
+    pool_recycle: int
+    pool_timeout: int
+
+    @property
+    def sqlalchemy_database_url(self) -> str:
+        # SQLite使用文件路径，不需要用户名密码等
+        return f"{self.driver}:///{self.db_path}/{{db_name}}.db"
+
+    def get_database_path(self, db_name: str, user_id: Optional[int] = None) -> str:
+        """获取数据库文件的完整路径，支持用户隔离
+        
+        Args:
+            db_name: 数据库名称
+            user_id: 用户ID，用于隔离不同用户的数据库文件
+            
+        Returns:
+            数据库文件的完整路径
+        """
+        import os
+        from pathlib import Path
+        
+        if user_id is not None:
+            # 为不同用户创建独立的目录
+            user_dir = Path(self.db_path) / f"user_{user_id}"
+            user_dir.mkdir(parents=True, exist_ok=True)
+            return str(user_dir / f"{db_name}.db")
+        else:
+            # 默认路径（兼容旧代码）
+            return str(Path(self.db_path) / f"{db_name}.db")
+
 class UserSQLPermissions(BaseModel):
     allowed_operations: List[str]
     forbidden_operations: List[str]
@@ -235,5 +276,7 @@ class BaseConfig(BaseSettings):
     mysql: MySQLConfig
     # Postgres数据库配置
     postgresql: PostgresConfig
+    # SQLite数据库配置
+    sqlite: SQLiteConfig
     # SQL权限配置
     sql_permissions: SQLPermissions
