@@ -10,6 +10,8 @@ from core.log import log
 from core.database import PsqlHelper
 import models
 from mysql.mysql_database import MysqlHelper
+from postgresql.postgres_database import PostgresHelper
+from sqlite.sqlite_database import SQLiteHelper
 from redis.redis import init_redis, close_redis, get_redis, init_redis_listener, close_redis_listener
 from redis.expiration_listener import redis_expire_listener
 from api.v1.api import api_router
@@ -37,6 +39,15 @@ async def startup_services(app: FastAPI):
     # 测试Mysql连接
     await MysqlHelper.test_connection()
 
+    # 初始化 PostgreSQL Root 连接 (用于用户项目)
+    log.info("initialize postgresql root engine")
+    await PostgresHelper.init_root_engine(config.postgresql)
+    try:
+        await PostgresHelper.test_connection()
+        log.info("PostgreSQL connection test passed")
+    except Exception as e:
+        log.error(f"PostgreSQL connection test failed: {e}")
+
     # 初始化Redis连接
     log.info("initialize redis linking")
     await init_redis()
@@ -60,6 +71,10 @@ async def close_services(app: FastAPI):
     # 关闭数据库连接
     log.info("close database linking")
     await PsqlHelper.close_conn_psql(app.state.psql_engine)
+    # 关闭 PostgreSQL 连接池 (释放所有用户项目的连接)
+    await PostgresHelper.close_all_engine()
+    # 关闭 SQLite 连接池 (释放文件句柄)
+    await SQLiteHelper.close_all_engine()
     # 关闭Redis连接
     await close_redis()
     # 关闭Redis监听连接

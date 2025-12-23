@@ -159,6 +159,14 @@ async def deploy_postgres_ddl(db_name: str, statements: list[str]):
         )
         
         async with temp_engine.connect() as conn:
+            # [关键修复] 强制断开该数据库的所有现有连接
+            # 否则如果有其他连接（如pgAdmin, 之前的连接池等）在使用该库，DROP会报错 ObjectInUseError
+            terminate_sql = f"""
+                            SELECT pg_terminate_backend(pid)
+                            FROM pg_stat_activity
+                            WHERE datname = '{db_name}'
+                            AND pid <> pg_backend_pid();
+                        """
             # 删除数据库（如果存在）
             await conn.execute(text(f'DROP DATABASE IF EXISTS "{db_name}";'))
             

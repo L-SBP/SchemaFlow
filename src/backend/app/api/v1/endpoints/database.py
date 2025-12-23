@@ -6,8 +6,10 @@ from api.v1 import deps
 from crud.crud_project import crud_project
 from crud.crud_database_instance import crud_database_instance
 from models.session import Session as SessionModel
-from service.mysql_service import execute_mysql_sql_with_user_check
+from service.mysql_service import execute_mysql_sql_with_user_check as execute_mysql
 from sqlalchemy.future import select
+from service.postgresql_service import execute_postgres_sql_with_user_check as execute_postgres
+from sqlite.sqlite_execute import execute_dql_user as execute_sqlite
 
 router = APIRouter()
 
@@ -60,24 +62,45 @@ async def get_tables(
     Get all tables in the database associated with the session.
     """
     instance = await get_db_instance_by_session(db, session_id, current_user.user_id)
-    
-    # Use SHOW FULL TABLES to get both name and type (BASE TABLE vs VIEW)
-    sql = "SHOW FULL TABLES WHERE Table_Type = 'BASE TABLE'"
-    
-    # We use "SELECT" as the operation type because "SHOW" returns a result set similar to SELECT,
-    # and we want execute_sql_with_user_check to treat it as a query (DQL) rather than DML.
-    # Ensure "SHOW *" is added to allowed_operations in config.yaml.
-    result = await execute_mysql_sql_with_user_check(sql, "SELECT", instance)
-    
+
     tables = []
-    if result:
-        for row in result:
-            # The result rows are dictionaries.
-            # For SHOW FULL TABLES, the columns are usually `Tables_in_dbname` and `Table_type`.
-            # We use values() to be robust against the database name in the column header.
-            values = list(row.values())
-            if values:
-                tables.append({"name": values[0]})
+
+    try:
+        # === MySQL ===
+        if instance.db_type == 'mysql':
+            sql = "SHOW FULL TABLES WHERE Table_Type = 'BASE TABLE'"
+            result = await execute_mysql(sql, "SELECT", instance)
+            if result:
+                for row in result:
+                    # MySQL 返回字典: {'Tables_in_db': 'users', 'Table_type': 'BASE TABLE'}
+                    values = list(row.values())
+                    if values:
+                        tables.append({"name": values[0]})
+
+        # === PostgreSQL ===
+        elif instance.db_type == 'postgresql':
+            sql = "SELECT table_name FROM information_schema.tables WHERE table_schema = 'public' AND table_type = 'BASE TABLE'"
+            result = await execute_postgres(sql, "SELECT", instance)
+            if result:
+                for row in result:
+                    # PG 返回字典: {'table_name': 'users'}
+                    tables.append({"name": row.get('table_name')})
+
+        # === SQLite ===
+        elif instance.db_type == 'sqlite':
+            sql = "SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'"
+            result = await execute_sqlite(sql, instance)
+            if result:
+                for row in result:
+                    # SQLite 返回字典: {'name': 'users'}
+                    tables.append({"name": row.get('name')})
+
+        else:
+            raise HTTPException(status_code=400, detail=f"Unsupported DB type: {instance.db_type}")
+
+    except Exception as e:
+        # 捕获数据库连接或执行错误
+        raise HTTPException(status_code=500, detail=f"Failed to fetch tables: {str(e)}")
     return tables
 
 @router.get("/{session_id}/tables/{table_name}/schema", response_model=List[Dict[str, Any]])
@@ -96,14 +119,49 @@ async def get_table_schema(
     if not table_name.isidentifier():
          raise HTTPException(status_code=400, detail="Invalid table name")
 
-    sql = f"DESCRIBE `{table_name}`"
-    result = await execute_mysql_sql_with_user_check(sql, "SELECT", instance)
+
     
     schema = []
-    if result:
-        for row in result:
-            # Normalize keys to lowercase for frontend consistency
-            schema.append({k.lower(): v for k, v in row.items()})
+    try:
+        # === MySQL ===
+        if instance.db_type == 'mysql':
+            sql = f"DESCRIBE `{table_name}`"
+            result = await execute_mysql(sql, "SELECT", instance)
+            if result:
+                for row in result:
+                    # 统一转小写: field, type, null, key, default, extra
+                    schema.append({k.lower(): v for k, v in row.items()})
+
+        # === PostgreSQL ===
+        elif instance.db_type == 'postgresql':
+            sql = f"SELECT column_name, data_type, is_nullable, column_default FROM information_schema.columns WHERE table_name = '{table_name}' AND table_schema = 'public'"
+            result = await execute_postgres(sql, "SELECT", instance)
+            if result:
+                for row in result:
+                    # 映射为前端通用字段名
+                    schema.append({
+                        "field": row.get("column_name"),
+                        "type": row.get("data_type"),
+                        "null": row.get("is_nullable"),
+                        "default": row.get("column_default")
+                    })
+
+        # === SQLite ===
+        elif instance.db_type == 'sqlite':
+            sql = f"PRAGMA table_info(\"{table_name}\")"
+            result = await execute_sqlite(sql, instance)
+            if result:
+                for row in result:
+                    # SQLite: cid, name, type, notnull, dflt_value, pk
+                    schema.append({
+                        "field": row.get("name"),
+                        "type": row.get("type"),
+                        "null": "NO" if row.get("notnull") else "YES",
+                        "default": row.get("dflt_value")
+                    })
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to fetch schema: {str(e)}")
     return schema
 
 @router.get("/{session_id}/tables/{table_name}/data", response_model=List[Dict[str, Any]])
@@ -119,13 +177,30 @@ async def get_table_data(
     Get data from a specific table with pagination.
     """
     instance = await get_db_instance_by_session(db, session_id, current_user.user_id)
-    
+
     if not table_name.isidentifier():
-         raise HTTPException(status_code=400, detail="Invalid table name")
-         
-    # Ensure limit is reasonable
+        raise HTTPException(status_code=400, detail="Invalid table name")
+
     limit = min(limit, 1000)
-    
-    sql = f"SELECT * FROM `{table_name}` LIMIT {limit} OFFSET {offset}"
-    result = await execute_mysql_sql_with_user_check(sql, "SELECT", instance)
-    return result or []
+
+    try:
+        # 构建 SQL (注意不同数据库的引号区别)
+        if instance.db_type == 'mysql':
+            sql = f"SELECT * FROM `{table_name}` LIMIT {limit} OFFSET {offset}"
+            result = await execute_mysql(sql, "SELECT", instance)
+
+        elif instance.db_type == 'postgresql':
+            sql = f'SELECT * FROM "{table_name}" LIMIT {limit} OFFSET {offset}'
+            result = await execute_postgres(sql, "SELECT", instance)
+
+        elif instance.db_type == 'sqlite':
+            sql = f'SELECT * FROM "{table_name}" LIMIT {limit} OFFSET {offset}'
+            result = await execute_sqlite(sql, instance)
+
+        else:
+            return []
+
+        return result or []
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to fetch data: {str(e)}")

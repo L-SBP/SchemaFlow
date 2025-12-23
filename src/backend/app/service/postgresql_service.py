@@ -39,7 +39,7 @@ def _escape_sql_string(value: str) -> str:
     return f"'{escaped}'"
 
 
-async def _execute_raw_sql(sql: str) -> None:
+async def _execute_raw_sql(sql: str, db_name: Optional[str] = None) -> None:
     """
     直接执行原始 SQL，不经过任何转换器
     专门用于 CREATE USER、GRANT 等语句
@@ -47,8 +47,14 @@ async def _execute_raw_sql(sql: str) -> None:
     # 验证 SQL 安全性
     validate_safe_sql(sql, is_root=True)
 
-    # 直接获取引擎并执行
-    engine = await PostgresHelper.get_root_engine()
+    # 如果指定了库名，则获取该库的 root 引擎
+    if db_name:
+        # 注意：需要确保 PostgresHelper 实现了通过库名获取 root 引擎的方法
+        # 或者在此处根据 config.postgresql 动态构建 URL
+        engine = await PostgresHelper.get_root_engine_by_db(db_name)
+    else:
+        engine = await PostgresHelper.get_root_engine()
+
     async with engine.connect() as conn:
         await conn.execute(text(sql))
         await conn.commit()
@@ -116,11 +122,11 @@ async def grant_user_privileges(
     log.info(f"[PostgreSQL] Granting privileges to user {db_username} on database {db_name}")
     
     # 执行授权语句
-    await _execute_raw_sql(grant_connect_sql)
-    await _execute_raw_sql(grant_usage_sql)
-    await _execute_raw_sql(grant_tables_sql)
-    await _execute_raw_sql(grant_sequences_sql)
-    await _execute_raw_sql(alter_default_privileges)
+    # 关键：传入 db_name
+    await _execute_raw_sql(grant_usage_sql, db_name=db_name)
+    await _execute_raw_sql(grant_tables_sql, db_name=db_name)
+    await _execute_raw_sql(grant_sequences_sql, db_name=db_name)
+    await _execute_raw_sql(alter_default_privileges, db_name=db_name)
     
     log.info(f"[PostgreSQL] Privileges granted to {db_username} on {db_name}")
 
@@ -264,7 +270,7 @@ async def ensure_user_and_engine(
             has_privileges = await PostgresHelper.check_privilege(db_username, db_name)
             if not has_privileges:
                 log.info(f"[PostgreSQL] User {db_username} does not have privileges for {db_name}, granting privileges...")
-                await grant_user_privileges(db_name, db_username)
+                await PostgresHelper.grant_user_privileges(db_name, db_username)
 
             # 尝试初始化引擎
             if await init_user_engine(db_username, db_password, db_name, instance_id):
@@ -284,7 +290,7 @@ async def ensure_user_and_engine(
             has_privileges = await PostgresHelper.check_privilege(db_username, db_name)
             if not has_privileges:
                 log.info(f"[PostgreSQL] User {db_username} does not have privileges for {db_name}, granting privileges...")
-                await grant_user_privileges(db_name, db_username)
+                await PostgresHelper.grant_user_privileges(db_name, db_username)
 
             # 尝试初始化引擎
             if await init_user_engine(db_username, db_password, db_name, instance_id):
@@ -352,7 +358,7 @@ async def execute_postgres_sql_with_user_check(
                 # 修改为列表格式，以便前端作为表格展示
                 result = [{
                     "受影响行数": cursor.rowcount,
-                    "最后插入ID": cursor.lastrowid
+                    "最后插入ID": None
                 }]
             
             log.info(f"[PostgreSQL] DML executed successfully for instance {instance_obj.instance_id}")

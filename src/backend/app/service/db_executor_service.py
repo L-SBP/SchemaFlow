@@ -1,10 +1,12 @@
 # backend/app/service/db_executor_service.py
 
+from core.config import config
 from core.sql_sort import sort_ddl_by_dependency
 from core.exceptions import ValidationException
 from mysql.mysql_execute import deploy_mysql_ddl
 from core.log import log
 from postgresql.postgres_execute import deploy_postgres_ddl
+from sqlite.sqlite_execute import deploy_sqlite_ddl
 
 
 class DBExecutorService:
@@ -33,9 +35,9 @@ class DBExecutorService:
             await deploy_mysql_ddl(db_name, execution_statements)
         elif db_type == 'postgresql':
             await deploy_postgres_ddl(db_name, execution_statements)
-            raise NotImplementedError("PostgreSQL support coming soon")
+            # raise NotImplementedError("PostgreSQL support coming soon")
         elif db_type == 'sqlite':
-            # await deploy_sqlite_ddl(db_name, execution_statements)
-            raise NotImplementedError("SQLite support coming soon")
+            await deploy_sqlite_ddl(db_name, execution_statements)
+            # raise NotImplementedError("SQLite support coming soon")
         else:
             raise ValidationException(f"Unsupported database type: {db_type}")

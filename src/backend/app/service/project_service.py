@@ -110,7 +110,7 @@ async def task_step_1_generate_schema(
 
     # 调用生成 Schema
     schema_res = await loop.run_in_executor(
-        None, AIService.generate_schema, requirements, db_name, db_type, ai_model
+        None, AIService.generate_schema, requirements, db_name, "mysql", ai_model
     )
 
     if not schema_res:
@@ -164,8 +164,15 @@ async def task_generate_ddl_only(
 
     temp_engine = PsqlHelper._get_async_engine(config.db)
     async with PsqlHelper.get_session(temp_engine) as session:
-        # 移除 async with session.begin(): 这一行，直接使用 session:
-        full_ddl = f"CREATE DATABASE IF NOT EXISTS `{db_name}`;\nUSE `{db_name}`;\n\n{ddl_res}"
+        if db_type == 'mysql':
+            # MySQL 需要显式创建数据库并切换
+            full_ddl = f"CREATE DATABASE IF NOT EXISTS `{db_name}`;\nUSE `{db_name}`;\n\n{ddl_res}"
+        else:
+            # PostgreSQL 和 SQLite:
+            # 1. 不支持 USE 语法。
+            # 2. 部署脚本(DBExecutorService) 中已经内置了 Create Database/File 的逻辑。
+            # 3. 这里只保留 AI 生成的建表语句即可。
+            full_ddl = ddl_res
         await crud_project.update(session, project_id,
             ddl_statement=full_ddl,
             creation_stage=schemas.CreationStageEnum.DDL_GENERATED.value,
@@ -253,12 +260,24 @@ async def create_project_service(
     # 生成 DB Name，但不创建物理库
     temp_db_name = generate_meaningful_db_name(project_name, user_id)
 
+    # 根据 db_type 动态获取配置的 host 和 port
+    target_host = "127.0.0.1"  # 默认回退值
+    target_port = 3306  # 默认回退值
+
+    if db_type == 'mysql':
+        target_host = config.mysql.host
+        target_port = config.mysql.port
+    elif db_type == 'postgresql':
+        target_host = config.postgresql.host
+        target_port = config.postgresql.port
+    # 如果有 sqlite 或其他类型，可以在此扩展，sqlite 通常不需要 port
+
     # 1. 创建 DatabaseInstance (占位)
     new_instance = await crud_database_instance.create(
         db,
         db_type=db_type,
-        db_host="127.0.0.1", # TODO:部署到服务器上时，需要将网址和端口视情况更改
-        db_port=3306,
+        db_host=target_host,
+        db_port=target_port,
         db_name=temp_db_name,  # 此时物理库还未创建
         db_username=f"test_{user_id}",
         db_password="User_secure_2025",
