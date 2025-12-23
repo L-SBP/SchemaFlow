@@ -17,13 +17,13 @@ class TestSQLDialectConverter:
         """测试支持的方言"""
         dialects = self.converter.get_supported_dialects()
         assert 'mysql' in dialects
-        assert 'postgresql' in dialects
+        assert 'postgresql_database' in dialects
         assert 'sqlite' in dialects
     
     def test_mysql_to_postgresql_conversion(self):
         """测试MySQL到PostgreSQL转换"""
         mysql_sql = "SELECT DATE_FORMAT(NOW(), '%Y-%m-%d') AS today"
-        postgresql_sql = self.converter.convert(mysql_sql, 'mysql', 'postgresql')
+        postgresql_sql = self.converter.convert(mysql_sql, 'mysql', 'postgresql_database')
         # PostgreSQL使用TO_CHAR函数而不是DATE_FORMAT
         assert 'TO_CHAR' in postgresql_sql
         assert 'NOW()' in postgresql_sql
@@ -32,7 +32,7 @@ class TestSQLDialectConverter:
         """测试基本SELECT语句转换"""
         sql = "SELECT id, name FROM users WHERE age > 18"
         # MySQL到PostgreSQL
-        converted = self.converter.convert(sql, 'mysql', 'postgresql')
+        converted = self.converter.convert(sql, 'mysql', 'postgresql_database')
         assert 'SELECT' in converted
         assert 'FROM' in converted
         assert 'WHERE' in converted
@@ -46,7 +46,7 @@ class TestSQLDialectConverter:
         """测试无效SQL"""
         invalid_sql = "SELECT * FROM users WHERE"
         with pytest.raises(SQLConversionError):
-            self.converter.convert(invalid_sql, 'mysql', 'postgresql')
+            self.converter.convert(invalid_sql, 'mysql', 'postgresql_database')
     
     def test_sql_validation(self):
         """测试SQL验证"""

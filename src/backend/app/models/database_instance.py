@@ -99,11 +99,40 @@ class DatabaseInstance(Base):
 
     @property
     def user_database_url(self) -> URL:
-        return URL.create(
-            drivername=config.mysql.driver,
-            username=self.db_username,
-            password=self.db_password,
-            host=self.db_host,
-            port=self.db_port,
-            database=self.db_name
-        )
+        """
+        获取用户数据库连接 URL。
+
+        Returns:
+            URL: 用户数据库连接 URL。
+        """
+        if self.db_type == "mysql":
+            drivername = config.mysql.driver
+            return URL.create(
+                drivername=drivername,
+                username=self.db_username,
+                password=self.db_password,
+                host=self.db_host,
+                port=self.db_port,
+                database=self.db_name
+            )
+        elif self.db_type == "postgresql":
+            drivername = config.postgresql.driver
+            return URL.create(
+                drivername=drivername,
+                username=self.db_username,
+                password=self.db_password,
+                host=self.db_host,
+                port=self.db_port,
+                database=self.db_name
+            )
+        elif self.db_type == "sqlite":
+            # SQLite是文件型数据库，只需要文件路径
+            db_path = config.sqlite.db_path
+            import os
+            db_file_path = os.path.join(db_path, f"{self.db_name}.db")
+            return URL.create(
+                drivername=config.sqlite.driver,
+                database=db_file_path
+            )
+        else:
+            raise ValueError("Invalid database type")

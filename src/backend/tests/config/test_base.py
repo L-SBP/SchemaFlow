@@ -55,7 +55,7 @@ class TestDatabaseConfig:
             "username": "testuser",
             "password": "testpassword",
             "database": "testdb",
-            "driver": "postgresql+asyncpg",
+            "driver": "postgresql_database+asyncpg",
             "echo": True,
             "max_overflow": 10,
             "pool_size": 50,
@@ -69,7 +69,7 @@ class TestDatabaseConfig:
         assert db_config.username == "testuser"
         assert isinstance(db_config.password, SecretStr)
         assert db_config.database == "testdb"
-        assert db_config.driver == "postgresql+asyncpg"
+        assert db_config.driver == "postgresql_database+asyncpg"
         assert db_config.echo is True
         assert db_config.max_overflow == 10
         assert db_config.pool_size == 50
@@ -84,7 +84,7 @@ class TestDatabaseConfig:
             "username": "testuser",
             "password": "testpassword",
             "database": "testdb",
-            "driver": "postgresql+asyncpg",
+            "driver": "postgresql_database+asyncpg",
             "echo": True,
             "max_overflow": 10,
             "pool_size": 50,
@@ -94,7 +94,7 @@ class TestDatabaseConfig:
         
         db_config = DatabaseConfig(**config_data)
         url = db_config.sqlalchemy_database_url
-        assert url.drivername == "postgresql+asyncpg"
+        assert url.drivername == "postgresql_database+asyncpg"
         assert url.username == "testuser"
         assert url.password == "testpassword"
         assert url.host == "localhost"

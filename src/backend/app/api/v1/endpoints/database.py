@@ -6,7 +6,7 @@ from api.v1 import deps
 from crud.crud_project import crud_project
 from crud.crud_database_instance import crud_database_instance
 from models.session import Session as SessionModel
-from service.mysql_service import execute_sql_with_user_check
+from service.mysql_service import execute_mysql_sql_with_user_check
 from sqlalchemy.future import select
 
 router = APIRouter()
@@ -67,7 +67,7 @@ async def get_tables(
     # We use "SELECT" as the operation type because "SHOW" returns a result set similar to SELECT,
     # and we want execute_sql_with_user_check to treat it as a query (DQL) rather than DML.
     # Ensure "SHOW *" is added to allowed_operations in config.yaml.
-    result = await execute_sql_with_user_check(sql, "SELECT", instance)
+    result = await execute_mysql_sql_with_user_check(sql, "SELECT", instance)
     
     tables = []
     if result:
@@ -97,7 +97,7 @@ async def get_table_schema(
          raise HTTPException(status_code=400, detail="Invalid table name")
 
     sql = f"DESCRIBE `{table_name}`"
-    result = await execute_sql_with_user_check(sql, "SELECT", instance)
+    result = await execute_mysql_sql_with_user_check(sql, "SELECT", instance)
     
     schema = []
     if result:
@@ -127,5 +127,5 @@ async def get_table_data(
     limit = min(limit, 1000)
     
     sql = f"SELECT * FROM `{table_name}` LIMIT {limit} OFFSET {offset}"
-    result = await execute_sql_with_user_check(sql, "SELECT", instance)
+    result = await execute_mysql_sql_with_user_check(sql, "SELECT", instance)
     return result or []
