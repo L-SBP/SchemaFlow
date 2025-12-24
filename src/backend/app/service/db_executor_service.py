@@ -15,7 +15,7 @@ class DBExecutorService:
     """
 
     @classmethod
-    async def deploy(cls, db_type: str, db_name: str, ddl: str, use_smart_parse: bool, user_id: int = None):
+    async def deploy(cls, db_type: str, db_name: str, ddl: str, use_smart_parse: bool, user_id: int):
         # 1. 预处理：清洗 DDL（去除注释）
         cleaned_ddl = "\n".join([l for l in ddl.splitlines() if not l.strip().startswith('--')])
 

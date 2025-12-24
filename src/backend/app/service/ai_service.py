@@ -7,6 +7,7 @@ from bs4 import BeautifulSoup
 from openai import OpenAI
 from core.log import log
 from core.config import settings
+from core.prompts import MERMAID_ER_GENERATION_PROMPT, build_mermaid_init_directive
 
 class AIService:
     """
@@ -115,9 +116,17 @@ class AIService:
 
     # --- Mermaid ER 图生成逻辑 ---
     @classmethod
-    def generate_mermaid_code(cls,schema_text: str, ai_model: str = "gpt4") -> str:
-        # 1. API Key 配置
-        # TODO:后续不能写死
+    def generate_mermaid_code(cls, schema_text: str, ai_model: str = "gpt4") -> str:
+        """
+        根据 Schema 生成 Mermaid ER 图代码。
+        
+        Args:
+            schema_text: Schema 文本
+            ai_model: AI 模型标识
+            
+        Returns:
+            str: Mermaid ER 图代码（包含主题配置）
+        """
         api_key = settings.ai.mermaid_api_key
         base_url = "https://ai.nengyongai.cn/v1"
 
@@ -125,7 +134,7 @@ class AIService:
             log.warning("[ERGen] No API Key found.")
             return ""
 
-        # 2. 模型映射 (新增)
+        # 模型映射
         model_mapping = {
             'gpt4': 'gpt-4o-2024-08-06',
             'chatgpt': 'gpt-3.5-turbo',
@@ -137,37 +146,12 @@ class AIService:
         try:
             client = OpenAI(api_key=api_key, base_url=base_url)
 
-            # 3. 使用新的 Prompt (更新)
-            prompt = """You are a professional database designer.
-
-    Given the following Entity Sets and Relationship Sets, please generate a complete and accurate Mermaid ER diagram code using `erDiagram` syntax. Follow these strict rules:
-
-    1. Use `PK` and `FK` to mark primary and foreign keys in the entity or relationship tables.
-    2. Use `||--o{`, `||--||`, `o{--o{` etc. to represent correct cardinality:
-       - `||--o{` means one-to-many
-       - `||--||` means one-to-one
-       - `o{--o{` means many-to-many
-    3. For relationship sets, if needed, create a separate entity-like table to store relationship attributes and foreign keys.
-    4. Do not include any extra explanation or markdown syntax like ```mermaid. Just return the raw ER diagram code.
-    5. Use appropriate attribute types like `int`, `string`, `date`, `float`, etc., based on the names.
-    6. **Attribute Order (CRITICAL)**: 
-       - You MUST follow the format: `Type Name Key`.
-       - The Key (PK/FK) must ALWAYS be at the **end** of the line.
-       - **Correct**: `string StudentID PK`
-       - **WRONG**: `string PK StudentID` (Never put PK/FK before the name)
-
-    7. **Composite Keys (CRITICAL)**: 
-       - If an attribute is **BOTH** a Primary Key and a Foreign Key, you MUST separate them with a **COMMA**.
-       - **Correct**: `string course_id PK, FK`
-       - **WRONG**: `string course_id PK FK` (Missing comma causes error)
-        """
-
             response = client.chat.completions.create(
                 model=real_model,
                 messages=[
                     {
                         "role": "user",
-                        "content": prompt + "\n\nRequirement:\n" + schema_text
+                        "content": f"{MERMAID_ER_GENERATION_PROMPT}\n\nRequirement:\n{schema_text}"
                     }
                 ],
                 temperature=0.1
@@ -176,24 +160,8 @@ class AIService:
             content = response.choices[0].message.content
             content = content.replace("```mermaid", "").replace("```", "").strip()
 
-            # 4. 拼接主题 (新增)
-            theme_config = {
-                "theme": "base",
-                "themeVariables": {
-                    "primaryColor": "#ffffff",
-                    "primaryTextColor": "#000000",
-                    "primaryBorderColor": "#3370ff",
-                    "lineColor": "#3370ff",
-                    "tertiaryColor": "#e6f7ff",
-                    "tertiaryBorderColor": "#3370ff",
-                    "tertiaryTextColor": "#000000",
-                    "mainBkg": "#ffffff",
-                    "edgeLabelBackground": "#fff"
-                }
-            }
-            init_directive = f"%%{{init: {json.dumps(theme_config)} }}%%\n"
-
-            return init_directive + content
+            # 拼接主题初始化指令
+            return build_mermaid_init_directive() + content
 
         except Exception as e:
             log.error(f"[ERGen] Error generating mermaid code: {e}")
