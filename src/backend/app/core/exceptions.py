@@ -127,6 +127,11 @@ class OperationNotPermittedException(BusinessException):
     def __init__(self, message: str = "Operation not permitted"):
         super().__init__(code=403, message=message)
 
+class ForbiddenException(BusinessException):
+    """禁止访问异常。"""
+    def __init__(self, message: str = "Access forbidden"):
+        super().__init__(code=403, message=message)
+
 class ItemNotFoundException(BusinessException):
     """资源未找到异常。"""
     def __init__(self, message: str = "Item not found"):

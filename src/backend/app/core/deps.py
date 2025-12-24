@@ -1,7 +1,7 @@
 """
 依赖注入模块。
 
-提供数据库引擎和会话的依赖注入功能。
+提供数据库引擎、会话、认证等的依赖注入功能。
 """
 
 # backend/app/core/deps.py
@@ -10,10 +10,14 @@ from typing import AsyncGenerator
 from fastapi import Request, Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession
+from sqlalchemy import select
 
 from core.database import PsqlHelper, SQLAlchemyError
-from core.exceptions import DatabaseOperationFailedException
+from core.exceptions import DatabaseOperationFailedException, ForbiddenException
 from core.config import settings
+from core.auth import decode_jwt_token
+from models.user_account import UserAccount
+from core.log import log
 
 # --- 定义 OAuth2 流程 (Swagger 用的那个) ---
 
@@ -58,3 +62,145 @@ async def get_db(request: Request) -> AsyncGenerator[AsyncSession, None]:
         raise DatabaseOperationFailedException("get database session") from e
     except AttributeError:
         raise DatabaseOperationFailedException("database engine not initialized")
+
+
+# 3. 获取当前用户（带黑名单检查）
+async def get_current_user(
+    request: Request,
+    token: str = Depends(oauth2_scheme),
+    db: AsyncSession = Depends(get_db)
+) -> UserAccount:
+    """
+    从 JWT Token 中获取当前用户。
+
+    验证流程：
+    1. 解析 JWT Token 获取用户 ID
+    2. 查询数据库获取用户对象
+    3. 检查用户账户是否被封禁（is_active）
+    4. 检查请求频率是否超限（Redis）
+
+    Args:
+        request (Request): FastAPI 请求对象。
+        token (str): JWT Token。
+        db (AsyncSession): 数据库会话。
+
+    Returns:
+        UserAccount: 当前用户对象。
+
+    Raises:
+        HTTPException: Token 无效、用户不存在或被封禁时抛出。
+    """
+    try:
+        # 1. 解析 Token
+        user_id = decode_jwt_token(token)
+    except Exception as e:
+        log.warning(f"Token 解析失败: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid authentication credentials",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
+    try:
+        # 2. 查询用户
+        result = await db.execute(
+            select(UserAccount).where(UserAccount.user_id == user_id)
+        )
+        user = result.scalar_one_or_none()
+
+        if not user:
+            log.warning(f"用户 {user_id} 不存在")
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="User not found",
+                headers={"WWW-Authenticate": "Bearer"},
+            )
+
+        # 3. 检查用户是否被封禁（黑名单检查）
+        if not user.is_active:
+            log.warning(f"用户 {user_id} 已被封禁: {user.ban_reason}")
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail=f"Account is banned. Reason: {user.ban_reason}",
+            )
+
+        # 4. 检查请求频率（可选的额外防护）
+        from core.security import freq_limiter
+        is_exceeded, count = freq_limiter.check_frequency(
+            user_id,
+            time_window=10,
+            threshold=20
+        )
+
+        if is_exceeded:
+            log.warning(f"用户 {user_id} 请求频率超限: {count} 请求/10秒")
+            # 记录违规行为
+            try:
+                from core.security import ViolationLogger
+                ip_address = request.client.host if request.client else "127.0.0.1"
+                await ViolationLogger.log_violation(
+                    db,
+                    user_id,
+                    ViolationLogger.EVENT_EXCESSIVE_API_USAGE,
+                    f"请求频率超限: {count} 请求在 10 秒内",
+                    risk_level=ViolationLogger.RISK_MEDIUM,
+                    ip_address=ip_address,
+                    client_user_agent=request.headers.get("user-agent")
+                )
+                await db.commit()
+
+                # 检查是否触发自动封禁
+                from core.security import BlacklistManager
+                is_banned, reason = await BlacklistManager.auto_ban_if_needed(db, user_id)
+                if is_banned:
+                    raise HTTPException(
+                        status_code=status.HTTP_403_FORBIDDEN,
+                        detail=f"Account is banned due to excessive API usage.",
+                    )
+            except HTTPException:
+                raise
+            except Exception as e:
+                log.error(f"记录违规日志失败: {e}")
+                # 即使记录失败，仍然限制请求
+                raise HTTPException(
+                    status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                    detail="Too many requests",
+                )
+
+        return user
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        log.error(f"获取当前用户失败: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Could not validate credentials",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
+
+# 4. 获取当前管理员用户（需要 admin 权限）
+async def get_current_admin(
+    current_user: UserAccount = Depends(get_current_user)
+) -> UserAccount:
+    """
+    获取当前用户，并验证其是否为管理员。
+
+    Args:
+        current_user (UserAccount): 当前用户。
+
+    Returns:
+        UserAccount: 当前用户（已验证为管理员）。
+
+    Raises:
+        HTTPException: 用户不是管理员时抛出。
+    """
+    if not current_user.is_admin:
+        log.warning(f"非管理员用户 {current_user.user_id} 尝试访问管理员功能")
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Admin privileges required",
+        )
+
+    return current_user
