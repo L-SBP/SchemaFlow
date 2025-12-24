@@ -9,7 +9,8 @@
 
 from typing import List, Optional, Literal, Dict, Any
 from sqlalchemy.ext.asyncio import AsyncSession
-from datetime import datetime  # 确保导入 datetime
+from datetime import datetime, timezone, timedelta  # 确保导入 datetime
+from sqlalchemy import select, desc, and_
 
 from core.log import log
 from core.exceptions import ItemNotFoundException, ValidationException
@@ -328,3 +329,328 @@ async def get_admin_stats_service(db: AsyncSession) -> AdminStatsResponse:
     """
     stats_data = await crud_admin_data.get_system_stats(db)
     return AdminStatsResponse(**stats_data)
+
+
+# ============================================================================
+# 黑名单/频率限制管理功能
+# ============================================================================
+
+async def ban_user_service(
+    db: AsyncSession,
+    user_id: int,
+    reason: str = "违反服务条款",
+    admin_id: int = 0
+) -> Dict[str, Any]:
+    """
+    管理员手动封禁用户。
+    
+    Args:
+        db: 数据库会话
+        user_id: 要封禁的用户ID
+        reason: 封禁原因
+        admin_id: 执行封禁的管理员ID
+        
+    Returns:
+        包含操作结果的字典
+    """
+    try:
+        from core.security import BlacklistManager
+        from models.user_account import UserAccount
+        
+        # 检查用户是否存在
+        result = await db.execute(
+            select(UserAccount).where(UserAccount.user_id == user_id)
+        )
+        user = result.scalar_one_or_none()
+        
+        if not user:
+            raise ItemNotFoundException(f"User with ID {user_id} not found")
+        
+        # 执行封禁
+        success = await BlacklistManager.ban_user(
+            db, user_id, reason=reason, banned_by=admin_id
+        )
+        
+        if success:
+            log.info(f"管理员 {admin_id} 手动封禁用户 {user_id}: {reason}")
+            return {
+                "success": True,
+                "message": f"用户 {user_id} 已被封禁",
+                "user_id": user_id,
+                "reason": reason,
+                "banned_at": user.banned_at.isoformat() if user.banned_at else None,
+            }
+        else:
+            return {
+                "success": False,
+                "message": f"封禁用户 {user_id} 失败",
+            }
+    
+    except Exception as e:
+        log.error(f"封禁用户失败: {e}")
+        raise
+
+
+async def unban_user_service(
+    db: AsyncSession,
+    user_id: int,
+    admin_id: int = 0
+) -> Dict[str, Any]:
+    """
+    管理员手动解封用户。
+    
+    Args:
+        db: 数据库会话
+        user_id: 要解封的用户ID
+        admin_id: 执行解封的管理员ID
+        
+    Returns:
+        包含操作结果的字典
+    """
+    try:
+        from core.security import BlacklistManager, freq_limiter
+        from models.user_account import UserAccount
+        
+        # 检查用户是否存在
+        result = await db.execute(
+            select(UserAccount).where(UserAccount.user_id == user_id)
+        )
+        user = result.scalar_one_or_none()
+        
+        if not user:
+            raise ItemNotFoundException(f"User with ID {user_id} not found")
+        
+        # 执行解封
+        success = await BlacklistManager.unban_user(db, user_id)
+        
+        if success:
+            # 重置请求频率
+            freq_limiter.reset_frequency(user_id)
+            log.info(f"管理员 {admin_id} 手动解封用户 {user_id}")
+            return {
+                "success": True,
+                "message": f"用户 {user_id} 已被解封",
+                "user_id": user_id,
+            }
+        else:
+            return {
+                "success": False,
+                "message": f"解封用户 {user_id} 失败",
+            }
+    
+    except Exception as e:
+        log.error(f"解封用户失败: {e}")
+        raise
+
+
+async def get_banned_users_service(
+    db: AsyncSession,
+    page: int = 1,
+    page_size: int = 20
+) -> Dict[str, Any]:
+    """
+    获取被封禁的用户列表。
+    
+    Args:
+        db: 数据库会话
+        page: 页码
+        page_size: 每页数量
+        
+    Returns:
+        包含被封禁用户列表的字典
+    """
+    try:
+        from models.user_account import UserAccount
+        
+        # 获取总数
+        count_result = await db.execute(
+            select(UserAccount).where(UserAccount.is_active == False)
+        )
+        total_count = len(count_result.scalars().all())
+        
+        # 分页
+        offset = (page - 1) * page_size
+        result = await db.execute(
+            select(UserAccount)
+            .where(UserAccount.is_active == False)
+            .order_by(desc(UserAccount.banned_at))
+            .offset(offset)
+            .limit(page_size)
+        )
+        users = result.scalars().all()
+        
+        return {
+            "total": total_count,
+            "page": page,
+            "page_size": page_size,
+            "users": [
+                {
+                    "user_id": u.user_id,
+                    "username": u.username,
+                    "email": u.email,
+                    "banned_at": u.banned_at.isoformat() if u.banned_at else None,
+                    "ban_reason": u.ban_reason,
+                }
+                for u in users
+            ]
+        }
+    
+    except Exception as e:
+        log.error(f"获取被封禁用户列表失败: {e}")
+        raise
+
+
+async def get_violation_stats_service(
+    db: AsyncSession,
+    hours: int = 24
+) -> Dict[str, Any]:
+    """
+    获取违规统计信息。
+    
+    Args:
+        db: 数据库会话
+        hours: 统计时间范围（小时）
+        
+    Returns:
+        包含违规统计的字典
+    """
+    try:
+        from models.violation_log import ViolationLog
+        
+        cutoff_time = datetime.now(timezone.utc) - timedelta(hours=hours)
+        
+        # 获取指定时间范围内的违规记录
+        result = await db.execute(
+            select(ViolationLog).where(
+                ViolationLog.created_at >= cutoff_time
+            )
+        )
+        logs = result.scalars().all()
+        
+        # 统计各风险等级的数量
+        risk_stats = {
+            "CRITICAL": 0,
+            "HIGH": 0,
+            "MEDIUM": 0,
+            "LOW": 0,
+        }
+        
+        event_type_stats = {}
+        
+        for log in logs:
+            risk_stats[log.risk_level] = risk_stats.get(log.risk_level, 0) + 1
+            event_type_stats[log.event_type] = event_type_stats.get(log.event_type, 0) + 1
+        
+        return {
+            "time_range_hours": hours,
+            "total_violations": len(logs),
+            "risk_level_distribution": risk_stats,
+            "event_type_distribution": event_type_stats,
+            "pending_violations": len([l for l in logs if l.resolution_status == "pending"]),
+        }
+    
+    except Exception as e:
+        log.error(f"获取违规统计失败: {e}")
+        raise
+
+
+async def get_frequency_limit_status_service(
+    db: AsyncSession,
+    user_id: int
+) -> Dict[str, Any]:
+    """
+    获取用户的频率限制状态。
+    
+    Args:
+        db: 数据库会话
+        user_id: 用户ID
+        
+    Returns:
+        包含频率限制状态的字典
+    """
+    try:
+        from core.security import freq_limiter, ViolationLogger
+        from models.user_account import UserAccount
+        
+        # 检查用户是否存在
+        result = await db.execute(
+            select(UserAccount).where(UserAccount.user_id == user_id)
+        )
+        user = result.scalar_one_or_none()
+        
+        if not user:
+            raise ItemNotFoundException(f"User with ID {user_id} not found")
+        
+        # 获取当前请求频率
+        current_frequency = freq_limiter.get_frequency(user_id)
+        
+        # 获取违规记录数
+        violation_count = await ViolationLogger.get_violation_count(
+            db, user_id, time_hours=24
+        )
+        
+        return {
+            "user_id": user_id,
+            "username": user.username,
+            "current_frequency": current_frequency,
+            "frequency_threshold": 20,
+            "time_window_seconds": 10,
+            "violation_count_24h": violation_count,
+            "auto_ban_threshold": 3,
+            "is_banned": not user.is_active,
+            "ban_reason": user.ban_reason if not user.is_active else None,
+        }
+    
+    except Exception as e:
+        log.error(f"获取频率限制状态失败: {e}")
+        raise
+
+
+async def reset_frequency_limit_service(
+    db: AsyncSession,
+    user_id: int,
+    admin_id: int = 0
+) -> Dict[str, Any]:
+    """
+    管理员重置用户的频率限制（清空 Redis 计数器）。
+    
+    Args:
+        db: 数据库会话
+        user_id: 用户ID
+        admin_id: 执行重置的管理员ID
+        
+    Returns:
+        包含操作结果的字典
+    """
+    try:
+        from core.security import freq_limiter
+        from models.user_account import UserAccount
+        
+        # 检查用户是否存在
+        result = await db.execute(
+            select(UserAccount).where(UserAccount.user_id == user_id)
+        )
+        user = result.scalar_one_or_none()
+        
+        if not user:
+            raise ItemNotFoundException(f"User with ID {user_id} not found")
+        
+        # 重置频率
+        success = freq_limiter.reset_frequency(user_id)
+        
+        if success:
+            log.info(f"管理员 {admin_id} 重置了用户 {user_id} 的频率限制")
+            return {
+                "success": True,
+                "message": f"用户 {user_id} 的频率限制已重置",
+                "user_id": user_id,
+            }
+        else:
+            return {
+                "success": False,
+                "message": "重置频率限制失败",
+            }
+    
+    except Exception as e:
+        log.error(f"重置频率限制失败: {e}")
+        raise
