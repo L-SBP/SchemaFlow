@@ -16,6 +16,7 @@ from core.config import config
 from models.database_instance import DatabaseInstance
 from sqlite.sqlite_database import SQLiteHelper
 from sqlite.sqlite_execute import deploy_sqlite_ddl
+from sqlite.sqlite_execute import execute_dql_user
 
 
 async def create_sqlite_database(db_name: str, user_id: Optional[int] = None) -> bool:
@@ -160,3 +161,32 @@ async def delete_sqlite_database(db_name: str, db_path: Optional[str] = None) ->
     else:
         print(f"SQLite数据库文件不存在: {db_file_path}")
         return True  # 文件不存在也可以认为是删除成功
+
+async def execute_sqlite_sql_with_user_check(
+    sql: str,
+    sql_type: str,
+    instance_obj: DatabaseInstance,
+    user_id: int
+) -> Optional[list]:
+    """
+    执行 SQL 前先确保 SQLite 引擎已初始化且路径正确（基于 user_id）。
+    """
+    # 1. 确保引擎已初始化（内部会处理文件路径隔离）
+    success = await ensure_sqlite_user_and_engine(
+        db_name=instance_obj.db_name,
+        db_username=instance_obj.db_username,
+        db_password=instance_obj.db_password,
+        instance_id=instance_obj.instance_id,
+        user_id=user_id
+    )
+    if not success:
+        raise Exception(f"Failed to ensure SQLite engine for instance {instance_obj.instance_id}")
+
+    # 2. 调用执行器
+    from sqlite.sqlite_execute import execute_dql_user, execute_dml_user
+    if sql_type == "SELECT":
+        return await execute_dql_user(sql, instance_obj)
+    else:
+        # DML 操作处理
+        res = await execute_dml_user(sql, instance_obj)
+        return [res] # 返回列表以保持接口一致性

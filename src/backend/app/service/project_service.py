@@ -417,7 +417,8 @@ async def deploy_project_service(
             db_type=instance.db_type,
             db_name=instance.db_name,
             ddl=final_ddl,
-            use_smart_parse=deploy_data.use_smart_parse
+            use_smart_parse=deploy_data.use_smart_parse,
+            user_id=user_id  # 传入当前用户的 ID
         )
 
         # 4. 更新部署成功后的业务状态

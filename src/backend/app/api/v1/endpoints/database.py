@@ -9,7 +9,7 @@ from models.session import Session as SessionModel
 from service.mysql_service import execute_mysql_sql_with_user_check as execute_mysql
 from sqlalchemy.future import select
 from service.postgresql_service import execute_postgres_sql_with_user_check as execute_postgres
-from sqlite.sqlite_execute import execute_dql_user as execute_sqlite
+from service.sqlite_service import execute_sqlite_sql_with_user_check as execute_sqlite
 
 router = APIRouter()
 
@@ -89,7 +89,8 @@ async def get_tables(
         # === SQLite ===
         elif instance.db_type == 'sqlite':
             sql = "SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'"
-            result = await execute_sqlite(sql, instance)
+            # 传入 current_user.user_id
+            result = await execute_sqlite(sql, "SELECT", instance, current_user.user_id)
             if result:
                 for row in result:
                     # SQLite 返回字典: {'name': 'users'}
@@ -148,8 +149,9 @@ async def get_table_schema(
 
         # === SQLite ===
         elif instance.db_type == 'sqlite':
-            sql = f"PRAGMA table_info(\"{table_name}\")"
-            result = await execute_sqlite(sql, instance)
+            sql = f"SELECT * FROM pragma_table_info('{table_name}')"
+            # 传入 current_user.user_id
+            result = await execute_sqlite(sql, "SELECT", instance, current_user.user_id)
             if result:
                 for row in result:
                     # SQLite: cid, name, type, notnull, dflt_value, pk
@@ -195,7 +197,9 @@ async def get_table_data(
 
         elif instance.db_type == 'sqlite':
             sql = f'SELECT * FROM "{table_name}" LIMIT {limit} OFFSET {offset}'
-            result = await execute_sqlite(sql, instance)
+            # 传入 current_user.user_id
+            result = await execute_sqlite(sql, "SELECT", instance, current_user.user_id)
+        # ...
 
         else:
             return []

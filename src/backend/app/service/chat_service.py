@@ -32,7 +32,7 @@ from models.session import Session as SessionModel
 from schema.chat import ChatResponse, MessageType
 from service.mysql_service import execute_mysql_sql_with_user_check
 from service.postgresql_service import execute_postgres_sql_with_user_check
-from sqlite.sqlite_execute import execute_dql_user
+from service.sqlite_service import execute_sqlite_sql_with_user_check as execute_sqlite
 from models.ai_generated_statement import AIGeneratedStatement
 from models.query_result import QueryResult
 
@@ -276,7 +276,7 @@ async def call_ai_agent(
         return f"-- AI Service Error: {str(e)}"
 
 
-async def _execute_sql_by_type(sql: str, sql_type: str, instance: Any):
+async def _execute_sql_by_type(sql: str, sql_type: str, instance: Any, user_id: int):
     """
     根据数据库类型分发执行逻辑
     """
@@ -285,7 +285,7 @@ async def _execute_sql_by_type(sql: str, sql_type: str, instance: Any):
     elif instance.db_type == 'postgresql':
         return await execute_postgres_sql_with_user_check(sql, sql_type, instance)
     elif instance.db_type == 'sqlite':
-        return await execute_dql_user(sql, sql_type, instance)
+        return await execute_sqlite(sql, sql_type, instance, user_id)
     else:
         raise HTTPException(status_code=400, detail=f"不支持的数据库类型: {instance.db_type}")
 
@@ -408,7 +408,7 @@ async def process_chat(
         try:
             database_instance = await crud_database_instance.get(db, project.instance_id)
             exec_type = sql_type if sql_type != "UNKNOWN" else "SELECT"
-            raw_result = await _execute_sql_by_type(sql_text, exec_type, database_instance)
+            raw_result = await _execute_sql_by_type(sql_text, exec_type, database_instance, user_id)
             
             # 统一数据格式为 List[Dict]
             if isinstance(raw_result, list): data = raw_result
@@ -526,7 +526,7 @@ async def confirm_and_execute_sql(
     try:
         database_instance = await crud_database_instance.get(db, project.instance_id)
         # 真正执行 DML
-        result = await _execute_sql_by_type(sql_text, "UPDATE", database_instance)
+        result = await _execute_sql_by_type(sql_text, "UPDATE", database_instance, user_id)
         execute_res = [result] if isinstance(result, dict) else result
         
         # 1. 更新消息确认状态

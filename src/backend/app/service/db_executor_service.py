@@ -8,7 +8,6 @@ from core.log import log
 from postgresql.postgres_execute import deploy_postgres_ddl
 from sqlite.sqlite_execute import deploy_sqlite_ddl
 
-
 class DBExecutorService:
     """
     数据库部署调度服务。
@@ -16,7 +15,7 @@ class DBExecutorService:
     """
 
     @classmethod
-    async def deploy(cls, db_type: str, db_name: str, ddl: str, use_smart_parse: bool):
+    async def deploy(cls, db_type: str, db_name: str, ddl: str, use_smart_parse: bool, user_id: int = None):
         # 1. 预处理：清洗 DDL（去除注释）
         cleaned_ddl = "\n".join([l for l in ddl.splitlines() if not l.strip().startswith('--')])
 
@@ -37,7 +36,7 @@ class DBExecutorService:
             await deploy_postgres_ddl(db_name, execution_statements)
             # raise NotImplementedError("PostgreSQL support coming soon")
         elif db_type == 'sqlite':
-            await deploy_sqlite_ddl(db_name, execution_statements)
+            await deploy_sqlite_ddl(db_name, execution_statements, config.sqlite, user_id)
             # raise NotImplementedError("SQLite support coming soon")
         else:
             raise ValidationException(f"Unsupported database type: {db_type}")
