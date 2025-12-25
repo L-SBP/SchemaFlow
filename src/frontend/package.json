@@ -6,10 +6,7 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
-    "preview": "vite preview",
-    "test": "vitest",
-    "test:run": "vitest run",
-    "test:coverage": "vitest run --coverage"
+    "preview": "vite preview"
   },
   "dependencies": {
     "@google/genai": "^1.30.0",
@@ -22,17 +19,12 @@
     "recharts": "^3.4.1"
   },
   "devDependencies": {
-    "@testing-library/jest-dom": "^6.9.1",
-    "@testing-library/react": "^16.3.1",
     "@types/node": "^22.14.0",
     "@types/react": "^19.2.6",
     "@vitejs/plugin-react": "^5.0.0",
-    "fast-check": "^4.5.2",
-    "jsdom": "^27.3.0",
     "mockjs": "^1.1.0",
     "typescript": "~5.8.2",
     "vite": "^6.2.0",
-    "vite-plugin-mock": "^3.0.2",
-    "vitest": "^4.0.16"
+    "vite-plugin-mock": "^3.0.2"
   }
 }
