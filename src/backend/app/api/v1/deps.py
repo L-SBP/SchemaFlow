@@ -6,7 +6,7 @@ from core.deps import get_db, oauth2_scheme # 从 core.deps 导入 oauth2_scheme
 from core.auth import decode_jwt_token # 导入刚才纯净版的工具函数
 from crud.crud_user_account import crud_user_account
 from schema.user import UserMe
-from redis.redis import get_redis
+from redis_client.redis import get_redis
 from core.log import log
 
 # 1. 这一步只负责从 Header 拿 Token 字符串

@@ -19,7 +19,7 @@ from core.config import config
 from core.log import log
 from core.auth import get_password_hash
 from crud.crud_user_account import crud_user_account
-from redis.redis import get_redis
+from redis_client.redis import get_redis
 from core import exceptions
 from core.email_utils import send_password_reset_code_email
 

@@ -14,7 +14,7 @@ from aiosmtplib import SMTP
 
 from core.config import config
 from core.log import log
-from redis.redis import get_redis
+from redis_client.redis import get_redis
 
 def _generate_code(length: int = 6) -> str:
     """

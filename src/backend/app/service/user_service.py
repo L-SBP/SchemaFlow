@@ -20,7 +20,7 @@ from core import exceptions
 from core.auth import get_password_hash, verify_password, decode_jwt_token  # 补充 decode_jwt_token 供 logout 使用
 from core.log import log
 from core.exceptions import ValidationException
-from redis.redis import get_redis
+from redis_client.redis import get_redis
 from core.config import config
 from service import email_service  # 导入 email_service 模块本身
 from schema import user as schemas  # 导入 User Schemas

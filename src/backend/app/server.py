@@ -12,8 +12,8 @@ import models
 from mysql.mysql_database import MysqlHelper
 from postgresql.postgres_database import PostgresHelper
 from sqlite.sqlite_database import SQLiteHelper
-from redis.redis import init_redis, close_redis, get_redis, init_redis_listener, close_redis_listener
-from redis.expiration_listener import redis_expire_listener
+from redis_client.redis import init_redis, close_redis, get_redis, init_redis_listener, close_redis_listener
+from redis_client.expiration_listener import redis_expire_listener
 from api.v1.api import api_router
 import asyncio
 import os
