@@ -1,0 +1,708 @@
+/**
+ * 全局样式 - 响应式与高缩放适配
+ * 支持浏览器 500% 缩放级别
+ */
+
+/* ========================================
+   1. 基础重置与缩放适配
+   ======================================== */
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html {
+  /* 使用 rem 作为基础单位，便于整体缩放控制 */
+  font-size: 16px;
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+}
+
+body {
+  margin: 0;
+  padding: 0;
+  min-height: 100vh;
+  min-height: 100dvh;
+  /* 动态视口高度，适配移动端 */
+  overflow-x: hidden;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+#root {
+  min-height: 100vh;
+  min-height: 100dvh;
+  display: flex;
+  flex-direction: column;
+}
+
+/* ========================================
+   2. 响应式容器与布局
+   ======================================== */
+
+/* 主容器自适应 */
+.app-container {
+  display: flex;
+  min-height: 100vh;
+  min-height: 100dvh;
+  width: 100%;
+  overflow: hidden;
+}
+
+/* 内容区域弹性布局 */
+.main-content {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  /* 防止 flex 子元素溢出 */
+  overflow: hidden;
+}
+
+/* 可滚动内容区 */
+.scrollable-content {
+  flex: 1;
+  overflow-y: auto;
+  overflow-x: hidden;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* ========================================
+   3. 高缩放级别适配 (500%+)
+   ======================================== */
+
+/* 当视口非常小时（高缩放或小屏幕），调整基础字体 */
+@media screen and (max-width: 400px) {
+  html {
+    font-size: 14px;
+  }
+}
+
+@media screen and (max-width: 300px) {
+  html {
+    font-size: 12px;
+  }
+}
+
+@media screen and (max-width: 200px) {
+  html {
+    font-size: 10px;
+  }
+}
+
+/* ========================================
+   4. 弹性文本与元素
+   ======================================== */
+
+/* 防止文本溢出 */
+.text-truncate {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.text-wrap-balance {
+  text-wrap: balance;
+}
+
+/* 响应式字体大小 */
+.text-responsive-sm {
+  font-size: clamp(0.75rem, 2vw, 0.875rem);
+}
+
+.text-responsive-base {
+  font-size: clamp(0.875rem, 2.5vw, 1rem);
+}
+
+.text-responsive-lg {
+  font-size: clamp(1rem, 3vw, 1.25rem);
+}
+
+.text-responsive-xl {
+  font-size: clamp(1.125rem, 3.5vw, 1.5rem);
+}
+
+.text-responsive-2xl {
+  font-size: clamp(1.25rem, 4vw, 1.875rem);
+}
+
+/* ========================================
+   5. 按钮与交互元素适配
+   ======================================== */
+
+/* 确保按钮最小可点击区域 (WCAG 2.1 AA: 44x44px) */
+button,
+[role="button"],
+.btn,
+a.btn {
+  min-height: 44px;
+  min-width: 44px;
+  touch-action: manipulation;
+}
+
+/* 小型按钮例外，但保持可访问性 */
+.btn-sm,
+button.btn-sm {
+  min-height: 36px;
+  min-width: 36px;
+}
+
+/* 图标按钮 */
+.btn-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.5rem;
+}
+
+/* ========================================
+   6. 表单元素适配
+   ======================================== */
+
+input,
+textarea,
+select {
+  font-size: 16px;
+  /* 防止 iOS 自动缩放 */
+  max-width: 100%;
+}
+
+/* 响应式输入框 */
+.input-responsive {
+  width: 100%;
+  min-height: 44px;
+  padding: 0.5rem 0.75rem;
+}
+
+/* ========================================
+   7. 卡片与容器适配
+   ======================================== */
+
+/* 响应式卡片网格 */
+.card-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 280px), 1fr));
+  gap: 1rem;
+}
+
+@media screen and (min-width: 640px) {
+  .card-grid {
+    gap: 1.5rem;
+  }
+}
+
+/* 卡片内容防溢出 */
+.card-content {
+  min-width: 0;
+  overflow: hidden;
+}
+
+/* ========================================
+   8. 模态框适配
+   ======================================== */
+
+/* 模态框响应式 */
+.modal-container {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+  overflow-y: auto;
+}
+
+.modal-content {
+  width: 100%;
+  max-width: min(90vw, 32rem);
+  max-height: calc(100vh - 2rem);
+  max-height: calc(100dvh - 2rem);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.modal-body {
+  flex: 1;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* ========================================
+   9. 分页组件样式
+   ======================================== */
+
+.pagination {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  padding: 0.75rem 0;
+}
+
+.pagination-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 2.5rem;
+  min-height: 2.5rem;
+  padding: 0.5rem;
+  border-radius: 0.375rem;
+  font-size: 0.875rem;
+  font-weight: 500;
+  transition: all 0.2s;
+  border: 1px solid transparent;
+}
+
+.pagination-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.pagination-btn-active {
+  background-color: #1677ff;
+  color: white;
+  border-color: #1677ff;
+}
+
+.pagination-info {
+  font-size: 0.875rem;
+  color: #6b7280;
+  white-space: nowrap;
+}
+
+/* 分页容器统一样式 */
+.pagination-container {
+  flex-shrink: 0;
+  border-top: 1px solid #e5e7eb;
+  /* border-gray-200 */
+  background-color: white;
+  border-radius: 0 0 0.75rem 0.75rem;
+  /* rounded-b-xl */
+  padding-top: 1rem;
+  /* pt-4 */
+  margin-top: 1rem;
+  /* mt-4 */
+}
+
+.pagination-wrapper {
+  padding-left: 1rem;
+  /* px-4 */
+  padding-right: 1rem;
+}
+
+/* 响应式分页 */
+@media screen and (max-width: 480px) {
+  .pagination {
+    gap: 0.25rem;
+  }
+
+  .pagination-btn {
+    min-width: 2rem;
+    min-height: 2rem;
+    padding: 0.25rem;
+    font-size: 0.75rem;
+  }
+
+  .pagination-info {
+    font-size: 0.75rem;
+    width: 100%;
+    text-align: center;
+    order: -1;
+    margin-bottom: 0.5rem;
+  }
+
+  .pagination-container {
+    padding-top: 0.75rem;
+    /* pt-3 */
+  }
+}
+
+/* 分页总数文字右对齐 */
+.pagination-total-text {
+  text-align: right;
+}
+
+@media screen and (min-width: 640px) {
+  .pagination-total-text {
+    text-align: left;
+  }
+}
+
+/* ========================================
+   10. 表格响应式
+   ======================================== */
+
+.table-responsive {
+  width: 100%;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+.table-responsive table {
+  min-width: 100%;
+}
+
+/* ========================================
+   11. 侧边栏适配
+   ======================================== */
+
+.sidebar {
+  flex-shrink: 0;
+  transition: width 0.3s ease, transform 0.3s ease;
+}
+
+/* 移动端侧边栏 */
+@media screen and (max-width: 768px) {
+  .sidebar {
+    position: fixed;
+    z-index: 50;
+    height: 100%;
+    height: 100dvh;
+  }
+
+  .sidebar-overlay {
+    position: fixed;
+    inset: 0;
+    background-color: rgba(0, 0, 0, 0.5);
+    z-index: 40;
+  }
+}
+
+/* ========================================
+   12. 滚动条美化
+   ======================================== */
+
+/* Webkit 浏览器滚动条 */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: #f1f1f1;
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #c1c1c1;
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #a1a1a1;
+}
+
+/* Firefox 滚动条 */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: #c1c1c1 #f1f1f1;
+}
+
+/* ========================================
+   13. 动画与过渡
+   ======================================== */
+
+/* 减少动画（无障碍） */
+@media (prefers-reduced-motion: reduce) {
+
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* 淡入动画 */
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes slideInUp {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes slideInRight {
+  from {
+    opacity: 0;
+    transform: translateX(10px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+.animate-fade-in {
+  animation: fadeIn 0.2s ease-out;
+}
+
+.animate-slide-up {
+  animation: slideInUp 0.2s ease-out;
+}
+
+.animate-slide-right {
+  animation: slideInRight 0.2s ease-out;
+}
+
+/* ========================================
+   14. 焦点样式（无障碍）
+   ======================================== */
+
+:focus-visible {
+  outline: 2px solid #1677ff;
+  outline-offset: 2px;
+}
+
+/* 移除默认焦点样式，使用自定义 */
+:focus:not(:focus-visible) {
+  outline: none;
+}
+
+/* ========================================
+   15. 打印样式
+   ======================================== */
+
+@media print {
+  .no-print {
+    display: none !important;
+  }
+
+  .sidebar,
+  header,
+  .pagination {
+    display: none !important;
+  }
+
+  body {
+    font-size: 12pt;
+  }
+}
+
+
+/* ========================================
+   16. 工作区输入栏响应式布局
+   ======================================== */
+
+/* 模型选择器响应式 - 窄屏隐藏标签 */
+@media screen and (max-width: 640px) {
+  .model-label {
+    display: none !important;
+  }
+
+  .input-bar-controls {
+    max-width: 45%;
+    /* 在小屏幕上减少控件区域 */
+  }
+
+  .model-selector-compact {
+    max-width: 80px;
+    min-width: 50px;
+  }
+}
+
+/* 极窄屏幕 (<400px) - 模型选择器仅显示图标 */
+@media screen and (max-width: 400px) {
+  .model-selector-compact .model-select {
+    max-width: 50px !important;
+    min-width: 40px !important;
+    font-size: 10px;
+  }
+
+  .model-selector-compact .model-label {
+    display: none !important;
+  }
+
+  .model-selector-compact {
+    padding-left: 0.375rem;
+    padding-right: 0.375rem;
+    max-width: 60px;
+    min-width: 50px;
+  }
+
+  .input-bar-controls {
+    gap: 0.25rem;
+    /* 减少间距 */
+    max-width: 40%;
+  }
+}
+
+/* 超窄屏幕 (<320px) - 模型选择器极简模式 */
+@media screen and (max-width: 320px) {
+  .model-selector-compact .model-select {
+    max-width: 40px !important;
+    min-width: 35px !important;
+    font-size: 9px;
+  }
+
+  .model-selector-compact {
+    max-width: 50px;
+    min-width: 45px;
+    padding-left: 0.25rem;
+    padding-right: 0.25rem;
+  }
+
+  .input-bar-controls {
+    max-width: 35%;
+  }
+}
+
+/* 输入栏容器 - 使用 flex 布局防止溢出 */
+.input-bar-container {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  overflow: hidden;
+  position: relative;
+}
+
+/* 输入框 - 弹性收缩 */
+.input-bar-textarea {
+  flex: 1;
+  min-width: 0;
+}
+
+/* 输入栏控件容器 - 防止溢出 */
+.input-bar-controls {
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+  /* gap-1.5 */
+  flex-shrink: 0;
+  min-width: 0;
+  max-width: 50%;
+  /* 确保控件不会占用超过50%的空间 */
+}
+
+/* 确保发送按钮最小尺寸 */
+.send-button {
+  min-width: 36px;
+  min-height: 36px;
+  flex-shrink: 0;
+  box-sizing: border-box;
+}
+
+/* 在极小屏幕上稍微减小发送按钮尺寸但保持可用性 */
+@media screen and (max-width: 320px) {
+  .send-button {
+    min-width: 32px;
+    min-height: 32px;
+    padding: 0.375rem;
+    /* 6px */
+  }
+}
+
+/* 模型选择器改进 */
+.model-selector-compact {
+  max-width: 120px;
+  /* 设置最大宽度防止过度扩展 */
+  min-width: 60px;
+  /* 设置最小宽度确保可用性 */
+}
+
+.model-selector-compact .model-select {
+  max-width: 80px;
+  min-width: 40px;
+  text-overflow: ellipsis;
+  overflow: hidden;
+  white-space: nowrap;
+}
+
+/* 模型选择器选项文本截断 */
+.model-selector-compact .model-select option {
+  text-overflow: ellipsis;
+  overflow: hidden;
+  white-space: nowrap;
+}
+
+/* ========================================
+   17. 顶部标题栏响应式布局
+   ======================================== */
+
+/* 窄屏时隐藏按钮文字，仅保留图标 */
+@media screen and (max-width: 768px) {
+  .header-button-text {
+    display: none !important;
+  }
+
+  .header-button-icon-only {
+    padding: 0.5rem !important;
+    min-width: 44px;
+    min-height: 44px;
+  }
+}
+
+/* 极窄屏幕时进一步优化 */
+@media screen and (max-width: 480px) {
+  .header-button-icon-only {
+    padding: 0.375rem !important;
+    min-width: 36px;
+    min-height: 36px;
+  }
+}
+
+/* ========================================
+   18. 面板切换按钮样式
+   ======================================== */
+
+/* 面板切换按钮 - 确保最小可点击区域 */
+.panel-toggle-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 44px;
+  min-height: 44px;
+  padding: 0.625rem;
+  /* p-2.5 = 10px */
+  border-radius: 0.375rem;
+  background-color: transparent;
+  border: none;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  color: #6b7280;
+  /* text-gray-500 */
+  box-sizing: border-box;
+}
+
+.panel-toggle-button:hover {
+  background-color: #f3f4f6;
+  /* hover:bg-gray-100 */
+  color: #1f2937;
+  /* hover:text-gray-800 */
+}
+
+.panel-toggle-button:focus-visible {
+  outline: 2px solid #1677ff;
+  outline-offset: 2px;
+}
+
+/* 紧凑模式下的面板切换按钮 */
+@media screen and (max-width: 768px) {
+  .panel-toggle-button {
+    min-width: 36px;
+    min-height: 36px;
+    padding: 0.375rem;
+    /* p-1.5 = 6px */
+  }
+}

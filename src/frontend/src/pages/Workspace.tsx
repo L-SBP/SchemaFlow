@@ -4,6 +4,7 @@ import { Button, message as GlobalMessage, Modal } from '../components/UI';
 import { Send, Plus, MessageSquare, Edit2, Trash2, Check, X, ChevronLeft, Loader2, Sparkles, AlertTriangle, Play, Ban, Table as TableIcon, Info, Bot, Database, PanelLeftClose, PanelLeftOpen, PanelRightClose, PanelRightOpen } from 'lucide-react';
 import { sessionApi } from '../api/session';
 import { ProjectWizard } from '../components/ProjectWizard';
+import { PanelToggleButton } from '../components/PanelToggleButton';
 import DatabaseViewer from './DatabaseViewer';
 
 interface WorkspaceProps {
@@ -144,19 +145,40 @@ export const Workspace: React.FC<WorkspaceProps> = ({ project, onBack }) => {
   const pendingLeftPanelWidthRef = useRef<number>(800);
   const resizeRafIdRef = useRef<number | null>(null);
 
+  // 视口宽度状态
+  const [viewportWidth, setViewportWidth] = useState(window.innerWidth);
+
+  // 监听视口宽度变化
+  useEffect(() => {
+    const handleResize = () => {
+      setViewportWidth(window.innerWidth);
+    };
+
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
+
+  // 计算最大宽度（视口宽度的60%）
+  const getMaxLeftPanelWidth = () => Math.floor(viewportWidth * 0.6);
+  const getMinLeftPanelWidth = () => {
+    const maxWidth = getMaxLeftPanelWidth();
+    // 确保最小宽度不超过最大宽度，在极小视口下优先保证最大宽度约束
+    return Math.min(200, maxWidth);
+  };
+
   // 记住上次拖拽宽度
   useEffect(() => {
     try {
       const raw = localStorage.getItem('workspace.leftPanelWidth');
       const parsed = raw ? Number(raw) : NaN;
       if (Number.isFinite(parsed)) {
-        const clamped = Math.max(260, Math.min(1600, parsed));
+        const clamped = Math.max(getMinLeftPanelWidth(), Math.min(getMaxLeftPanelWidth(), parsed));
         setLeftPanelWidth(clamped);
       }
     } catch {
       // ignore
     }
-  }, []);
+  }, [viewportWidth]); // 依赖viewportWidth，当视口变化时重新计算
 
   useEffect(() => {
     leftPanelWidthRef.current = leftPanelWidth;
@@ -239,7 +261,7 @@ export const Workspace: React.FC<WorkspaceProps> = ({ project, onBack }) => {
     const handleMouseMove = (e: MouseEvent) => {
       const dx = e.clientX - leftResizeStartXRef.current;
       const nextWidth = leftResizeStartWidthRef.current + dx;
-      const clamped = Math.max(260, Math.min(1600, nextWidth));
+      const clamped = Math.max(getMinLeftPanelWidth(), Math.min(getMaxLeftPanelWidth(), nextWidth));
       pendingLeftPanelWidthRef.current = clamped;
 
       if (resizeRafIdRef.current != null) return;
@@ -521,14 +543,11 @@ export const Workspace: React.FC<WorkspaceProps> = ({ project, onBack }) => {
       {/* 左侧收起后：最左侧展开把手 */}
       {!isLeftPanelOpen && (
         <div className="w-10 border-r border-gray-200 bg-white shrink-0 flex items-start justify-center pt-3">
-          <button
-            onClick={() => setIsLeftPanelOpen(true)}
-            className="p-1.5 hover:bg-gray-100 rounded-md text-gray-500 hover:text-gray-800 transition-colors"
-            title="展开数据库面板"
-            type="button"
-          >
-            <PanelLeftOpen size={18} />
-          </button>
+          <PanelToggleButton
+            isOpen={false}
+            onToggle={() => setIsLeftPanelOpen(true)}
+            position="left"
+          />
         </div>
       )}
 
@@ -542,14 +561,11 @@ export const Workspace: React.FC<WorkspaceProps> = ({ project, onBack }) => {
             <Database size={16} className="text-primary shrink-0" />
             <span className="font-medium text-gray-700 truncate">数据库</span>
           </div>
-          <button
-            onClick={() => setIsLeftPanelOpen(false)}
-            className="p-1.5 hover:bg-gray-200 rounded-md text-gray-500 transition-colors"
-            title="最小化数据库面板"
-            type="button"
-          >
-            <PanelLeftClose size={18} />
-          </button>
+          <PanelToggleButton
+            isOpen={true}
+            onToggle={() => setIsLeftPanelOpen(false)}
+            position="left"
+          />
         </div>
         <div className="flex-1 min-h-0 overflow-hidden">
           {activeSessionId ? (
@@ -580,34 +596,36 @@ export const Workspace: React.FC<WorkspaceProps> = ({ project, onBack }) => {
       {/* 中间：对话区 */}
       <div className="flex-1 flex flex-col min-w-0 bg-white">
         {/* 顶部标题栏 */}
-        <div className="px-6 py-4 border-b border-gray-200 flex justify-between items-center bg-white sticky top-0 z-10 shadow-sm">
-          <div className="flex items-center gap-3 min-w-0">
-            <div className="min-w-0">
-              <div className="flex items-center gap-2 mb-1">
-                <h2 className="font-bold text-gray-800 text-lg truncate">{project.name}</h2>
+        <div className="px-6 py-4 border-b border-gray-200 flex justify-between items-center bg-white sticky top-0 z-10 shadow-sm min-h-12">
+          <div className="flex items-center gap-3 min-w-0 flex-1">
+            <div className="min-w-0 flex-1">
+              <div className="flex items-center gap-2 mb-1 min-w-0">
+                <h2 className="font-bold text-gray-800 text-lg truncate min-w-0">{project.name}</h2>
                 <span className="px-2 py-0.5 bg-gray-100 text-gray-500 text-xs rounded-full border border-gray-200 shrink-0">
                   {project.type}
                 </span>
               </div>
-              <p className="text-xs text-gray-400 flex items-center gap-2">
-                <span className={`w-2 h-2 rounded-full ${activeSessionId ? 'bg-green-500' : 'bg-gray-300'}`}></span>
-                当前会话: {activeSession?.name || '未选择'}
+              <p className="text-xs text-gray-400 flex items-center gap-2 truncate">
+                <span className={`w-2 h-2 rounded-full ${activeSessionId ? 'bg-green-500' : 'bg-gray-300'} shrink-0`}></span>
+                <span className="truncate">当前会话: {activeSession?.name || '未选择'}</span>
               </p>
             </div>
           </div>
-          <div className="flex gap-2 items-center">
-            <Button variant="default" icon={<Info size={16} />} onClick={() => setIsInfoModalOpen(true)}>
-              项目详情
+          <div className="flex gap-2 items-center shrink-0">
+            <Button
+              variant="default"
+              icon={<Info size={16} />}
+              onClick={() => setIsInfoModalOpen(true)}
+              className="header-button-icon-only"
+            >
+              <span className="header-button-text">项目详情</span>
             </Button>
             {!isRightPanelOpen && (
-              <button
-                onClick={() => setIsRightPanelOpen(true)}
-                className="p-1.5 hover:bg-gray-100 rounded-md text-gray-500 hover:text-gray-800 transition-colors"
-                title="展开会话列表"
-                type="button"
-              >
-                <PanelRightOpen size={18} />
-              </button>
+              <PanelToggleButton
+                isOpen={false}
+                onToggle={() => setIsRightPanelOpen(true)}
+                position="right"
+              />
             )}
           </div>
         </div>
@@ -778,50 +796,53 @@ export const Workspace: React.FC<WorkspaceProps> = ({ project, onBack }) => {
         </div>
 
         {/* 底部输入区 */}
-        <div className="p-6 bg-white border-t border-gray-200">
-          <div className="relative max-w-4xl mx-auto flex items-center">
-            {/* 输入框 */}
-            <textarea
-              value={inputValue}
-              onChange={(e) => setInputValue(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter' && !e.shiftKey) {
-                  e.preventDefault();
-                  handleSend();
-                }
-              }}
-              placeholder={activeSessionId ? "输入您的指令..." : "请先选择左侧会话"}
-              // 关键修改：右侧内边距设置为 13rem (约 208px)，为右侧的控件组预留空间
-              className="w-full pl-4 pr-[13rem] py-4 bg-gray-50 border border-gray-300 rounded-xl focus:ring-2 focus:ring-primary focus:border-primary resize-none shadow-sm text-sm h-14 overflow-hidden disabled:opacity-60 disabled:cursor-not-allowed"
-              disabled={isSending || !activeSessionId}
-            />
+        <div className="p-4 sm:p-6 bg-white border-t border-gray-200">
+          <div className="max-w-4xl mx-auto">
+            {/* 响应式 flex 布局容器 - 改进的布局结构 */}
+            <div className="input-bar-container flex items-center bg-gray-50 border border-gray-300 rounded-xl focus-within:ring-2 focus-within:ring-primary focus-within:border-primary shadow-sm overflow-hidden">
+              {/* 输入框 - 使用 flex-1 和 min-w-0 防止溢出 */}
+              <textarea
+                value={inputValue}
+                onChange={(e) => setInputValue(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' && !e.shiftKey) {
+                    e.preventDefault();
+                    handleSend();
+                  }
+                }}
+                placeholder={activeSessionId ? "输入您的指令..." : "请先选择左侧会话"}
+                className="input-bar-textarea flex-1 min-w-0 pl-4 py-4 bg-transparent border-none focus:ring-0 focus:outline-none resize-none text-sm h-14 overflow-hidden disabled:opacity-60 disabled:cursor-not-allowed"
+                disabled={isSending || !activeSessionId}
+              />
 
-            {/* 右侧控件组容器: 包含模型选择器和发送按钮 */}
-            <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-2">
-              {/* 模型选择器 */}
-              <div className="flex items-center bg-white border border-gray-200 rounded-lg shadow-sm px-2 h-9 hover:border-gray-300 transition-colors">
-                <Bot size={14} className="text-gray-400 mr-1.5" />
-                <span className="text-[10px] text-gray-400 mr-1 select-none">模型</span>
-                <select
-                  value={selectedModel}
-                  onChange={(e) => setSelectedModel(e.target.value)}
-                  className="text-xs bg-transparent border-none focus:ring-0 text-gray-700 font-medium cursor-pointer outline-none p-0 pr-1 max-w-[100px] truncate"
-                  title="选择模型"
+              {/* 右侧控件组容器 - 使用绝对定位确保不溢出 */}
+              <div className="input-bar-controls flex items-center gap-1.5 px-2 py-2 shrink-0">
+                {/* 模型选择器 - 响应式收缩 */}
+                <div className="model-selector-compact flex items-center bg-white border border-gray-200 rounded-lg shadow-sm px-1.5 h-9 hover:border-gray-300 transition-colors shrink-0 overflow-hidden">
+                  <Bot size={14} className="text-gray-400 shrink-0" />
+                  <span className="model-label text-[10px] text-gray-400 mx-1 select-none hidden sm:inline whitespace-nowrap">模型</span>
+                  <select
+                    value={selectedModel}
+                    onChange={(e) => setSelectedModel(e.target.value)}
+                    className="model-select text-xs bg-transparent border-none focus:ring-0 text-gray-700 font-medium cursor-pointer outline-none p-0 pr-1 truncate min-w-0 overflow-hidden"
+                    title={`当前模型: ${selectedModel}`}
+                  >
+                    <option value="xiyan-sql" title="xiyan-sql">xiyan-sql</option>
+                    <option value="deepseek-v3" title="DeepSeek V3.1">DeepSeek V3.1</option>
+                    <option value="my-finetuned-sql" title="my-finetuned-sql">my-finetuned-sql</option>
+                  </select>
+                </div>
+
+                {/* 发送按钮 - 确保最小尺寸，不可压缩 */}
+                <button
+                  onClick={() => handleSend()}
+                  disabled={isSending || !inputValue.trim() || !activeSessionId}
+                  className="send-button p-2 bg-primary text-white rounded-lg hover:bg-primary-hover disabled:opacity-50 disabled:bg-gray-300 transition-colors shadow-sm flex items-center justify-center shrink-0"
+                  style={{ minWidth: '36px', minHeight: '36px' }}
                 >
-                  <option value="xiyan-sql">xiyan-sql</option>
-                  <option value="deepseek-v3">DeepSeek V3.1</option>
-                  <option value="my-finetuned-sql">my-finetuned-sql</option>
-                </select>
+                  {isSending ? <Loader2 size={16} className="animate-spin" /> : <Send size={16} />}
+                </button>
               </div>
-
-              {/* 发送按钮 */}
-              <button
-                onClick={() => handleSend()}
-                disabled={isSending || !inputValue.trim() || !activeSessionId}
-                className="p-2 bg-primary text-white rounded-lg hover:bg-primary-hover disabled:opacity-50 disabled:bg-gray-300 transition-colors shadow-sm h-9 w-9 flex items-center justify-center"
-              >
-                {isSending ? <Loader2 size={16} className="animate-spin" /> : <Send size={16} />}
-              </button>
             </div>
           </div>
           <p className="text-center text-xs text-gray-400 mt-2">
@@ -837,14 +858,11 @@ export const Workspace: React.FC<WorkspaceProps> = ({ project, onBack }) => {
             <MessageSquare size={16} className="text-gray-500 shrink-0" />
             <span className="font-medium text-gray-700 truncate">会话</span>
           </div>
-          <button
-            onClick={() => setIsRightPanelOpen(false)}
-            className="p-1.5 hover:bg-gray-200 rounded-md text-gray-500 transition-colors"
-            title="最小化会话列表"
-            type="button"
-          >
-            <PanelRightClose size={18} />
-          </button>
+          <PanelToggleButton
+            isOpen={true}
+            onToggle={() => setIsRightPanelOpen(false)}
+            position="right"
+          />
         </div>
 
         <div className="p-4 border-b border-gray-200">

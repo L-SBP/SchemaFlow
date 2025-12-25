@@ -1,0 +1,378 @@
+/**
+ * ProjectCard Component Styles
+ * Requirements: 9.1, 9.2, 9.3, 9.4, 9.5
+ */
+
+.project-card {
+  /* Requirement 9.1: Consistent dimensions across all cards */
+  width: 100%;
+  height: 180px;
+
+  /* Card styling with default shadow for depth */
+  background: #ffffff;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  padding: 18px;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.06), 0 1px 2px rgba(0, 0, 0, 0.04);
+
+  /* Layout structure */
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+
+  /* Requirement 9.2: Consistent spacing and margins */
+  box-sizing: border-box;
+
+  /* Transition for hover effects */
+  transition: all 0.2s ease-in-out;
+
+  /* Requirement 9.5: Responsive behavior */
+  min-width: 320px;
+}
+
+/* Requirement 1.5: Cursor pointer for clickable areas */
+.project-card--clickable {
+  cursor: pointer;
+}
+
+/* Requirement 1.3, 9.3: Hover effects for visual feedback */
+.project-card--hover {
+  /* Enhanced elevation effect on hover */
+  box-shadow: 0 8px 16px rgba(0, 0, 0, 0.12), 0 4px 8px rgba(0, 0, 0, 0.08);
+  border-color: #9ca3af;
+  transform: translateY(-2px);
+}
+
+/* Card sections layout */
+.project-card__header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 12px;
+  min-height: 24px;
+}
+
+.project-card__header-left {
+  display: flex;
+  align-items: center;
+  flex: 1;
+  min-width: 0;
+  /* Allow text truncation */
+}
+
+/* Project name styling */
+.project-name {
+  font-size: 16px;
+  font-weight: 600;
+  color: #1f2937;
+  line-height: 1.2;
+}
+
+.project-name--truncated {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 200px;
+  /* Increase space for longer names with wider cards */
+}
+
+.project-card__content {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-start;
+  margin-bottom: 12px;
+  overflow: hidden;
+}
+
+/* Project description styling */
+.project-description-container {
+  display: flex;
+  flex-direction: column;
+}
+
+.project-description {
+  font-size: 14px;
+  color: #6b7280;
+  line-height: 1.4;
+  margin: 0;
+  word-wrap: break-word;
+  overflow-wrap: break-word;
+}
+
+.project-description--truncated {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  line-clamp: 2;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.project-card__footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  min-height: 32px;
+  margin-top: auto;
+  /* Push footer to bottom */
+  padding-right: 4px;
+  /* Add slight padding to align with card edge */
+}
+
+.project-card__footer-left {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex: 1;
+  min-height: 32px;
+  /* Ensure consistent height with view details button */
+}
+
+/* View Details Button */
+.view-details-button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  min-width: 32px;
+  min-height: 32px;
+  border: none;
+  border-radius: 4px;
+  background: transparent;
+  color: #6b7280;
+  cursor: pointer;
+  transition: all 0.2s ease-in-out;
+  flex-shrink: 0;
+  padding: 0;
+  margin-left: 8px;
+  /* Add margin to separate from status/date */
+  align-self: center;
+  /* Ensure vertical alignment with status badge and date */
+}
+
+.view-details-button:hover {
+  background: #f3f4f6;
+  color: #374151;
+  transform: scale(1.05);
+}
+
+.view-details-button:active {
+  transform: scale(0.95);
+  background: #e5e7eb;
+}
+
+.view-details-button:focus {
+  outline: none;
+  background: #f3f4f6;
+  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.2);
+}
+
+.view-details-button svg {
+  width: 14px;
+  height: 14px;
+  transition: transform 0.2s ease-in-out;
+  stroke-width: 1.5;
+}
+
+.view-details-button:hover svg {
+  transform: scale(1.1);
+}
+
+/* Responsive design */
+/* Requirement 9.4: Responsive card layout for different screen sizes */
+@media (max-width: 768px) {
+  .project-card {
+    width: 100%;
+    max-width: 100%;
+    min-width: 320px;
+  }
+
+  /* Adjust header layout for smaller screens */
+  .project-card__header {
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
+  .project-name--truncated {
+    max-width: 180px;
+    /* Adjust for wider cards */
+  }
+}
+
+/* Medium mobile screens */
+@media (max-width: 480px) {
+  .project-card {
+    width: 100%;
+    min-width: 300px;
+    padding: 14px;
+    height: 150px;
+  }
+
+  .project-card__header {
+    margin-bottom: 10px;
+  }
+
+  .project-card__content {
+    margin-bottom: 10px;
+  }
+
+  .project-name--truncated {
+    max-width: 160px;
+  }
+
+  /* Progressive element hiding for insufficient space */
+  .project-description--truncated {
+    -webkit-line-clamp: 1;
+    /* Reduce to single line on small screens */
+    line-clamp: 1;
+  }
+}
+
+/* Requirement 9.5: Accessibility at minimum 320px viewport width */
+@media (max-width: 360px) {
+  .project-card {
+    width: 100%;
+    min-width: 240px;
+    padding: 12px;
+    height: 140px;
+  }
+
+  .project-card__header {
+    margin-bottom: 8px;
+  }
+
+  .project-card__content {
+    margin-bottom: 8px;
+  }
+
+  .project-name--truncated {
+    max-width: 100px;
+  }
+
+  /* Further reduce description on very small screens */
+  .project-description--truncated {
+    -webkit-line-clamp: 1;
+    line-clamp: 1;
+    font-size: 13px;
+  }
+
+  /* Adjust footer elements */
+  .project-card__footer {
+    flex-wrap: nowrap;
+    gap: 8px;
+    min-height: 32px;
+    padding-right: 2px;
+    /* Reduce padding on small screens */
+  }
+
+  .project-card__footer-left {
+    gap: 8px;
+    min-height: 32px;
+  }
+
+  /* Keep view details button consistent with action buttons */
+  .view-details-button {
+    width: 32px;
+    height: 32px;
+    min-width: 32px;
+    min-height: 32px;
+    margin-left: 6px;
+    /* Reduce margin on small screens */
+  }
+
+  .view-details-button svg {
+    width: 14px;
+    height: 14px;
+  }
+}
+
+/* Critical minimum width - 320px viewport */
+@media (max-width: 320px) {
+  .project-card {
+    width: 100%;
+    min-width: 280px;
+    padding: 10px;
+    height: 130px;
+  }
+
+  .project-card__header {
+    margin-bottom: 6px;
+  }
+
+  .project-card__content {
+    margin-bottom: 6px;
+  }
+
+  .project-name--truncated {
+    max-width: 80px;
+    font-size: 15px;
+  }
+
+  /* Progressive element hiding for insufficient space */
+  .project-description {
+    font-size: 12px;
+  }
+
+  .project-description--truncated {
+    -webkit-line-clamp: 1;
+    line-clamp: 1;
+  }
+
+  /* Adjust footer for minimal space */
+  .project-card__footer {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 4px;
+    min-height: 32px;
+    padding-right: 0;
+    /* Remove padding on very small screens */
+  }
+
+  .project-card__footer-left {
+    gap: 8px;
+    min-height: auto;
+  }
+
+  /* Hide view details button on very small screens to save space */
+  .view-details-button {
+    display: none;
+  }
+
+  /* Smaller status badge and date */
+  .status-badge {
+    font-size: 10px;
+  }
+
+  .date-display {
+    font-size: 9px;
+  }
+}
+
+/* Container queries for responsive card grids */
+@container (max-width: 600px) {
+  .project-card {
+    width: 100%;
+    max-width: 100%;
+  }
+}
+
+@container (max-width: 400px) {
+  .project-card {
+    min-width: 240px;
+  }
+}
+
+/* Focus styles for accessibility */
+.project-card:focus {
+  outline: 2px solid #3b82f6;
+  outline-offset: 2px;
+}
+
+/* Ensure card maintains structure even with varying content */
+.project-card__header,
+.project-card__content,
+.project-card__footer {
+  width: 100%;
+}

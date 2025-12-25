@@ -1,0 +1,23 @@
+/**
+ * DateDisplay Component Styles
+ * Requirements: 8.3, 8.4
+ */
+
+.date-display {
+  /* Requirement 8.4: Muted color (gray) and smaller font size (11px) */
+  color: #9ca3af;
+  font-size: 11px;
+  font-weight: 400;
+  line-height: 1;
+
+  /* Requirement 8.3: Positioned in bottom-right corner */
+  display: inline-block;
+  text-align: right;
+
+  /* Ensure text doesn't wrap */
+  white-space: nowrap;
+
+  /* Subtle styling */
+  font-family: monospace;
+  /* Better for date/time display */
+}

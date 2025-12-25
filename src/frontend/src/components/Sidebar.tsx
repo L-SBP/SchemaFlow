@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { LayoutDashboard, Database, Users, FileText, Bell, X, PanelLeftClose, PanelLeftOpen, User as UserIcon, Settings, LogOut } from 'lucide-react';
+import { LayoutDashboard, BarChart2, Users, Book, Bell, X, PanelLeftClose, PanelLeftOpen, User as UserIcon, Settings, LogOut, Database } from 'lucide-react';
 import { UserRole } from '../types'; // 修复: 移除 .ts 后缀
 
 /**
@@ -65,12 +65,12 @@ export const Sidebar: React.FC<SidebarProps> = ({ role, user, selectedProject, a
     // 根据角色定义菜单项配置
     const menuItems = role === UserRole.ADMIN ? [
         { id: 'admin_users', label: '用户管理', icon: <Users size={18} /> },
-        { id: 'admin_announcements', label: '公告管理', icon: <FileText size={18} /> },
+        { id: 'admin_announcements', label: '公告管理', icon: <Bell size={18} /> },
         { id: 'admin_status', label: '系统状态', icon: <LayoutDashboard size={18} /> },
     ] : [
         { id: 'dashboard', label: '项目概览', icon: <LayoutDashboard size={18} /> },
-        { id: 'reports', label: '报表分析', icon: <FileText size={18} /> },
-        { id: 'glossary', label: '业务术语', icon: <Database size={18} /> },
+        { id: 'reports', label: '报表分析', icon: <BarChart2 size={18} /> },
+        { id: 'glossary', label: '业务术语', icon: <Book size={18} /> },
         { id: 'announcements', label: '系统公告', icon: <Bell size={18} /> },
     ];
 
@@ -86,9 +86,9 @@ export const Sidebar: React.FC<SidebarProps> = ({ role, user, selectedProject, a
 
             {/* 侧边栏容器 - z-50 ensures it's on top of everything */}
             <div className={`
-                fixed inset-y-0 left-0 w-64 bg-white border-r border-gray-200 h-screen flex flex-col 
+                fixed inset-y-0 left-0 w-64 bg-white border-r border-gray-200 h-screen h-[100dvh] flex flex-col 
                 transition-[transform,width] duration-300 ease-in-out motion-reduce:transition-none z-50
-                md:translate-x-0 md:static md:sticky md:top-0
+                md:translate-x-0 md:static md:sticky md:top-0 md:h-screen md:h-[100dvh]
                 ${isOpen ? 'translate-x-0' : '-translate-x-full'}
                 ${isCollapsed ? 'md:w-16' : 'md:w-64'}
             `}>
@@ -116,7 +116,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ role, user, selectedProject, a
                         {/* 桌面端最小化/展开按钮 */}
                         <button
                             onClick={() => setIsCollapsed(v => !v)}
-                            className={`hidden md:inline-flex p-1 text-gray-500 hover:bg-gray-100 rounded-md ${isCollapsed ? 'md:mx-auto md:absolute md:left-1/2 md:-translate-x-1/2' : ''}`}
+                            className={`hidden md:inline-flex p-1 text-gray-500 hover:bg-gray-100 rounded-md items-center justify-center ${isCollapsed ? 'md:mx-auto md:absolute md:left-1/2 md:-translate-x-1/2 md:top-1/2 md:-translate-y-1/2' : ''}`}
                             title={isCollapsed ? '展开侧边栏' : '最小化侧边栏'}
                             type="button"
                         >

@@ -224,17 +224,17 @@ export const Login: React.FC<LoginProps> = ({ onLogin }) => {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-[#f0f2f5] bg-[url('https://gw.alipayobjects.com/zos/rmsportal/TVYTbAXWheQpRcWDaDMu.svg')] bg-center bg-no-repeat bg-contain">
-      <div className="w-full max-w-sm bg-white p-8 rounded-xl shadow-lg animate-in fade-in zoom-in duration-300">
-        <div className="text-center mb-8">
-          {/* 修改: 增大Logo尺寸 (w-16 -> w-24) */}
+    <div className="min-h-screen min-h-[100dvh] flex items-center justify-center bg-[#f0f2f5] bg-[url('https://gw.alipayobjects.com/zos/rmsportal/TVYTbAXWheQpRcWDaDMu.svg')] bg-center bg-no-repeat bg-contain p-4">
+      <div className="w-full max-w-sm bg-white p-6 sm:p-8 rounded-xl shadow-lg animate-in fade-in zoom-in duration-300">
+        <div className="text-center mb-6 sm:mb-8">
+          {/* 响应式Logo尺寸 */}
           <img
             src="public/database-logo.svg"
             alt="AutoDB Logo"
-            className="w-24 h-24 mx-auto mb-4 object-contain hover:scale-105 transition-transform duration-300"
+            className="w-16 h-16 sm:w-24 sm:h-24 mx-auto mb-3 sm:mb-4 object-contain hover:scale-105 transition-transform duration-300"
           />
-          <h1 className="text-2xl font-bold text-gray-800">AutoDB</h1>
-          <p className="text-gray-500 mt-2 text-sm">基于大模型多智能体的数据库自动部署平台</p>
+          <h1 className="text-xl sm:text-2xl font-bold text-gray-800">AutoDB</h1>
+          <p className="text-gray-500 mt-2 text-xs sm:text-sm">基于大模型多智能体的数据库自动部署平台</p>
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-4">
@@ -415,7 +415,7 @@ export const Login: React.FC<LoginProps> = ({ onLogin }) => {
           </div>
         </form>
 
-        <div className="mt-8 text-center text-xs text-gray-400">
+        <div className="mt-6 sm:mt-8 text-center text-xs text-gray-400">
           Copyright © 2025 AutoDB
         </div>
       </div>

@@ -1,0 +1,94 @@
+/**
+ * ActionButtons Component Styles
+ * Requirements: 5.1, 5.2, 5.3, 5.4, 5.5
+ */
+
+.action-buttons {
+  /* Requirement 5.1: Positioned in top-right corner */
+  display: flex;
+  align-items: flex-start;
+  justify-content: flex-end;
+  margin-top: -2px;
+  /* Align with title baseline */
+}
+
+.action-button {
+  /* Requirement 5.2: Compact design with reduced width */
+  /* Requirement 5.3: Minimum 32x32 pixel clickable area */
+  min-width: 32px;
+  min-height: 32px;
+  width: 32px;
+  height: 32px;
+
+  /* Requirement 5.4: Icon-only display */
+  padding: 0;
+  border: none;
+  border-radius: 4px;
+  background: transparent;
+
+  /* Center the icon */
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  /* Interaction styles */
+  cursor: pointer;
+  transition: all 0.2s ease-in-out;
+
+  /* Remove default button styles */
+  font-size: 0;
+  line-height: 0;
+}
+
+.action-button:hover {
+  background: #f3f4f6;
+  transform: scale(1.05);
+}
+
+.action-button:active {
+  transform: scale(0.95);
+  background: #e5e7eb;
+}
+
+.action-button:focus {
+  outline: none;
+  background: #f3f4f6;
+  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.2);
+}
+
+/* Edit button specific styles */
+.action-button--edit {
+  color: #6b7280;
+}
+
+.action-button--edit:hover {
+  color: #3b82f6;
+  background: #eff6ff;
+}
+
+/* Delete button specific styles */
+.action-button--delete {
+  color: #6b7280;
+}
+
+.action-button--delete:hover {
+  color: #ef4444;
+  background: #fef2f2;
+}
+
+/* Icon styles */
+.action-button svg {
+  width: 14px;
+  height: 14px;
+  stroke-width: 1.5;
+  transition: transform 0.2s ease-in-out;
+}
+
+.action-button:hover svg {
+  transform: scale(1.1);
+}
+
+/* Ensure buttons don't shrink */
+.action-button {
+  flex-shrink: 0;
+}

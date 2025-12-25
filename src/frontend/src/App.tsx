@@ -204,7 +204,7 @@ const App: React.FC = () => {
   };
 
   return (
-    <div className="flex h-screen bg-[#f0f2f5] bg-[url('https://gw.alipayobjects.com/zos/rmsportal/TVYTbAXWheQpRcWDaDMu.svg')] bg-center bg-no-repeat bg-contain overflow-hidden">
+    <div className="flex h-screen h-[100dvh] bg-[#f0f2f5] bg-[url('https://gw.alipayobjects.com/zos/rmsportal/TVYTbAXWheQpRcWDaDMu.svg')] bg-center bg-no-repeat bg-contain overflow-hidden">
       <ToastContainer />
 
       <Sidebar
@@ -221,11 +221,11 @@ const App: React.FC = () => {
           setIsSidebarOpen(false);
         }}
       />
-      <main className="flex-1 flex flex-col min-w-0">
+      <main className="flex-1 flex flex-col min-w-0 min-h-0">
         <Header
           onToggleSidebar={() => setIsSidebarOpen(!isSidebarOpen)}
         />
-        <div className="flex-1 overflow-auto relative">
+        <div className="flex-1 overflow-hidden relative">
           {renderContent()}
         </div>
       </main>

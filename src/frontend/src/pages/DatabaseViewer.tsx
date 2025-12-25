@@ -41,6 +41,7 @@ const DatabaseViewer: React.FC<DatabaseViewerProps> = ({ sessionId, className })
   const resizeStartWidthRef = useRef<number>(256);
   const resizeRafIdRef = useRef<number | null>(null);
   const [isResizingExplorer, setIsResizingExplorer] = useState(false);
+  const resizeObserverRef = useRef<ResizeObserver | null>(null);
 
   useEffect(() => {
     try {
@@ -65,6 +66,39 @@ const DatabaseViewer: React.FC<DatabaseViewerProps> = ({ sessionId, className })
       // ignore
     }
   }, [explorerWidth]);
+
+  // ResizeObserver 监听 DataViewer 宽度变化，自动折叠侧边栏
+  useEffect(() => {
+    const rootElement = rootRef.current;
+    if (!rootElement) return;
+
+    // 创建 ResizeObserver 监听容器宽度变化
+    resizeObserverRef.current = new ResizeObserver((entries) => {
+      for (const entry of entries) {
+        const { width } = entry.contentRect;
+
+        // 当 DataViewer 宽度 < 400px 时自动折叠侧边栏
+        if (width < 400 && !isSidebarCollapsed) {
+          setIsSidebarCollapsed(true);
+        }
+        // 当宽度 >= 500px 时可以考虑自动展开（可选，避免频繁切换）
+        else if (width >= 500 && isSidebarCollapsed) {
+          // 只有在用户没有手动折叠的情况下才自动展开
+          // 这里简化处理，可以根据需要添加更复杂的状态管理
+          setIsSidebarCollapsed(false);
+        }
+      }
+    });
+
+    resizeObserverRef.current.observe(rootElement);
+
+    return () => {
+      if (resizeObserverRef.current) {
+        resizeObserverRef.current.disconnect();
+        resizeObserverRef.current = null;
+      }
+    };
+  }, [isSidebarCollapsed]); // 依赖 isSidebarCollapsed 状态
 
   useEffect(() => {
     if (!isResizingExplorer) return;
@@ -295,11 +329,13 @@ const DatabaseViewer: React.FC<DatabaseViewerProps> = ({ sessionId, className })
         </div>
 
         {/* Content */}
-        <div className="flex-1 overflow-auto bg-gray-50 p-4">
+        <div className="flex-1 overflow-hidden bg-gray-50 p-4">
           {selectedTable ? (
-            <div className="bg-white rounded-lg border border-gray-200 shadow-sm overflow-hidden">
-              <div className="overflow-x-auto">
+            <div className="bg-white rounded-lg border border-gray-200 shadow-sm overflow-hidden h-full flex flex-col">
+              {/* 确保表格容器有正确的水平滚动 */}
+              <div className="flex-1 overflow-auto">
                 <table className="w-full text-sm text-left">
+                  {/* 确保列头 sticky 定位正常工作 */}
                   <thead className="text-xs text-gray-700 uppercase bg-gray-50 border-b border-gray-200 sticky top-0 z-10">
                     <tr>
                       {columns.map((col) => (

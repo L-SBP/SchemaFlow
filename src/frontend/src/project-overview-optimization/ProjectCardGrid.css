@@ -1,0 +1,184 @@
+/**
+ * ProjectCardGrid Component Styles
+ * Requirements: 9.1, 9.2, 9.4, 9.5
+ * 
+ * Responsive grid layout that adapts to different screen sizes
+ * and ensures accessibility at minimum 320px viewport width.
+ */
+
+.project-card-grid {
+  display: grid;
+  gap: 8px;
+  padding: 0;
+  width: 100%;
+  box-sizing: border-box;
+
+  /* Default grid: auto-fit columns with minimum 360px width */
+  grid-template-columns: repeat(auto-fit, minmax(360px, 1fr));
+
+  /* Ensure consistent alignment - stretch items to fill grid cells */
+  justify-items: stretch;
+  align-items: start;
+}
+
+.project-card-grid__item {
+  width: 100%;
+  display: flex;
+  justify-content: stretch;
+}
+
+/* Large screens - 4+ columns */
+@media (min-width: 1400px) {
+  .project-card-grid {
+    grid-template-columns: repeat(auto-fit, minmax(380px, 1fr));
+    gap: 10px;
+    padding: 0;
+  }
+}
+
+/* Desktop screens - 3-4 columns */
+@media (min-width: 1024px) and (max-width: 1399px) {
+  .project-card-grid {
+    grid-template-columns: repeat(auto-fit, minmax(360px, 1fr));
+    gap: 8px;
+    padding: 0;
+  }
+}
+
+/* Tablet screens - 2-3 columns */
+@media (min-width: 768px) and (max-width: 1023px) {
+  .project-card-grid {
+    grid-template-columns: repeat(auto-fit, minmax(340px, 1fr));
+    gap: 8px;
+    padding: 0;
+  }
+}
+
+/* Small tablet/large mobile - 2 columns */
+@media (min-width: 600px) and (max-width: 767px) {
+  .project-card-grid {
+    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+    gap: 12px;
+    padding: 0;
+  }
+}
+
+/* Mobile screens - 1-2 columns */
+@media (min-width: 480px) and (max-width: 599px) {
+  .project-card-grid {
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    gap: 10px;
+    padding: 0;
+  }
+}
+
+/* Small mobile screens - 1 column */
+@media (min-width: 360px) and (max-width: 479px) {
+  .project-card-grid {
+    grid-template-columns: 1fr;
+    gap: 10px;
+    padding: 0;
+  }
+}
+
+/* Requirement 9.5: Accessibility at minimum 320px viewport width */
+@media (max-width: 359px) {
+  .project-card-grid {
+    grid-template-columns: 1fr;
+    gap: 8px;
+    padding: 0;
+  }
+}
+
+/* Critical minimum width - 320px viewport */
+@media (max-width: 320px) {
+  .project-card-grid {
+    grid-template-columns: 1fr;
+    gap: 8px;
+    padding: 0;
+    min-width: 280px;
+  }
+}
+
+/* Container queries for more precise responsive behavior */
+@supports (container-type: inline-size) {
+  .project-card-grid {
+    container-type: inline-size;
+  }
+
+  @container (max-width: 600px) {
+    .project-card-grid {
+      grid-template-columns: 1fr;
+      gap: 10px;
+    }
+  }
+
+  @container (min-width: 601px) and (max-width: 900px) {
+    .project-card-grid {
+      grid-template-columns: repeat(2, 1fr);
+      gap: 12px;
+    }
+  }
+
+  @container (min-width: 901px) and (max-width: 1200px) {
+    .project-card-grid {
+      grid-template-columns: repeat(3, 1fr);
+      gap: 12px;
+    }
+  }
+
+  @container (min-width: 1201px) {
+    .project-card-grid {
+      grid-template-columns: repeat(auto-fit, minmax(340px, 1fr));
+      gap: 14px;
+    }
+  }
+}
+
+/* Accessibility improvements */
+.project-card-grid:focus-within {
+  outline: 2px solid #3b82f6;
+  outline-offset: 4px;
+  border-radius: 4px;
+}
+
+/* Ensure grid maintains structure with varying content */
+.project-card-grid__item {
+  display: flex;
+  flex-direction: column;
+  height: fit-content;
+}
+
+/* Loading state placeholder */
+.project-card-grid--loading {
+  opacity: 0.6;
+  pointer-events: none;
+}
+
+/* Empty state */
+.project-card-grid--empty {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  min-height: 200px;
+  color: #6b7280;
+  font-size: 16px;
+}
+
+/* High contrast mode support */
+@media (prefers-contrast: high) {
+  .project-card-grid {
+    gap: 16px;
+  }
+}
+
+/* Reduced motion support */
+@media (prefers-reduced-motion: reduce) {
+  .project-card-grid {
+    transition: none;
+  }
+
+  .project-card-grid__item {
+    transition: none;
+  }
+}

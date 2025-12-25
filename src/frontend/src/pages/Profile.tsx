@@ -381,8 +381,8 @@ export const Profile: React.FC<ProfileProps> = ({ onLogout }) => {
                   key={tab.id}
                   onClick={() => setActiveTab(tab.id as any)}
                   className={`px-6 py-3 text-sm font-medium border-b-2 transition-all flex items-center gap-2 ${activeTab === tab.id
-                      ? 'border-primary text-primary bg-blue-50/50'
-                      : 'border-transparent text-gray-500 hover:text-gray-700 hover:bg-gray-50'
+                    ? 'border-primary text-primary bg-blue-50/50'
+                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:bg-gray-50'
                     }`}
                 >
                   {tab.icon} {tab.label}

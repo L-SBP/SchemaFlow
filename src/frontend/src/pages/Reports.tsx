@@ -1,15 +1,19 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { Project, Report, ReportType } from '../types.ts';
 import { Card, Button, Modal, Input, Tag, Steps } from '../components/UI.tsx';
-import { Plus, BarChart2, PieChart, TrendingUp, Download, Trash2, Edit2, Filter, Database, Table as TableIcon, ScatterChart, ArrowRight, ArrowLeft, Save, Loader2 } from 'lucide-react'; // 引入 Loader2
+import { Pagination } from '../components/Pagination.tsx';
+import { Plus, BarChart2, PieChart, TrendingUp, Download, Trash2, Filter, Database, ScatterChart, ArrowRight, ArrowLeft, Save, Loader2, FileText } from 'lucide-react';
 import { BarChart, Bar, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart as RePieChart, Pie, Cell, ScatterChart as ReScatterChart, Scatter, ZAxis } from 'recharts';
-import { reportApi, HistoryQuery } from '../api/reports.ts'; // 导入 API
+import { reportApi, HistoryQuery } from '../api/reports.ts';
 import { fetchProjects, ProjectDTO } from '../api/project.ts';
 import { toPng } from 'html-to-image';
 
 interface ReportsProps {
   projects?: Project[];
 }
+
+// 分页配置
+const PAGE_SIZE = 6;
 
 const COLORS = ['#1677ff', '#52c41a', '#faad14', '#ff4d4f', '#722ed1', '#13c2c2'];
 
@@ -70,6 +74,19 @@ export const Reports: React.FC<ReportsProps> = ({ projects }) => {
   const [historyQueries, setHistoryQueries] = useState<HistoryQuery[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+
+  // 分页状态
+  const [currentPage, setCurrentPage] = useState(1);
+  const totalReports = reports.length;
+  const paginatedReports = useMemo(() => {
+    const start = (currentPage - 1) * PAGE_SIZE;
+    return reports.slice(start, start + PAGE_SIZE);
+  }, [reports, currentPage]);
+
+  // 当报表列表变化时，重置页码
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [selectedProjectId]);
 
   // Export image
   const [isExportModalOpen, setIsExportModalOpen] = useState(false);
@@ -298,76 +315,101 @@ export const Reports: React.FC<ReportsProps> = ({ projects }) => {
   }
 
   return (
-    <div className="p-8 max-w-7xl mx-auto h-full overflow-y-auto">
-      {/* Header & Filter */}
-      <div className="flex justify-between items-center mb-8">
-        <h2 className="text-2xl font-bold text-gray-800">报表生成器</h2>
-        <div className="flex items-center gap-4">
+    <div className="p-4 sm:p-6 lg:p-8 max-w-7xl mx-auto h-full flex flex-col overflow-hidden">
+      {/* 报表分析标题区域 - 使用与系统公告一致的样式 */}
+      <div className="flex-shrink-0 flex items-center gap-3 mb-6">
+        <div className="p-2 bg-blue-100 text-blue-600 rounded-lg shrink-0">
+          <BarChart2 size={20} className="sm:w-6 sm:h-6" />
+        </div>
+        <div className="min-w-0 flex-1">
+          <h2 className="text-xl sm:text-2xl font-bold text-gray-800 truncate">报表分析</h2>
+          <p className="text-gray-500 text-sm hidden sm:block">基于数据库查询生成可视化报表</p>
+        </div>
+        <div className="flex items-center gap-3 shrink-0">
           <div className="flex items-center gap-2 bg-white px-3 py-2 rounded-md border border-gray-300 shadow-sm">
-            <Filter size={16} className="text-gray-400" />
+            <Filter size={16} className="text-gray-400 shrink-0" />
             <select
-              className="bg-transparent border-none text-sm font-medium text-gray-800 focus:ring-0 cursor-pointer min-w-[120px]"
+              className="bg-transparent border-none text-sm font-medium text-gray-800 focus:ring-0 cursor-pointer min-w-0 outline-none"
               value={selectedProjectId}
               onChange={(e) => setSelectedProjectId(e.target.value)}
             >
               {availableProjects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
             </select>
           </div>
-          <Button variant="primary" icon={<Plus size={16} />} onClick={handleOpenModal}>
+          <Button variant="primary" icon={<Plus size={16} />} onClick={handleOpenModal} className="shrink-0">
             新建报表
           </Button>
         </div>
       </div>
 
-      {/* Reports Grid */}
-      {isLoading ? (
-        <div className="flex justify-center items-center h-64">
-          <Loader2 className="animate-spin text-primary" size={32} />
-        </div>
-      ) : (
-        <div className="grid grid-cols-1 gap-8">
-          {reports.length === 0 && (
-            <div className="text-center py-20 bg-gray-50 rounded-xl border border-dashed border-gray-300">
-              <BarChart2 size={48} className="mx-auto text-gray-300 mb-4" />
-              <p className="text-gray-500">该项目下暂无报表，点击右上角创建。</p>
-            </div>
-          )}
-          {reports.map(report => (
-            <Card key={report.id} className="bg-white group">
-              <div className="flex flex-col h-full">
-                {/* Report Toolbar */}
-                <div className="p-4 border-b border-gray-100 flex justify-between items-center bg-gray-50/50">
-                  <div className="flex items-center gap-4">
-                    <span className="font-bold text-gray-700">{report.name}</span>
-                    <div className="flex items-center gap-1 bg-blue-50 text-blue-700 px-2 py-1 rounded text-xs border border-blue-100">
-                      <Database size={12} /> 源: {report.sourceQueryText}
+      {/* Reports Grid - 可滚动区域 */}
+      <div className="flex-1 overflow-y-auto min-h-0">
+        {isLoading ? (
+          <div className="flex justify-center items-center h-64">
+            <Loader2 className="animate-spin text-primary" size={32} />
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 gap-6 pb-4">
+            {paginatedReports.length === 0 && reports.length === 0 && (
+              <div className="text-center py-16 sm:py-20 bg-gray-50 rounded-xl border border-dashed border-gray-300">
+                <BarChart2 size={40} className="mx-auto text-gray-300 mb-4" />
+                <p className="text-gray-500 text-sm sm:text-base">该项目下暂无报表，点击右上角创建。</p>
+              </div>
+            )}
+            {paginatedReports.map(report => (
+              <Card key={report.id} className="bg-white group">
+                <div className="flex flex-col h-full">
+                  {/* Report Toolbar */}
+                  <div className="p-3 sm:p-4 border-b border-gray-100 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 bg-gray-50/50">
+                    <div className="flex flex-wrap items-center gap-2 sm:gap-4 min-w-0 flex-1">
+                      <span className="font-bold text-gray-700 text-sm sm:text-base truncate">{report.name}</span>
+                      <div className="flex items-center gap-1 bg-blue-50 text-blue-700 px-2 py-1 rounded text-xs border border-blue-100 max-w-full truncate">
+                        <Database size={12} className="shrink-0" />
+                        <span className="truncate">源: {report.sourceQueryText}</span>
+                      </div>
+                    </div>
+                    <div className="flex gap-2 shrink-0">
+                      <Button
+                        variant="text"
+                        className="h-8 text-xs px-2 text-gray-700 hover:bg-gray-50"
+                        icon={exportingReportId === report.id ? <Loader2 className="animate-spin" size={14} /> : <Download size={14} />}
+                        disabled={exportingReportId === report.id}
+                        onClick={() => exportReportAsImage(report.id, report.name)}
+                      />
+                      <Button
+                        variant="text"
+                        className="h-8 text-xs px-2 text-red-500 hover:bg-red-50"
+                        icon={<Trash2 size={14} />}
+                        onClick={() => handleDelete(report.id)}
+                      />
                     </div>
                   </div>
-                  <div className="flex gap-2">
-                    <Button
-                      variant="text"
-                      className="h-8 text-xs px-2 text-gray-700 hover:bg-gray-50"
-                      icon={exportingReportId === report.id ? <Loader2 className="animate-spin" size={14} /> : <Download size={14} />}
-                      disabled={exportingReportId === report.id}
-                      onClick={() => exportReportAsImage(report.id, report.name)}
-                    />
-                    <Button
-                      variant="text"
-                      className="h-8 text-xs px-2 text-red-500 hover:bg-red-50"
-                      icon={<Trash2 size={14} />}
-                      onClick={() => handleDelete(report.id)}
-                    />
-                  </div>
-                </div>
 
-                <div className="p-6 flex flex-col gap-4">
-                  <div id={`report-chart-${report.id}`} className="h-[400px] w-full bg-white">
-                    {renderDynamicChart(report)}
+                  <div className="p-4 sm:p-6 flex flex-col gap-4">
+                    <div id={`report-chart-${report.id}`} className="h-[280px] sm:h-[350px] lg:h-[400px] w-full bg-white">
+                      {renderDynamicChart(report)}
+                    </div>
                   </div>
                 </div>
-              </div>
-            </Card>
-          ))}
+              </Card>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* 分页控件 - 固定在底部，始终显示 */}
+      {totalReports > 0 && (
+        <div className="pagination-container">
+          <div className="pagination-wrapper">
+            <Pagination
+              current={currentPage}
+              total={totalReports}
+              pageSize={PAGE_SIZE}
+              onChange={setCurrentPage}
+              showTotal={true}
+              simple={window.innerWidth < 640}
+            />
+          </div>
         </div>
       )}
 

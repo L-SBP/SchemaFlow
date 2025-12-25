@@ -12,15 +12,15 @@ import {
   Filter,
   Loader2,
   FileText,
-  ChevronLeft,
-  ChevronRight,
   AlertCircle,
-  CheckCircle2
+  CheckCircle2,
+  Database
 } from 'lucide-react';
 import { KnowledgeTerm, KnowledgeImportResponse } from '../types.ts';
 import { glossaryApi, CreateTermParams } from '../api/glossary.ts';
 import { fetchProjects, ProjectDTO } from '../api/project.ts';
 import { Button, Input, Modal, Card } from '../components/UI.tsx';
+import { Pagination } from '../components/Pagination.tsx';
 
 export const Glossary: React.FC = () => {
   // --- 状态管理 ---
@@ -40,7 +40,7 @@ export const Glossary: React.FC = () => {
   // 筛选与分页
   const [searchQuery, setSearchQuery] = useState("");
   const [page, setPage] = useState(1);
-  const pageSize = 10; // 紧凑视图，每页 10 条
+  const pageSize = 9; // 每页 9 条
   const [hasMore, setHasMore] = useState(false);
 
   // 选中项 (用于批量删除)
@@ -71,7 +71,7 @@ export const Glossary: React.FC = () => {
         setProjectList(data);
         // 如果当前没有选中项目且获取到了项目列表，默认选中第一个
         if (data.length > 0 && !selectedProjectId) {
-          setSelectedProjectId(data[0].project_id);
+          setSelectedProjectId(String(data[0].project_id));
         }
       } catch (error) {
         console.error("Failed to fetch projects", error);
@@ -266,30 +266,41 @@ export const Glossary: React.FC = () => {
   const totalPages = Math.ceil(total / pageSize);
 
   return (
-    <div className="p-8 max-w-7xl mx-auto h-full flex flex-col overflow-hidden">
+    <div className="p-4 sm:p-6 lg:p-8 max-w-7xl mx-auto h-full flex flex-col overflow-hidden">
       {/* 头部与操作栏 - 固定在顶部 */}
-      <div className="flex-shrink-0 flex flex-col gap-6 mb-4">
-        <div className="flex justify-between items-center">
-          <h2 className="text-2xl font-bold text-gray-800 flex items-center gap-2">
-            业务术语表
-          </h2>
-          {/* 项目选择器 (绑定真实数据) */}
-          <div className="flex items-center gap-2 bg-white px-3 py-2 rounded-md border border-gray-300 shadow-sm">
-            <Filter size={16} className="text-gray-400" />
-            <select
-              className="bg-transparent border-none text-sm font-medium text-gray-800 focus:ring-0 cursor-pointer min-w-[150px] outline-none"
-              value={selectedProjectId}
-              onChange={(e) => setSelectedProjectId(e.target.value)}
-            >
-              {projectList.map(p => (
-                <option key={p.project_id} value={p.project_id}>{p.project_name}</option>
-              ))}
-            </select>
+      <div className="flex-shrink-0 flex flex-col gap-4 sm:gap-6 mb-4">
+        {/* 业务术语标题区域 - 使用与系统公告一致的样式 */}
+        <div className="flex items-center gap-3 mb-4">
+          <div className="p-2 bg-blue-100 text-blue-600 rounded-lg shrink-0">
+            <Book size={20} className="sm:w-6 sm:h-6" />
+          </div>
+          <div className="min-w-0 flex-1">
+            <h2 className="text-xl sm:text-2xl font-bold text-gray-800 truncate">业务术语</h2>
+            <p className="text-gray-500 text-sm hidden sm:block">管理项目相关的业务术语定义</p>
+          </div>
+          <div className="flex items-center gap-3 shrink-0">
+            {/* 项目选择器 */}
+            <div className="flex items-center gap-2 bg-white px-3 py-2 rounded-md border border-gray-300 shadow-sm">
+              <Filter size={16} className="text-gray-400 shrink-0" />
+              <select
+                className="bg-transparent border-none text-sm font-medium text-gray-800 focus:ring-0 cursor-pointer min-w-0 outline-none"
+                value={selectedProjectId}
+                onChange={(e) => setSelectedProjectId(e.target.value)}
+              >
+                {projectList.map(p => (
+                  <option key={p.project_id} value={p.project_id}>{p.project_name}</option>
+                ))}
+              </select>
+            </div>
+            {/* 新增术语按钮 */}
+            <Button variant="primary" onClick={() => openModal()} icon={<Plus size={16} />} className="shrink-0">
+              新增术语
+            </Button>
           </div>
         </div>
 
-        <div className="flex flex-col sm:flex-row gap-4 justify-between items-center bg-white p-4 rounded-xl border border-gray-200 shadow-sm">
-          <div className="relative w-full sm:w-96">
+        <div className="flex flex-col gap-3 sm:flex-row sm:gap-4 justify-between items-stretch sm:items-center bg-white p-3 sm:p-4 rounded-xl border border-gray-200 shadow-sm">
+          <div className="relative w-full sm:w-80 lg:w-96">
             <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
               <Search className="h-4 w-4 text-gray-400" />
             </div>
@@ -299,11 +310,11 @@ export const Glossary: React.FC = () => {
               placeholder="搜索术语名称..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              onKeyDown={(e) => e.key === 'Enter' && setPage(1)} // 回车重置页码
+              onKeyDown={(e) => e.key === 'Enter' && setPage(1)}
             />
           </div>
 
-          <div className="flex items-center gap-3 w-full sm:w-auto justify-end">
+          <div className="flex flex-wrap items-center gap-2 sm:gap-3 justify-end">
             {selectedIds.size > 0 && (
               <Button
                 variant="danger"
@@ -316,8 +327,8 @@ export const Glossary: React.FC = () => {
             )}
             <div className="h-6 w-px bg-gray-200 hidden sm:block"></div>
 
-            <Button variant="default" onClick={handleExport} icon={<Download size={16} />} className="h-9 text-xs hidden sm:flex">
-              导出 (Excel/CSV)
+            <Button variant="default" onClick={handleExport} icon={<Download size={16} />} className="h-9 text-xs hidden md:flex">
+              导出
             </Button>
 
             <Button
@@ -325,11 +336,10 @@ export const Glossary: React.FC = () => {
               onClick={() => fileInputRef.current?.click()}
               icon={isImporting ? <Loader2 className="animate-spin" size={16} /> : <Upload size={16} />}
               disabled={isImporting}
-              className="h-9 text-xs hidden sm:flex"
+              className="h-9 text-xs hidden md:flex"
             >
-              {isImporting ? '导入中' : '导入 (Excel/CSV)'}
+              {isImporting ? '导入中' : '导入'}
             </Button>
-            {/* 更新 accept 属性，允许选择 Excel 文件 */}
             <input
               type="file"
               ref={fileInputRef}
@@ -337,10 +347,6 @@ export const Glossary: React.FC = () => {
               className="hidden"
               accept=".csv, application/vnd.openxmlformats-officedocument.spreadsheetml.sheet, application/vnd.ms-excel"
             />
-
-            <Button variant="primary" onClick={() => openModal()} icon={<Plus size={16} />} className="h-9 text-xs">
-              新增术语
-            </Button>
           </div>
         </div>
       </div>
@@ -352,8 +358,8 @@ export const Glossary: React.FC = () => {
             <Loader2 className="animate-spin text-primary" size={32} />
           </div>
         ) : terms.length === 0 ? (
-          <div className="text-center py-20 bg-gray-50 rounded-xl border border-dashed border-gray-300">
-            <Book size={48} className="mx-auto text-gray-300 mb-4" />
+          <div className="text-center py-12 sm:py-20 bg-gray-50 rounded-xl border border-dashed border-gray-300">
+            <Book size={40} className="mx-auto text-gray-300 mb-4" />
             <h3 className="text-gray-900 font-medium">暂无业务术语</h3>
             <p className="text-gray-500 text-sm mt-1">当前项目下还没有定义任何业务术语。</p>
           </div>
@@ -363,15 +369,15 @@ export const Glossary: React.FC = () => {
             <div className="flex items-center gap-3 px-2 text-sm text-gray-500">
               <button onClick={toggleAll} className="flex items-center gap-2 hover:text-primary">
                 {selectedIds.size === terms.length && terms.length > 0 ? <CheckSquare size={16} className="text-primary" /> : <Square size={16} />}
-                全选本页
+                <span className="hidden sm:inline">全选本页</span>
               </button>
-              <span>共 {total} 条记录</span>
+              <span className="text-xs sm:text-sm">共 {total} 条记录</span>
             </div>
 
             {terms.map((term) => (
               <Card key={term.knowledge_id} className={`transition-all duration-200 group border-l-4 ${selectedIds.has(term.knowledge_id) ? 'border-l-primary bg-blue-50/30' : 'border-l-transparent hover:border-l-primary'}`}>
-                <div className="p-3 flex gap-3">
-                  <div className="pt-1">
+                <div className="p-2 sm:p-3 flex gap-2 sm:gap-3">
+                  <div className="pt-1 shrink-0">
                     <button
                       onClick={() => toggleSelection(term.knowledge_id)}
                       className="text-gray-400 hover:text-primary focus:outline-none transition-colors"
@@ -384,12 +390,12 @@ export const Glossary: React.FC = () => {
                     </button>
                   </div>
                   <div className="flex-1 min-w-0">
-                    <div className="flex items-start justify-between">
-                      <div className="flex-1 min-w-0 pr-4">
-                        <h3 className="text-base font-bold text-gray-900 group-hover:text-primary transition-colors flex items-center gap-2 truncate">
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="flex-1 min-w-0">
+                        <h3 className="text-sm sm:text-base font-bold text-gray-900 group-hover:text-primary transition-colors flex items-center gap-2 truncate">
                           {term.term}
                         </h3>
-                        <p className="mt-1 text-gray-600 leading-snug text-sm line-clamp-2">
+                        <p className="mt-1 text-gray-600 leading-snug text-xs sm:text-sm line-clamp-2">
                           <span className="font-semibold text-gray-400 text-xs mr-2">定义</span>
                           {term.definition}
                         </p>
@@ -404,7 +410,7 @@ export const Glossary: React.FC = () => {
                         )}
                       </div>
 
-                      <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
+                      <div className="flex items-center gap-1 opacity-100 sm:opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
                         <button
                           onClick={() => openModal(term)}
                           className="p-1.5 text-gray-400 hover:text-primary hover:bg-blue-50 rounded-full transition-all"
@@ -422,36 +428,18 @@ export const Glossary: React.FC = () => {
         )}
       </div>
 
-      {/* 分页控制栏 - 固定在底部 */}
+      {/* 分页控制栏 - 固定在底部，始终显示 */}
       {total > 0 && (
-        <div className="flex-shrink-0 pt-4 border-t border-gray-200 mt-2 bg-white">
-          <div className="flex justify-between items-center">
-            <div className="text-xs text-gray-500">
-              显示第 {(page - 1) * pageSize + 1} 到 {Math.min(page * pageSize, total)} 条，共 {total} 条
-            </div>
-            <div className="flex items-center gap-2">
-              <Button
-                variant="default"
-                disabled={page <= 1}
-                onClick={() => setPage(p => p - 1)}
-                className="h-8 px-2"
-              >
-                <ChevronLeft size={14} />
-              </Button>
-
-              <span className="text-sm text-gray-600 font-medium px-2">
-                {page} / {totalPages}
-              </span>
-
-              <Button
-                variant="default"
-                disabled={page >= totalPages}
-                onClick={() => setPage(p => p + 1)}
-                className="h-8 px-2"
-              >
-                <ChevronRight size={14} />
-              </Button>
-            </div>
+        <div className="pagination-container">
+          <div className="pagination-wrapper">
+            <Pagination
+              current={page}
+              total={total}
+              pageSize={pageSize}
+              onChange={setPage}
+              showTotal={true}
+              simple={window.innerWidth < 640}
+            />
           </div>
         </div>
       )}
