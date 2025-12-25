@@ -12,6 +12,7 @@ from sqlalchemy.exc import SQLAlchemyError
 
 from .exceptions import BusinessException, AppException
 from .log import log
+from schema.unified_response import UnifiedResponse
 
 
 async def business_exception_handler(request: Request, exc: BusinessException) -> JSONResponse:
@@ -26,13 +27,14 @@ async def business_exception_handler(request: Request, exc: BusinessException) -
         JSONResponse: 标准化的错误响应
     """
     log.warning(f"BusinessException: {exc.message}", extra={"path": request.url.path, "method": request.method})
+    response = UnifiedResponse.error(
+        code=exc.code,
+        message=exc.message,
+        data=None
+    )
     return JSONResponse(
-        status_code=exc.code,
-        content={
-            "status_code": exc.code,
-            "detail": exc.message,
-            "message": "业务处理失败"
-        },
+        status_code=status.HTTP_200_OK,
+        content=response.dict()
     )
 
 
@@ -48,13 +50,14 @@ async def app_exception_handler(request: Request, exc: AppException) -> JSONResp
         JSONResponse: 标准化的错误响应
     """
     log.error(f"AppException: {exc.detail}", extra={"path": request.url.path, "method": request.method}, exc_info=True)
+    response = UnifiedResponse.error(
+        code=exc.code,
+        message=exc.message or "系统处理失败",
+        data=None
+    )
     return JSONResponse(
-        status_code=exc.code,
-        content={
-            "status_code": exc.code,
-            "detail": exc.detail or "内部服务器错误",
-            "message": exc.message or "系统处理失败"
-        },
+        status_code=status.HTTP_200_OK,
+        content=response.dict()
     )
 
 
@@ -77,13 +80,14 @@ async def validation_exception_handler(request: Request, exc: RequestValidationE
         field = "".join([f"[{k}]" if isinstance(k, int) else f".{k}" for k in error["loc"]]).lstrip(".")
         error_details.append(f"{field}: {error['msg']}")
     
+    response = UnifiedResponse.error(
+        code=10001,  # 参数错误业务代码
+        message=". ".join(error_details),
+        data=None
+    )
     return JSONResponse(
-        status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-        content={
-            "status_code": status.HTTP_422_UNPROCESSABLE_ENTITY,
-            "detail": "; ".join(error_details),
-            "message": "请求参数验证失败"
-        },
+        status_code=status.HTTP_200_OK,
+        content=response.dict()
     )
 
 
@@ -106,13 +110,14 @@ async def pydantic_validation_exception_handler(request: Request, exc: Validatio
         field = "".join([f"[{k}]" if isinstance(k, int) else f".{k}" for k in error["loc"]]).lstrip(".")
         error_details.append(f"{field}: {error['msg']}")
     
+    response = UnifiedResponse.error(
+        code=10002,  # 数据验证错误业务代码
+        message=". ".join(error_details),
+        data=None
+    )
     return JSONResponse(
-        status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-        content={
-            "status_code": status.HTTP_422_UNPROCESSABLE_ENTITY,
-            "detail": "; ".join(error_details),
-            "message": "数据验证失败"
-        },
+        status_code=status.HTTP_200_OK,
+        content=response.dict()
     )
 
 
@@ -128,13 +133,14 @@ async def sqlalchemy_exception_handler(request: Request, exc: SQLAlchemyError) -
         JSONResponse: 标准化的错误响应
     """
     log.error(f"SQLAlchemyError: {str(exc)}", extra={"path": request.url.path, "method": request.method}, exc_info=True)
+    response = UnifiedResponse.error(
+        code=20001,  # 数据库操作错误业务代码
+        message="数据库操作失败",
+        data=None
+    )
     return JSONResponse(
-        status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-        content={
-            "status_code": status.HTTP_500_INTERNAL_SERVER_ERROR,
-            "detail": "数据库操作失败",
-            "message": "系统处理失败"
-        },
+        status_code=status.HTTP_200_OK,
+        content=response.dict()
     )
 
 
@@ -150,11 +156,12 @@ async def general_exception_handler(request: Request, exc: Exception) -> JSONRes
         JSONResponse: 标准化的错误响应
     """
     log.error(f"UnexpectedException: {str(exc)}", extra={"path": request.url.path, "method": request.method}, exc_info=True)
+    response = UnifiedResponse.error(
+        code=20002,  # 系统内部错误业务代码
+        message="系统处理失败",
+        data=None
+    )
     return JSONResponse(
-        status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-        content={
-            "status_code": status.HTTP_500_INTERNAL_SERVER_ERROR,
-            "detail": "内部服务器错误",
-            "message": "系统处理失败"
-        },
+        status_code=status.HTTP_200_OK,
+        content=response.dict()
     )

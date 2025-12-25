@@ -18,6 +18,7 @@ from core.exceptions import ItemNotFoundException
 # 3. 导入 Schema
 from schema.chat import ChatResponse, ChatRequest, MessageType
 from schema.user import UserMe
+from schema.unified_response import UnifiedResponse
 from api.v1.deps import get_current_active_user, get_db
 
 router = APIRouter()
@@ -61,7 +62,7 @@ def _format_history_response(raw_messages: List[Any]) -> List[ChatResponse]:
         ))
     return clean_history
 
-@router.post("/sessions/{session_id}/messages", response_model=ChatResponse)
+@router.post("/sessions/{session_id}/messages", response_model=UnifiedResponse[ChatResponse])
 async def send_message(
     session_id: int = Path(...),
     chat_request: ChatRequest = None,
@@ -78,14 +79,15 @@ async def send_message(
         current_user (UserMe): 当前登录用户。
 
     Returns:
-        ChatResponse: AI 响应结果。
+        UnifiedResponse[ChatResponse]: AI 响应结果。
     """
-    return await process_chat(
+    result = await process_chat(
         db=db, session_id=session_id, user_input=chat_request.content,
         user_id=current_user.user_id, selected_model=chat_request.model 
     )
+    return UnifiedResponse.success(data=result, message="消息处理成功")
 
-@router.get("/sessions/{session_id}/messages", response_model=List[ChatResponse])
+@router.get("/sessions/{session_id}/messages", response_model=UnifiedResponse[List[ChatResponse]])
 async def get_history(
     session_id: int,
     db: AsyncSession = Depends(get_db),
@@ -100,16 +102,18 @@ async def get_history(
         current_user (UserMe): 当前登录用户。
 
     Returns:
-        List[ChatResponse]: 历史消息列表。
+        UnifiedResponse[List[ChatResponse]]: 历史消息列表。
     """
     raw_messages = await crud_message.get_recent_messages(db, session_id, limit=50)
-    return _format_history_response(raw_messages)
+    result = _format_history_response(raw_messages)
+    return UnifiedResponse.success(data=result, message="获取历史消息成功")
 
-@router.post("/messages/{message_id}/confirm", response_model=ChatResponse)
+@router.post("/messages/{message_id}/confirm", response_model=UnifiedResponse[ChatResponse])
 async def confirm_message_execution(
     message_id: int,
     db: AsyncSession = Depends(get_db),
     current_user: UserMe = Depends(get_current_active_user)
 ):
     log.info(f"User {current_user.user_id} confirming message {message_id}")
-    return await confirm_and_execute_sql(db, message_id, current_user.user_id)
+    result = await confirm_and_execute_sql(db, message_id, current_user.user_id)
+    return UnifiedResponse.success(data=result, message="SQL 执行成功")

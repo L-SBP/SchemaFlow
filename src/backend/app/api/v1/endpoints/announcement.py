@@ -6,7 +6,7 @@
 - 管理员：可按 status 获取（含草稿等）
 """
 
-from typing import Any, Literal
+from typing import Any, Literal, List
 
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -18,6 +18,7 @@ from schema.announcement import (
     AnnouncementListResponse,
     AnnouncementDetailResponse
 )
+from schema.unified_response import UnifiedResponse, PageData
 from core.exceptions import ItemNotFoundException, OperationNotPermittedException
 
 router = APIRouter()
@@ -28,7 +29,7 @@ router = APIRouter()
 # ============================
 @router.get(
     "/",
-    response_model=AnnouncementListResponse,
+    response_model=UnifiedResponse[PageData[List[AnnouncementDetailResponse]]],
     summary="获取公告列表"
 )
 async def read_announcements(
@@ -64,12 +65,13 @@ async def read_announcements(
         page_size=page_size,
     )
 
-    return AnnouncementListResponse(
+    page_data = PageData(
         total=total,
         page=page,
         page_size=page_size,
         items=items
     )
+    return UnifiedResponse.success(data=page_data, message="获取公告列表成功")
 
 
 # ============================
@@ -77,7 +79,7 @@ async def read_announcements(
 # ============================
 @router.get(
     "/{announcement_id}",
-    response_model=AnnouncementDetailResponse,
+    response_model=UnifiedResponse[AnnouncementDetailResponse],
     summary="获取公告详情"
 )
 async def get_announcement_detail(
@@ -107,4 +109,4 @@ async def get_announcement_detail(
     if announcement.status != "published":
         raise OperationNotPermittedException("Announcement not published")
 
-    return announcement
+    return UnifiedResponse.success(data=announcement, message="获取公告详情成功")

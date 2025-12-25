@@ -6,9 +6,10 @@
 
 # backend/app/api/v1/endpoints/admin_blacklist.py
 
-from typing import Optional
-from fastapi import APIRouter, Depends, status, Request
+from typing import Optional, List, Any
+from fastapi import APIRouter, Depends, Request
 from sqlalchemy.ext.asyncio import AsyncSession
+from schema.unified_response import UnifiedResponse, PageData
 
 from core.deps import get_db, get_current_admin
 from core.log import log
@@ -35,7 +36,7 @@ router = APIRouter(
 # 1. 用户黑名单操作
 # ============================================================================
 
-@router.post("/ban/{user_id}")
+@router.post("/ban/{user_id}", response_model=UnifiedResponse[dict])
 async def ban_user(
     user_id: int,
     reason: str = "违反服务条款",
@@ -62,15 +63,16 @@ async def ban_user(
         "banned_at": "2025-12-23T10:30:00+00:00"
     }
     """
-    return await ban_user_service(
+    result = await ban_user_service(
         db=db,
         user_id=user_id,
         reason=reason,
         admin_id=current_admin.user_id
     )
+    return UnifiedResponse.success(data=result, message="用户封禁成功")
 
 
-@router.post("/unban/{user_id}")
+@router.post("/unban/{user_id}", response_model=UnifiedResponse[dict])
 async def unban_user(
     user_id: int,
     current_admin: UserAccount = Depends(get_current_admin),
@@ -94,14 +96,15 @@ async def unban_user(
         "user_id": 123
     }
     """
-    return await unban_user_service(
+    result = await unban_user_service(
         db=db,
         user_id=user_id,
         admin_id=current_admin.user_id
     )
+    return UnifiedResponse.success(data=result, message="用户解封成功")
 
 
-@router.get("/list")
+@router.get("/list", response_model=UnifiedResponse[PageData[List[dict]]])
 async def list_banned_users(
     page: int = 1,
     page_size: int = 20,
@@ -138,18 +141,25 @@ async def list_banned_users(
     page = max(1, page)
     page_size = min(max(1, page_size), 100)  # 限制最大 100
     
-    return await get_banned_users_service(
+    result = await get_banned_users_service(
         db=db,
         page=page,
         page_size=page_size
     )
+    page_data = PageData(
+        total=result.get("total", 0), 
+        page=result.get("page", page), 
+        page_size=result.get("page_size", page_size), 
+        items=result.get("users", [])
+    )
+    return UnifiedResponse.success(data=page_data, message="获取封禁用户列表成功")
 
 
 # ============================================================================
 # 2. 频率限制和违规监控
 # ============================================================================
 
-@router.get("/frequency/{user_id}")
+@router.get("/frequency/{user_id}", response_model=UnifiedResponse[dict])
 async def get_frequency_status(
     user_id: int,
     current_admin: UserAccount = Depends(get_current_admin),
@@ -185,10 +195,10 @@ async def get_frequency_status(
         db=db,
         user_id=user_id
     )
-    return result
+    return UnifiedResponse.success(data=result, message="获取用户频率限制状态成功")
 
 
-@router.post("/frequency/{user_id}/reset")
+@router.post("/frequency/{user_id}/reset", response_model=UnifiedResponse[dict])
 async def reset_frequency(
     user_id: int,
     current_admin: UserAccount = Depends(get_current_admin),
@@ -216,10 +226,10 @@ async def reset_frequency(
         user_id=user_id,
         admin_id=current_admin.user_id
     )
-    return result
+    return UnifiedResponse.success(data=result, message="重置用户频率限制成功")
 
 
-@router.get("/violations/stats")
+@router.get("/violations/stats", response_model=UnifiedResponse[dict])
 async def get_violation_statistics(
     hours: int = 24,
     current_admin: UserAccount = Depends(get_current_admin),
@@ -259,14 +269,14 @@ async def get_violation_statistics(
         db=db,
         hours=hours
     )
-    return result
+    return UnifiedResponse.success(data=result, message="获取违规统计信息成功")
 
 
 # ============================================================================
 # 3. 批量操作和报告
 # ============================================================================
 
-@router.get("/dashboard")
+@router.get("/dashboard", response_model=UnifiedResponse[dict])
 async def get_blacklist_dashboard(
     current_admin: UserAccount = Depends(get_current_admin),
     db: AsyncSession = Depends(get_db)
@@ -309,8 +319,9 @@ async def get_blacklist_dashboard(
         hours=24
     )
     
-    return {
+    result = {
         "banned_users_count": banned_users_count,
         "violation_stats": violation_stats,
         "timestamp": datetime.now(timezone.utc).isoformat(),
     }
+    return UnifiedResponse.success(data=result, message="获取黑名单管理看板数据成功")

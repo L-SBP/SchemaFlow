@@ -8,7 +8,7 @@
 from fastapi import APIRouter, Depends, status, Body, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 from typing import Any
-from schema.unified_response import NoContentResponse, UnifiedSuccessResponse, LoginData
+from schema.unified_response import UnifiedResponse, LoginData
 from schema.auth import UserSendCode, UserRegister, UserLogin, ForgotPasswordRequest, ResetPasswordRequest
 from fastapi.security import OAuth2PasswordRequestForm
 from schema.token import Token # 记得导入这个
@@ -72,7 +72,7 @@ async def swagger_login(
     }
 
 # ：所有的装饰器 @auth_router.xxx 都改为 @router.xxx
-@router.post("/register/send-code", response_model=NoContentResponse)
+@router.post("/register/send-code", response_model=UnifiedResponse[None])
 async def send_register_code(
     payload: UserSendCode,
     db: AsyncSession = Depends(get_db)
@@ -85,7 +85,7 @@ async def send_register_code(
         db (AsyncSession): 数据库会话。
 
     Returns:
-        NoContentResponse: 空响应。
+        UnifiedResponse: 发送成功响应。
 
     Raises:
         HTTPException: 邮箱已注册或发送失败。
@@ -96,10 +96,10 @@ async def send_register_code(
         raise exceptions.EmailHasBeenRegisteredException()
     await email_service.service_send_verification_code(payload.email)
     log.info("send register code success")
-    return NoContentResponse()
+    return UnifiedResponse.success(message="验证码发送成功")
 
 
-@router.post("/register", response_model=UnifiedSuccessResponse[dict])
+@router.post("/register", response_model=UnifiedResponse[dict])
 async def register(
     payload: UserRegister,
     db: AsyncSession = Depends(get_db)
@@ -112,7 +112,7 @@ async def register(
         db (AsyncSession): 数据库会话。
 
     Returns:
-        UnifiedSuccessResponse: 注册成功的用户信息。
+        UnifiedResponse: 注册成功的用户信息。
 
     Raises:
         HTTPException: 注册失败。
@@ -126,7 +126,7 @@ async def register(
     )
 
     log.info(f"Registered user {new_user.username}")
-    return UnifiedSuccessResponse.create(
+    return UnifiedResponse.success(
         data={
             "user_id": new_user.user_id,
             "username": new_user.username,
@@ -138,7 +138,7 @@ async def register(
     )
 
 
-@router.post("/login", response_model=UnifiedSuccessResponse[LoginData])
+@router.post("/login", response_model=UnifiedResponse[LoginData])
 async def login(
         request: Request,
         payload: UserLogin,
@@ -155,7 +155,7 @@ async def login(
         db (AsyncSession): 数据库会话。
 
     Returns:
-        UnifiedSuccessResponse: 包含Token和用户信息的响应。
+        UnifiedResponse: 包含Token和用户信息的响应。
     """
     # 初始化变量：存储登录记录需要的信息
     client_ip = request.client.host
@@ -180,7 +180,7 @@ async def login(
         log.error("Failed to save token in redis_client")
         raise exceptions.RedisOperationFailedException()
 
-    return UnifiedSuccessResponse.create(
+    return UnifiedResponse.success(
         data=LoginData(
             access_token=access_token,
             token_type="bearer",
@@ -195,7 +195,7 @@ async def login(
         message="用户登录成功"
     )
 
-@router.post("/logout", response_model=NoContentResponse)
+@router.post("/logout", response_model=UnifiedResponse[None])
 async def logout(
         db: AsyncSession = Depends(get_db),
         token: str = Depends(oauth2_scheme)
@@ -210,7 +210,7 @@ async def logout(
         token (str): JWT 访问令牌。
 
     Returns:
-        NoContentResponse: 空响应。
+        UnifiedResponse: 登出成功响应。
 
     Raises:
         HTTPException: 登出失败。
@@ -219,10 +219,10 @@ async def logout(
     if not result:
         raise exceptions.RedisOperationFailedException()
 
-    return NoContentResponse()
+    return UnifiedResponse.success(message="用户登出成功")
 
 
-@router.post("/forgot-password", response_model=NoContentResponse)
+@router.post("/forgot-password", response_model=UnifiedResponse[None])
 async def forgot_password(
     request: Request,
     payload: ForgotPasswordRequest,
@@ -235,10 +235,10 @@ async def forgot_password(
 
     client_ip = request.client.host if request.client else None
     await service_send_password_reset_code(db, payload.email, client_ip=client_ip)
-    return NoContentResponse()
+    return UnifiedResponse.success(message="重置邮件发送成功")
 
 
-@router.post("/reset-password", response_model=NoContentResponse)
+@router.post("/reset-password", response_model=UnifiedResponse[None])
 async def reset_password(
     payload: ResetPasswordRequest,
     db: AsyncSession = Depends(get_db),
@@ -246,4 +246,4 @@ async def reset_password(
     """重置密码：校验邮箱验证码并设置新密码。"""
 
     await service_reset_password_with_code(db, payload.email, payload.verification_code, payload.new_password)
-    return NoContentResponse()
+    return UnifiedResponse.success(message="密码重置成功")

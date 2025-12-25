@@ -1,6 +1,7 @@
 from fastapi import APIRouter, Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 from typing import List, Dict, Any
+from schema.unified_response import UnifiedResponse
 
 from api.v1 import deps
 from core.exceptions import ItemNotFoundException, OperationNotPermittedException, ValidationException
@@ -53,7 +54,7 @@ async def get_db_instance_by_session(db: AsyncSession, session_id: int, user_id:
         
     return database_instance
 
-@router.get("/{session_id}/tables", response_model=List[Dict[str, Any]])
+@router.get("/{session_id}/tables", response_model=UnifiedResponse[List[Dict[str, Any]]])
 async def get_tables(
     session_id: int,
     db: AsyncSession = Depends(deps.get_db),
@@ -99,9 +100,9 @@ async def get_tables(
     else:
         raise ValidationException(f"Unsupported DB type: {instance.db_type}")
 
-    return tables
+    return UnifiedResponse.success(data=tables, message="获取数据库表列表成功")
 
-@router.get("/{session_id}/tables/{table_name}/schema", response_model=List[Dict[str, Any]])
+@router.get("/{session_id}/tables/{table_name}/schema", response_model=UnifiedResponse[List[Dict[str, Any]]])
 async def get_table_schema(
     session_id: int,
     table_name: str,
@@ -156,9 +157,9 @@ async def get_table_schema(
                     "default": row.get("dflt_value")
                 })
 
-    return schema
+    return UnifiedResponse.success(data=schema, message="获取表结构成功")
 
-@router.get("/{session_id}/tables/{table_name}/data", response_model=List[Dict[str, Any]])
+@router.get("/{session_id}/tables/{table_name}/data", response_model=UnifiedResponse[List[Dict[str, Any]]])
 async def get_table_data(
     session_id: int,
     table_name: str,
@@ -195,4 +196,4 @@ async def get_table_data(
     else:
         return []
 
-    return result or []
+    return UnifiedResponse.success(data=result or [], message="获取表数据成功")

@@ -11,13 +11,14 @@ from schema.report import ReportCreate, Report, HistoryQuery, ReportUpdate
 from schema.user import UserMe
 from api.v1.deps import get_db, get_current_active_user
 from service import report_service
+from schema.unified_response import UnifiedResponse
 
 router = APIRouter()
 
 # -------------------------------------------
 # 1. 获取报表列表 (Read)
 # -------------------------------------------
-@router.get("/reports", response_model=List[Report], summary="获取报表列表")
+@router.get("/reports", response_model=UnifiedResponse[List[Report]], summary="获取报表列表")
 async def read_reports(
     projectId: int = Query(..., description="项目ID"),
     db: AsyncSession = Depends(get_db),
@@ -32,19 +33,20 @@ async def read_reports(
         user (UserMe): 当前登录用户。
 
     Returns:
-        List[Report]: 报表列表。
+        UnifiedResponse[List[Report]]: 报表列表响应。
     """
-    return await report_service.get_report_list(
+    result = await report_service.get_report_list(
         db=db,
         project_id=projectId,
         user_id=user.user_id
     )
+    return UnifiedResponse.success(data=result, message="获取报表列表成功")
 
 
 # -------------------------------------------
 # 2. 获取历史查询记录
 # -------------------------------------------
-@router.get("/history-queries", response_model=List[HistoryQuery], summary="获取历史查询记录")
+@router.get("/history-queries", response_model=UnifiedResponse[List[HistoryQuery]], summary="获取历史查询记录")
 async def read_history(
     projectId: int = Query(..., description="项目ID"),
     db: AsyncSession = Depends(get_db),
@@ -59,13 +61,14 @@ async def read_history(
         user (UserMe): 当前登录用户。
 
     Returns:
-        List[HistoryQuery]: 历史查询记录列表。
+        UnifiedResponse[List[HistoryQuery]]: 历史查询记录列表响应。
     """
-    return await report_service.get_history_queries_service(
+    result = await report_service.get_history_queries_service(
         db=db,
         project_id=projectId,
         user_id=user.user_id
     )
+    return UnifiedResponse.success(data=result, message="获取历史查询记录成功")
 
 
 # -------------------------------------------
@@ -73,7 +76,7 @@ async def read_history(
 # -------------------------------------------
 @router.post(
     "/projects/{project_id}/reports",
-    response_model=Report,
+    response_model=UnifiedResponse[Report],
     summary="创建报表"
 )
 async def create_report(
@@ -92,14 +95,15 @@ async def create_report(
         user (UserMe): 当前登录用户。
 
     Returns:
-        Report: 创建后的报表信息。
+        UnifiedResponse[Report]: 创建后的报表信息响应。
     """
-    return await report_service.create_report_service(
+    result = await report_service.create_report_service(
         db=db,
         project_id=project_id,
         payload=body,
         user_id=user.user_id
     )
+    return UnifiedResponse.success(data=result, message="报表创建成功")
 
 
 # -------------------------------------------
@@ -107,7 +111,7 @@ async def create_report(
 # -------------------------------------------
 @router.delete(
     "/reports/{report_id}",
-    response_model=bool,
+    response_model=UnifiedResponse[bool],
     summary="删除报表"
 )
 async def delete_report(
@@ -124,13 +128,14 @@ async def delete_report(
         user (UserMe): 当前登录用户。
 
     Returns:
-        bool: 删除成功返回True。
+        UnifiedResponse[bool]: 删除结果响应。
     """
-    return await report_service.delete_report_service(
+    result = await report_service.delete_report_service(
         db=db,
         report_id=report_id,
         user_id=user.user_id
     )
+    return UnifiedResponse.success(data=result, message="报表删除成功")
 
 
 # -------------------------------------------
@@ -138,7 +143,7 @@ async def delete_report(
 # -------------------------------------------
 @router.put(
     "/reports/{report_id}",
-    response_model=Report,
+    response_model=UnifiedResponse[Report],
     summary="更新报表"
 )
 async def update_report(
@@ -157,14 +162,15 @@ async def update_report(
         user (UserMe): 当前登录用户。
 
     Returns:
-        Report: 更新后的报表信息。
+        UnifiedResponse[Report]: 更新后的报表信息响应。
     """
-    return await report_service.update_report_service(
+    result = await report_service.update_report_service(
         db=db,
         report_id=report_id,
         payload=body,
         user_id=user.user_id
     )
+    return UnifiedResponse.success(data=result, message="报表更新成功")
 
 
 # -------------------------------------------
@@ -172,7 +178,7 @@ async def update_report(
 # -------------------------------------------
 @router.get(
     "/reports/{report_id}/export",
-    response_model=dict,
+    response_model=UnifiedResponse[dict],
     summary="导出报表"
 )
 async def export_report(
@@ -191,11 +197,12 @@ async def export_report(
         user (UserMe): 当前登录用户。
 
     Returns:
-        dict: 包含导出文件信息的字典。
+        UnifiedResponse[dict]: 包含导出文件信息的字典响应。
     """
-    return await report_service.export_report_service(
+    result = await report_service.export_report_service(
         db=db,
         report_id=report_id,
         format=format,
         user_id=user.user_id
     )
+    return UnifiedResponse.success(data=result, message="报表导出成功")
