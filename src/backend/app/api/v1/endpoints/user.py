@@ -6,7 +6,7 @@
 
 # backend/app/api/v1/endpoints/user.py
 
-from fastapi import APIRouter, Depends, HTTPException, status, Body, File, UploadFile, HTTPException,Query
+from fastapi import APIRouter, Depends, status, Body, File, UploadFile, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 from typing import Any
 from .. import deps
@@ -42,14 +42,8 @@ async def read_user_me(
     Raises:
         HTTPException: 用户未找到(404)或内部服务器错误(500)。
     """
-    try:
-        # Service 层负责将 ORM 转换为 UserMe DTO
-        user_dto = await user_service.get_user_me_service(db, current_user.user_id)
-        return user_dto
-    except ItemNotFoundException:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
-    except Exception as e:
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Failed to fetch user info: {e}")
+    # Service 层负责将 ORM 转换为 UserMe DTO
+    return await user_service.get_user_me_service(db, current_user.user_id)
 
 
 # ----------------------------------------------------------------------
@@ -75,21 +69,13 @@ async def update_username_endpoint(
     Raises:
         HTTPException: 用户名已存在(409)、验证失败(422)或内部服务器错误(500)。
     """
-    try:
-        updated_user_dto = await user_service.update_username_service(
-            db,
-            current_user.user_id,
-            username_data
-        )
-        # 成功返回 200 OK，返回更新后的 DTO
-        return updated_user_dto
-    # 捕获用户名已存在的异常
-    except UserAlreadyExistsException as e:
-        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(e))
-    except ValidationException as e:
-        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e))
-    except Exception as e:
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Username update failed: {e}")
+    updated_user_dto = await user_service.update_username_service(
+        db,
+        current_user.user_id,
+        username_data
+    )
+    # 成功返回 200 OK，返回更新后的 DTO
+    return updated_user_dto
 
 
 # ----------------------------------------------------------------------
@@ -115,19 +101,13 @@ async def update_password_endpoint(
     Raises:
         HTTPException: 密码错误(401)或内部服务器错误(500)。
     """
-    try:
-        await user_service.update_password_service(
-            db,
-            current_user.user_id,
-            password_data
-        )
-        # 成功返回 None (204 No Content)
-        return None
-    # 捕获旧密码错误
-    except PasswordInvalidException as e:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail=str(e))
-    except Exception as e:
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Password update failed: {e}")
+    await user_service.update_password_service(
+        db,
+        current_user.user_id,
+        password_data
+    )
+    # 成功返回 None (204 No Content)
+    return None
 
 
 # ----------------------------------------------------------------------
@@ -155,16 +135,13 @@ async def update_avatar_endpoint(
     Raises:
         HTTPException: 内部服务器错误(500)。
     """
-    try:
-        # Service 期望接收的是 schemas.UserUpdateAvatar 对象
-        updated_avatar_dto = await user_service.update_avatar_service(
-            db,
-            current_user.user_id,
-            avatar_data  # 传递 Pydantic Schema
-        )
-        return updated_avatar_dto
-    except Exception as e:
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Avatar update failed: {e}")
+    # Service 期望接收的是 schemas.UserUpdateAvatar 对象
+    updated_avatar_dto = await user_service.update_avatar_service(
+        db,
+        current_user.user_id,
+        avatar_data  # 传递 Pydantic Schema
+    )
+    return updated_avatar_dto
 
 # ----------------------------------------------------------------------
 # 5. POST /users/me/email/send-code - 请求更新邮箱 (Doc 3.1.4)
@@ -185,18 +162,9 @@ async def request_update_email_endpoint(
 
     Returns:
         None
-
-    Raises:
-        HTTPException: 邮箱已存在(409)或请求失败(400)。
     """
-    try:
-        await user_service.request_update_email_service(db, current_user.user_id, request_data)
-        return
-    # 捕获邮箱已被注册的异常
-    except UserAlreadyExistsException as e:
-        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(e))
-    except Exception as e:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"Email update request failed: {e}")
+    await user_service.request_update_email_service(db, current_user.user_id, request_data)
+    return
 
 
 # ----------------------------------------------------------------------
@@ -218,22 +186,13 @@ async def confirm_update_email_endpoint(
 
     Returns:
         UserMe: 更新后的用户信息。
-
-    Raises:
-        HTTPException: 验证码错误(401)或内部服务器错误(500)。
     """
-    try:
-        updated_user_dto = await user_service.confirm_update_email_service(
-            db,
-            current_user.user_id,
-            confirm_data
-        )
-        return updated_user_dto
-    # 捕获验证码错误
-    except CodeInvalidException as e:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail=str(e))
-    except Exception as e:
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Email confirmation failed: {e}")
+    updated_user_dto = await user_service.confirm_update_email_service(
+        db,
+        current_user.user_id,
+        confirm_data
+    )
+    return updated_user_dto
 
 
 @router.get("/me/login-history", response_model=schemas.PaginatedLoginHistory)
@@ -255,20 +214,12 @@ async def read_login_history(
 
     Returns:
         PaginatedLoginHistory: 分页登录历史记录。
-
-    Raises:
-        HTTPException: 内部服务器错误(500)。
     """
-    try:
-        # Router 严格只调用 Service
-        history_list = await user_service.get_login_history_service(
-            db,
-            user_id=current_user.user_id,
-            page=page,
-            page_size=page_size
-        )
-        return history_list
-
-    except Exception as e:
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                            detail=f"Failed to retrieve login history: {e}")
+    # Router 严格只调用 Service
+    history_list = await user_service.get_login_history_service(
+        db,
+        user_id=current_user.user_id,
+        page=page,
+        page_size=page_size
+    )
+    return history_list

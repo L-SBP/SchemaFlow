@@ -37,14 +37,8 @@ async def create_project(
 
     Returns:
         Any: 异步响应，包含项目ID。
-
-    Raises:
-        HTTPException: 内部服务器错误(500)。
     """
-    try:
-        return await project_service.create_project_service(db, project_in, current_user.user_id, background_tasks)
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+    return await project_service.create_project_service(db, project_in, current_user.user_id, background_tasks)
 
 # =========================================================
 # 新增接口：生成 DDL (第二步：用户确认 Schema 后调用)
@@ -71,18 +65,10 @@ async def generate_ddl(
 
     Returns:
         Any: 异步响应，包含项目ID。
-
-    Raises:
-        HTTPException: 项目未找到(404)或内部服务器错误(500)。
     """
-    try:
-        return await project_service.request_ddl_generation_service(
-            db, project_id, current_user.user_id, request_data, background_tasks
-        )
-    except ItemNotFoundException:
-        raise HTTPException(status_code=404, detail="Project not found")
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+    return await project_service.request_ddl_generation_service(
+        db, project_id, current_user.user_id, request_data, background_tasks
+    )
 
 # =========================================================
 # 执行部署 (第三步：用户确认 DDL 后调用)
@@ -108,18 +94,10 @@ async def deploy_project(
 
     Returns:
         Any: 部署后的项目信息。
-
-    Raises:
-        HTTPException: 项目未找到(404)或部署失败(500)。
     """
-    try:
-        return await project_service.deploy_project_service(
-            db, project_id, current_user.user_id, deploy_data
-        )
-    except ItemNotFoundException:
-        raise HTTPException(status_code=404, detail="Project not found")
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Deployment failed: {str(e)}")
+    return await project_service.deploy_project_service(
+        db, project_id, current_user.user_id, deploy_data
+    )
 
 
 # 2. 获取列表 (分页)
@@ -163,14 +141,8 @@ async def read_project_detail(
 
     Returns:
         Any: 项目详情响应。
-
-    Raises:
-        HTTPException: 项目未找到时抛出 404 错误。
     """
-    try:
-        return await project_service.get_project_detail_service(db, project_id, current_user.user_id)
-    except ItemNotFoundException:
-        raise HTTPException(status_code=404, detail="Not found")
+    return await project_service.get_project_detail_service(db, project_id, current_user.user_id)
 
 # 4. 更新项目
 @router.patch("/{project_id}", response_model=schemas.ProjectResponse)
@@ -191,14 +163,8 @@ async def update_project_info(
 
     Returns:
         Any: 更新后的项目信息。
-
-    Raises:
-        HTTPException: 项目未找到(404)。
     """
-    try:
-        return await project_service.update_project_info_service(db, project_id, current_user.user_id, update_data.model_dump(exclude_unset=True))
-    except ItemNotFoundException:
-        raise HTTPException(status_code=404, detail="Not found")
+    return await project_service.update_project_info_service(db, project_id, current_user.user_id, update_data.model_dump(exclude_unset=True))
 
 # 5. 确认删除
 @router.post("/{project_id}/confirm-delete", response_model=schemas.ConfirmationTokenResponse)
@@ -219,14 +185,8 @@ async def confirm_delete(
 
     Returns:
         Any: 删除令牌响应。
-
-    Raises:
-        HTTPException: 校验失败时抛出 400 错误。
     """
-    try:
-        return await project_service.confirm_delete_project_service(db, project_id, current_user.user_id, data.confirmation_text)
-    except ValidationException as e:
-        raise HTTPException(status_code=400, detail=str(e))
+    return await project_service.confirm_delete_project_service(db, project_id, current_user.user_id, data.confirmation_text)
 
 # 6. 最终删除
 @router.delete("/{project_id}", status_code=status.HTTP_204_NO_CONTENT)
@@ -247,12 +207,6 @@ async def delete_project(
 
     Returns:
         None
-
-    Raises:
-        HTTPException: 权限不足时抛出 403 错误。
     """
-    try:
-        await project_service.delete_project_service(db, project_id, current_user.user_id, x_confirmation_token)
-        return None
-    except OperationNotPermittedException as e:
-        raise HTTPException(status_code=403, detail=str(e))
+    await project_service.delete_project_service(db, project_id, current_user.user_id, x_confirmation_token)
+    return None

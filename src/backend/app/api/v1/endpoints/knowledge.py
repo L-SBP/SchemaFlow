@@ -38,18 +38,8 @@ async def create_term(
 
     Returns:
         Any: 创建后的术语信息。
-
-    Raises:
-        HTTPException: 项目未找到(404)、冲突(409)或内部错误(500)。
     """
-    try:
-        return await knowledge_service.create_knowledge_service(db, project_id, current_user.user_id, data)
-    except ItemNotFoundException:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Project not found.")
-    except ValidationException as e:
-        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(e)) # 409 for conflict
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+    return await knowledge_service.create_knowledge_service(db, project_id, current_user.user_id, data)
 
 
 # ----------------------------------------------------------------------
@@ -77,18 +67,10 @@ async def get_terms(
 
     Returns:
         Any: 分页术语列表。
-
-    Raises:
-        HTTPException: 项目未找到(404)或内部错误(500)。
     """
-    try:
-        return await knowledge_service.get_knowledge_list_service(
-            db, project_id, current_user.user_id, page, page_size, search
-        )
-    except ItemNotFoundException:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Project not found.")
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+    return await knowledge_service.get_knowledge_list_service(
+        db, project_id, current_user.user_id, page, page_size, search
+    )
 
 
 # ----------------------------------------------------------------------
@@ -114,18 +96,10 @@ async def update_term(
 
     Returns:
         Any: 更新后的术语信息。
-
-    Raises:
-        HTTPException: 术语/项目未找到(404)或内部错误(500)。
     """
-    try:
-        return await knowledge_service.update_knowledge_service(
-            db, project_id, knowledge_id, current_user.user_id, data
-        )
-    except ItemNotFoundException:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Term or Project not found.")
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+    return await knowledge_service.update_knowledge_service(
+        db, project_id, knowledge_id, current_user.user_id, data
+    )
 
 # ----------------------------------------------------------------------
 # [新增] 批量删除术语
@@ -148,20 +122,12 @@ async def batch_delete_terms(
 
     Returns:
         Any: 删除结果。
-
-    Raises:
-        HTTPException: 项目未找到(404)或内部错误(500)。
     """
-    try:
-        count = await knowledge_service.batch_delete_knowledge_service(
-            db, project_id, current_user.user_id, data.ids
-        )
-        # 这里临时构造一个返回，您也可以定义专门的 DeleteResponse
-        return {"imported_count": 0, "failed_count": 0, "failures": [], "message": f"Successfully deleted {count} items."}
-    except ItemNotFoundException:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Project not found.")
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+    count = await knowledge_service.batch_delete_knowledge_service(
+        db, project_id, current_user.user_id, data.ids
+    )
+    # 这里临时构造一个返回，您也可以定义专门的 DeleteResponse
+    return {"imported_count": 0, "failed_count": 0, "failures": [], "message": f"Successfully deleted {count} items."}
 
 
 
@@ -186,20 +152,10 @@ async def import_terms(
 
     Returns:
         Any: 导入结果统计。
-
-    Raises:
-        HTTPException: 格式错误(400)、项目未找到(404)或导入失败(500)。
     """
-    try:
-        return await knowledge_service.import_knowledge_service(
-            db, project_id, current_user.user_id, file
-        )
-    except ValidationException as e:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
-    except ItemNotFoundException:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Project not found.")
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Import failed: {e}")
+    return await knowledge_service.import_knowledge_service(
+        db, project_id, current_user.user_id, file
+    )
 
 
 # ----------------------------------------------------------------------
@@ -221,13 +177,5 @@ async def export_terms(
 
     Returns:
         Any: 导出文件下载链接。
-
-    Raises:
-        HTTPException: 项目未找到(404)或内部错误(500)。
     """
-    try:
-        return await knowledge_service.export_knowledge_service(db, project_id, current_user.user_id)
-    except ItemNotFoundException:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Project not found.")
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+    return await knowledge_service.export_knowledge_service(db, project_id, current_user.user_id)

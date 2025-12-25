@@ -2,7 +2,7 @@
 管理员 API 端点。提供用户管理、公告管理、违规记录查看及系统统计看板等管理员专属功能。
 """
 from typing import Optional, Literal, Any
-from fastapi import APIRouter, Depends, Query, Path, status, HTTPException, Body
+from fastapi import APIRouter, Depends, Query, Path, status, Body
 from sqlalchemy.ext.asyncio import AsyncSession as Session
 
 # 导入 Service 和 Schema
@@ -58,18 +58,11 @@ async def get_user_list(
 
     Returns:
         AdminUserListResponse: 用户列表响应。
-
-    Raises:
-        HTTPException: 内部服务器错误(500)。
     """
-    try:
-        # 这里传入 filter_status
-        return await service.get_admin_user_list_service(
-            db, pagination.page, pagination.page_size, search, filter_status
-        )
-    except Exception as e:
-        # 现在这里的 status 引用的是 fastapi.status 模块，不会报错了
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
+    # 这里传入 filter_status
+    return await service.get_admin_user_list_service(
+        db, pagination.page, pagination.page_size, search, filter_status
+    )
 
 
 @router.patch("/users/{user_id}/status", response_model=AdminUpdateUserStatusResponse, summary="4.1.2 修改用户状态 (封禁/解封)")
@@ -91,16 +84,8 @@ async def update_user_status(
 
     Returns:
         AdminUpdateUserStatusResponse: 更新后的用户状态信息。
-
-    Raises:
-        HTTPException: 用户未找到(404)或内部服务器错误(500)。
     """
-    try:
-        return await service.update_user_status_service(db, user_id, data, admin_user.user_id)
-    except ItemNotFoundException as e:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
-    except Exception as e:
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Failed to update user status: {e}")
+    return await service.update_user_status_service(db, user_id, data, admin_user.user_id)
 
 
 @router.patch("/users/{user_id}/quota", response_model=AdminUpdateUserQuotaResponse, summary="4.1.3 调整用户资源额度")
@@ -122,16 +107,8 @@ async def update_user_quota(
 
     Returns:
         AdminUpdateUserQuotaResponse: 更新后的用户额度信息。
-
-    Raises:
-        HTTPException: 用户未找到(404)或内部服务器错误(500)。
     """
-    try:
-        return await service.update_user_quota_service(db, user_id, data)
-    except ItemNotFoundException as e:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
-    except Exception as e:
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Failed to adjust quota: {e}")
+    return await service.update_user_quota_service(db, user_id, data)
 
 
 @router.get("/users/{user_id}", response_model=AdminUserDetailResponse, summary="4.1.4 获取用户详情")
@@ -143,17 +120,9 @@ async def get_user_detail(
     login_limit: int = Query(20, ge=0, le=200, description="返回的登录历史条目数量上限"),
 ) -> Any:
     """管理员查看用户详情：额度、项目列表、登录历史。"""
-    try:
-        return await service.get_admin_user_detail_service(
-            db, user_id=user_id, project_limit=project_limit, login_limit=login_limit
-        )
-    except ItemNotFoundException as e:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
-    except Exception as e:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to get user detail: {e}",
-        )
+    return await service.get_admin_user_detail_service(
+        db, user_id=user_id, project_limit=project_limit, login_limit=login_limit
+    )
 
 # ----------------------------------------------------------------------
 # 4.2. 公告管理
@@ -175,14 +144,8 @@ async def create_announcement(
 
     Returns:
         AnnouncementResponse: 创建后的公告信息。
-
-    Raises:
-        HTTPException: 内部服务器错误(500)。
     """
-    try:
-        return await service.create_announcement_service(db, data, current_admin.user_id)
-    except Exception as e:
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Failed to create announcement: {e}")
+    return await service.create_announcement_service(db, data, current_admin.user_id)
 
 
 @router.put("/announcements/{announcement_id}", response_model=AnnouncementResponse, summary="4.2.2 更新公告")
@@ -204,16 +167,8 @@ async def update_announcement(
 
     Returns:
         AnnouncementResponse: 更新后的公告信息。
-
-    Raises:
-        HTTPException: 公告未找到(404)或内部服务器错误(500)。
     """
-    try:
-        return await service.update_announcement_service(db, announcement_id, data)
-    except ItemNotFoundException as e:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Announcement not found.")
-    except Exception as e:
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Failed to update announcement: {e}")
+    return await service.update_announcement_service(db, announcement_id, data)
 
 
 @router.delete("/announcements/{announcement_id}", status_code=status.HTTP_204_NO_CONTENT, summary="4.2.3 删除公告")
@@ -232,17 +187,9 @@ async def delete_announcement(
 
     Returns:
         None: 无返回内容。
-
-    Raises:
-        HTTPException: 公告未找到(404)或内部服务器错误(500)。
     """
-    try:
-        await service.delete_announcement_service(db, announcement_id)
-        return
-    except ItemNotFoundException as e:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Announcement not found.")
-    except Exception as e:
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Failed to delete announcement: {e}")
+    await service.delete_announcement_service(db, announcement_id)
+    return
 
 # ----------------------------------------------------------------------
 # 4.3. 管理员状态 / 4.4. 违规记录与统计
@@ -264,14 +211,8 @@ async def get_admin_list(
 
     Returns:
         AdminListResponse: 管理员列表响应。
-
-    Raises:
-        HTTPException: 内部服务器错误(500)。
     """
-    try:
-        return await service.get_admin_list_service(db, pagination.page, pagination.page_size)
-    except Exception as e:
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Failed to fetch admin list: {e}")
+    return await service.get_admin_list_service(db, pagination.page, pagination.page_size)
 
 
 @router.get("/violations", response_model=ViolationLogListResponse, summary="4.4.2 获取违规记录列表")
@@ -294,16 +235,10 @@ async def get_violation_logs(
 
     Returns:
         ViolationLogListResponse: 违规记录列表响应。
-
-    Raises:
-        HTTPException: 内部服务器错误(500)。
     """
-    try:
-        return await service.get_violation_logs_service(
-            db, pagination.page, pagination.page_size, risk_level, resolution_status
-        )
-    except Exception as e:
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Failed to fetch violations: {e}")
+    return await service.get_violation_logs_service(
+        db, pagination.page, pagination.page_size, risk_level, resolution_status
+    )
 
 
 @router.get("/dashboard/stats", response_model=AdminStatsResponse, summary="4.4.1 获取系统统计看板")
@@ -320,11 +255,5 @@ async def get_system_stats(
 
     Returns:
         AdminStatsResponse: 系统统计响应。
-
-    Raises:
-        HTTPException: 内部服务器错误(500)。
     """
-    try:
-        return await service.get_admin_stats_service(db)
-    except Exception as e:
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Failed to fetch stats: {e}")
+    return await service.get_admin_stats_service(db)

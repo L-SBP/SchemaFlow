@@ -38,7 +38,7 @@ class TestGetConfig:
                     "pool_recycle": 3600,
                     "pool_timeout": 30
                 },
-                "redis": {
+                "redis_client": {
                     "host": "localhost",
                     "port": 6379,
                     "username": "",
@@ -99,7 +99,7 @@ class TestGetConfig:
                     "pool_recycle": 3600,
                     "pool_timeout": 30
                 },
-                "redis": {
+                "redis_client": {
                     "host": "localhost",
                     "port": 6379,
                     "username": "",
@@ -137,7 +137,7 @@ class TestGetConfig:
                     "pool_recycle": 3600,
                     "pool_timeout": 30
                 },
-                "redis": {
+                "redis_client": {
                     "host": "localhost",
                     "port": 6379,
                     "username": "",
@@ -212,7 +212,7 @@ class TestGetConfig:
                     "pool_recycle": 3600,
                     "pool_timeout": 30
                 },
-                "redis": {
+                "redis_client": {
                     "host": "localhost",
                     "port": 6379,
                     "username": "",

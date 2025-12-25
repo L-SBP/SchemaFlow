@@ -19,7 +19,7 @@ from core.config import config
 from core.log import log
 from core.auth import get_password_hash
 from crud.crud_user_account import crud_user_account
-from redis.redis import get_redis
+from redis_client.redis import get_redis
 from core import exceptions
 from core.email_utils import send_password_reset_code_email
 
@@ -35,7 +35,7 @@ async def _rate_limit(redis, key: str, limit: int, window_seconds: int) -> bool:
             await redis.expire(key, window_seconds)
         return count <= limit
     except Exception as e:
-        log.warning(f"Rate limit redis operation failed: {e}")
+        log.warning(f"Rate limit redis_client operation failed: {e}")
         return True
 
 
@@ -83,7 +83,7 @@ async def service_send_password_reset_code(db: AsyncSession, email: str, client_
     try:
         await redis.setex(redis_key, ttl, verify_code)
     except Exception as e:
-        log.error(f"Failed to save password reset code in redis: {e}")
+        log.error(f"Failed to save password reset code in redis_client: {e}")
         return
 
     expire_minutes = max(1, int(ttl / 60))

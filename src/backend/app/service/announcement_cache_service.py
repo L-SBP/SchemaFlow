@@ -11,7 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func
 
 from models.system_announcement import SystemAnnouncement as Announcement
-from redis.redis import get_redis
+from redis_client.redis import get_redis
 from core.log import log
 
 # 缓存键前缀

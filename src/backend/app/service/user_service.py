@@ -20,7 +20,7 @@ from core import exceptions
 from core.auth import get_password_hash, verify_password, decode_jwt_token  # 补充 decode_jwt_token 供 logout 使用
 from core.log import log
 from core.exceptions import ValidationException
-from redis.redis import get_redis
+from redis_client.redis import get_redis
 from core.config import config
 from service import email_service  # 导入 email_service 模块本身
 from schema import user as schemas  # 导入 User Schemas
@@ -197,7 +197,7 @@ async def service_save_token_in_redis(token: str) -> bool:
     redis = get_redis()
     if redis:
         await redis.set(f"token:{token}", "1", ex=config.jwt.token_expire_time_seconds)
-        log.info(f"Save token {token} to redis")
+        log.info(f"Save token {token} to redis_client")
         return True
     return False
 
@@ -215,7 +215,7 @@ async def service_abolish_token_in_redis(token: str) -> bool:
     redis = get_redis()
     if redis:
         await redis.delete(f"token:{token}")
-        log.info(f"Abolish token {token} in redis")
+        log.info(f"Abolish token {token} in redis_client")
         return True
     return False
 
@@ -278,7 +278,7 @@ async def service_logout(
     """
     # 从Redis中删除token，使其失效
     if not await service_abolish_token_in_redis(token):
-        log.error(f"Failed to abolish token {token} in redis")
+        log.error(f"Failed to abolish token {token} in redis_client")
         # 注意：即使 Redis 删除失败，通常也应该继续记录登出日志
 
     # 获取用户ID

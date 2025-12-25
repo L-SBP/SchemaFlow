@@ -204,7 +204,7 @@ class TestBaseConfig:
         config_data = {
             "app": app_config_data,
             "db": db_config_data,
-            "redis": redis_config_data,
+            "redis_client": redis_config_data,
             "log": log_config_data
         }
         

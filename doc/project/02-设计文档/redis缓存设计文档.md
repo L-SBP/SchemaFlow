@@ -217,7 +217,7 @@ Redis 连接层 (redis.py)
 ### 10.1 Redis 配置
 
 ```yaml
-# redis.conf 建议配置
+# redis_client.conf 建议配置
 maxmemory 256mb
 maxmemory-policy allkeys-lru
 save 900 1

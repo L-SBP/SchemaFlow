@@ -9,7 +9,7 @@
 import json
 from datetime import datetime, timezone
 from typing import Optional, Tuple
-import redis
+import redis_client
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 
@@ -43,7 +43,7 @@ class RedisFrequencyLimiter:
             redis_db: Redis 数据库号
         """
         try:
-            self.redis_client = redis.Redis(
+            self.redis_client = redis_client.Redis(
                 host=redis_host,
                 port=redis_port,
                 db=redis_db,

@@ -5,7 +5,7 @@ Redis 连接管理器。
 支持常规数据操作连接和 Pub/Sub 监听专用连接的独立管理。
 """
 
-# backend/app/redis/redis.py
+# backend/app/redis_client/redis_client.py
 
 import aioredis
 

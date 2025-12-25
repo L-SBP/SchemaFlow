@@ -8,7 +8,7 @@
 
 from typing import Any, Literal
 
-from fastapi import APIRouter, Depends, Query, HTTPException
+from fastapi import APIRouter, Depends, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.v1.deps import get_db, get_current_active_user
@@ -18,6 +18,7 @@ from schema.announcement import (
     AnnouncementListResponse,
     AnnouncementDetailResponse
 )
+from core.exceptions import ItemNotFoundException, OperationNotPermittedException
 
 router = APIRouter()
 
@@ -101,9 +102,9 @@ async def get_announcement_detail(
     announcement = await crud_announcement.get(db, announcement_id)
 
     if not announcement:
-        raise HTTPException(status_code=404, detail="Announcement not found")
+        raise ItemNotFoundException("Announcement not found")
 
     if announcement.status != "published":
-        raise HTTPException(status_code=403, detail="Announcement not published")
+        raise OperationNotPermittedException("Announcement not published")
 
     return announcement

@@ -5,7 +5,7 @@
 """
 
 import sqlparse
-from fastapi import APIRouter, Depends, HTTPException, Path
+from fastapi import APIRouter, Depends, Path
 from sqlalchemy.ext.asyncio import AsyncSession
 from typing import List, Any
 
@@ -13,6 +13,7 @@ from typing import List, Any
 from core.log import log
 from service.chat_service import process_chat, confirm_and_execute_sql
 from crud.crud_message import crud_message
+from core.exceptions import ItemNotFoundException
 
 # 3. 导入 Schema
 from schema.chat import ChatResponse, ChatRequest, MessageType
@@ -78,19 +79,11 @@ async def send_message(
 
     Returns:
         ChatResponse: AI 响应结果。
-
-    Raises:
-        HTTPException: 内部错误(500)。
     """
-    try:
-        return await process_chat(
-            db=db, session_id=session_id, user_input=chat_request.content,
-            user_id=current_user.user_id, selected_model=chat_request.model 
-        )
-    except Exception as e:
-        # 安全的日志记录方式
-        log.error("Chat Error: {}", str(e), exc_info=True)
-        raise HTTPException(status_code=500, detail="Internal Server Error processing chat")
+    return await process_chat(
+        db=db, session_id=session_id, user_input=chat_request.content,
+        user_id=current_user.user_id, selected_model=chat_request.model 
+    )
 
 @router.get("/sessions/{session_id}/messages", response_model=List[ChatResponse])
 async def get_history(
@@ -108,16 +101,9 @@ async def get_history(
 
     Returns:
         List[ChatResponse]: 历史消息列表。
-
-    Raises:
-        HTTPException: 获取失败(500)。
     """
-    try:
-        raw_messages = await crud_message.get_recent_messages(db, session_id, limit=50)
-        return _format_history_response(raw_messages)
-    except Exception as e:
-        log.error("History Error: {}", str(e), exc_info=True)
-        raise HTTPException(status_code=500, detail="Failed to retrieve history")
+    raw_messages = await crud_message.get_recent_messages(db, session_id, limit=50)
+    return _format_history_response(raw_messages)
 
 @router.post("/messages/{message_id}/confirm", response_model=ChatResponse)
 async def confirm_message_execution(
@@ -125,11 +111,5 @@ async def confirm_message_execution(
     db: AsyncSession = Depends(get_db),
     current_user: UserMe = Depends(get_current_active_user)
 ):
-    try:
-        log.info(f"User {current_user.user_id} confirming message {message_id}")
-        return await confirm_and_execute_sql(db, message_id, current_user.user_id)
-    except HTTPException as he: raise he
-    except Exception as e:
-        # ✅ 修复：安全的日志记录方式
-        log.error("Confirm Error: {}", str(e), exc_info=True)
-        raise HTTPException(status_code=500, detail=f"Execution failed: {str(e)}")
+    log.info(f"User {current_user.user_id} confirming message {message_id}")
+    return await confirm_and_execute_sql(db, message_id, current_user.user_id)

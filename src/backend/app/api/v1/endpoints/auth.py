@@ -5,7 +5,7 @@
 """
 # backend/app/api/v1/endpoints/auth.py
 
-from fastapi import APIRouter, Depends, HTTPException, status, Body, Request
+from fastapi import APIRouter, Depends, status, Body, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 from typing import Any
 from schema.unified_response import NoContentResponse, UnifiedSuccessResponse, LoginData
@@ -50,10 +50,12 @@ async def swagger_login(
     # 1. 验证用户
     user = await service_login(db, form_data.username, form_data.password)
     if not user:
-        raise HTTPException(status_code=400, detail="Incorrect username or password")
+        from core.exceptions import UserNotFoundException
+        raise UserNotFoundException()
     
     if user.status != 'normal':
-         raise HTTPException(status_code=400, detail="User is inactive")
+        from core.exceptions import UserStatusForbiddenException
+        raise UserStatusForbiddenException(status=user.status, user_id=user.user_id)
 
     # 2. 生成 Token
     access_token = create_access_token(data={"sub": str(user.user_id)})
@@ -61,7 +63,7 @@ async def swagger_login(
     # 3. 将 Token 存入 Redis 白名单
     # 如果不存，api/v1/deps.py 会因为查不到记录而报 Token revoked
     if not await service_save_token_in_redis(access_token):
-        raise HTTPException(status_code=500, detail="Failed to save token session")
+        raise exceptions.RedisOperationFailedException()
     
     # 4. 返回 Token
     return {
@@ -88,33 +90,13 @@ async def send_register_code(
     Raises:
         HTTPException: 邮箱已注册或发送失败。
     """
-    try:
-        log.info("send register code")
-        existing_user = await check_email_exists(db, payload.email)
-        if existing_user:
-            exc = exceptions.EmailHasBeenRegisteredException()
-            # 直接传入字符串 message
-            raise HTTPException(
-                status_code=exc.code,
-                detail=exc.message
-            )
-        await email_service.service_send_verification_code(payload.email)
-        log.info("send register code success")
-        return NoContentResponse()
-    except exceptions.BusinessException as e:
-        log.error(f"Failed to send verification code: {str(e)}", exc_info=True)
-        # 直接传入字符串 message
-        raise HTTPException(
-            status_code=e.code,
-            detail=e.message
-        )
-    except exceptions.AppException as e:
-        log.error(f"Failed to send verification code: {str(e)}", exc_info=True)
-        # 直接传入字符串 message
-        raise HTTPException(
-            status_code=e.code,
-            detail=e.message
-        )
+    log.info("send register code")
+    existing_user = await check_email_exists(db, payload.email)
+    if existing_user:
+        raise exceptions.EmailHasBeenRegisteredException()
+    await email_service.service_send_verification_code(payload.email)
+    log.info("send register code success")
+    return NoContentResponse()
 
 
 @router.post("/register", response_model=UnifiedSuccessResponse[dict])
@@ -135,39 +117,25 @@ async def register(
     Raises:
         HTTPException: 注册失败。
     """
-    try:
-        new_user = await service_register_user(
-            db,
-            username=payload.username,
-            email=payload.email,
-            password=payload.password,
-            code=payload.verification_code
-        )
+    new_user = await service_register_user(
+        db,
+        username=payload.username,
+        email=payload.email,
+        password=payload.password,
+        code=payload.verification_code
+    )
 
-        log.info(f"Registered user {new_user.username}")
-        return UnifiedSuccessResponse.create(
-            data={
-                "user_id": new_user.user_id,
-                "username": new_user.username,
-                "email": new_user.email,
-                "status": new_user.status,
-                "created_at": new_user.created_at
-            },
-            message="用户注册成功"
-        )
-    except exceptions.BusinessException as e:
-        #  直接传入字符串 message
-        raise HTTPException(
-            status_code=e.code,
-            detail=e.message
-        )
-    except exceptions.AppException as e:
-        log.error(f"注册失败：{str(e)}", exc_info=True)
-        #  直接传入字符串 message
-        raise HTTPException(
-            status_code=e.code,
-            detail=e.message
-        )
+    log.info(f"Registered user {new_user.username}")
+    return UnifiedSuccessResponse.create(
+        data={
+            "user_id": new_user.user_id,
+            "username": new_user.username,
+            "email": new_user.email,
+            "status": new_user.status,
+            "created_at": new_user.created_at
+        },
+        message="用户注册成功"
+    )
 
 
 @router.post("/login", response_model=UnifiedSuccessResponse[LoginData])
@@ -188,9 +156,6 @@ async def login(
 
     Returns:
         UnifiedSuccessResponse: 包含Token和用户信息的响应。
-
-    Raises:
-        HTTPException: 登录失败。
     """
     # 初始化变量：存储登录记录需要的信息
     client_ip = request.client.host
@@ -198,113 +163,37 @@ async def login(
     device_info = request.headers.get("X-Device-Info", "")
     log.info(f"Login request: client_ip={client_ip}, user_agent={user_agent}, device_infp={device_info}")
 
-    try:
-        exist_user = await service_login(db, payload.username, payload.password)
+    exist_user = await service_login(db, payload.username, payload.password)
 
-        log.info(f"start to record the login log")
-        await create_login_record(
-            db=db,
-            user_id=exist_user.user_id,
-            ip_address=client_ip,
-            login_status="success",
-            user_agent=user_agent,
-            device_info=device_info,
-        )
+    log.info(f"start to record the login log")
+    await create_login_record(
+        db=db,
+        user_id=exist_user.user_id,
+        ip_address=client_ip,
+        login_status="success",
+        user_agent=user_agent,
+        device_info=device_info,
+    )
 
-        access_token = create_access_token(data={"sub": f"{exist_user.user_id}"})
-        if not await service_save_token_in_redis(access_token):
-            log.error("Failed to save token in redis")
-            exc = exceptions.RedisOperationFailedException()
-            #  直接传入字符串 message
-            raise HTTPException(
-                status_code=exc.code,
-                detail=exc.message
-            )
+    access_token = create_access_token(data={"sub": f"{exist_user.user_id}"})
+    if not await service_save_token_in_redis(access_token):
+        log.error("Failed to save token in redis_client")
+        raise exceptions.RedisOperationFailedException()
 
-        return UnifiedSuccessResponse.create(
-            data=LoginData(
-                access_token=access_token,
-                token_type="bearer",
-                user={
-                    "user_id": exist_user.user_id,
-                    "username": exist_user.username,
-                    "email": exist_user.email,
-                    "is_admin": exist_user.is_admin,
-                    "avatar_url": exist_user.avatar_url
-                }
-            ),
-            message="用户登录成功"
-        )
-    except exceptions.PasswordInvalidException as e:
-        # ：手动查用户ID用于记日志
-        current_user = await service_check_user_exists(db, payload.username)
-        user_id = current_user.user_id if current_user else None
-
-        await create_login_record(
-            db=db,
-            user_id=user_id,
-            ip_address=client_ip,
-            login_status="failed",
-            failure_reason="密码错误",
-            user_agent=user_agent,
-            device_info=device_info
-        )
-        #  直接传入字符串 message
-        raise HTTPException(
-            status_code=e.code,
-            detail=e.message
-        )
-    except exceptions.UserStatusForbiddenException as e:
-        # ：手动查用户ID用于记日志
-        current_user = await service_check_user_exists(db, payload.username)
-        user_id = current_user.user_id if current_user else None
-
-        await create_login_record(
-            db=db,
-            user_id=user_id,
-            ip_address=client_ip,
-            login_status="failed",
-            failure_reason=e.message,
-            user_agent=user_agent,
-            device_info=device_info
-        )
-        #  直接传入字符串 message
-        raise HTTPException(
-            status_code=e.code,
-            detail=e.message
-        )
-    except exceptions.BusinessException as e:
-        await create_login_record(
-            db=db,
-            user_id=None,
-            ip_address=client_ip,
-            login_status="failed",
-            failure_reason=e.message,
-            user_agent=user_agent,
-            device_info=device_info
-        )
-        # 直接传入字符串 message
-        raise HTTPException(
-            status_code=e.code,
-            detail=e.message
-        ) from e
-
-    except exceptions.AppException as e:
-        await create_login_record(
-            db=db,
-            user_id=None,
-            ip_address=client_ip,
-            login_status="failed",
-            failure_reason="系统内部错误",
-            user_agent=user_agent,
-            device_info=device_info
-        )
-        log.error(f"系统内部错误：{str(e)}", exc_info=True)
-        # 直接传入字符串 message
-        raise HTTPException(
-            status_code=e.code,
-            detail=e.message
-        ) from e
+    return UnifiedSuccessResponse.create(
+        data=LoginData(
+            access_token=access_token,
+            token_type="bearer",
+            user={
+                "user_id": exist_user.user_id,
+                "username": exist_user.username,
+                "email": exist_user.email,
+                "is_admin": exist_user.is_admin,
+                "avatar_url": exist_user.avatar_url
+            }
+        ),
+        message="用户登录成功"
+    )
 
 @router.post("/logout", response_model=NoContentResponse)
 async def logout(
@@ -326,32 +215,11 @@ async def logout(
     Raises:
         HTTPException: 登出失败。
     """
-    try:
-        result = await service_logout(db, token)
-        if not result:
-            exc = exceptions.RedisOperationFailedException()
-            #  直接传入字符串 message
-            raise HTTPException(
-                status_code=exc.code,
-                detail=exc.message
-            )
+    result = await service_logout(db, token)
+    if not result:
+        raise exceptions.RedisOperationFailedException()
 
-        return NoContentResponse()
-
-    except exceptions.AppException as e:
-        log.error(f"Logout failed: {str(e)}", exc_info=True)
-        # 直接传入字符串 message
-        raise HTTPException(
-            status_code=e.code,
-            detail=e.message
-        ) from e
-    except Exception as e:
-        log.error(f"Unexpected error during logout: {str(e)}", exc_info=True)
-        # 直接传入字符串 message
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="系统内部错误"
-        ) from e
+    return NoContentResponse()
 
 
 @router.post("/forgot-password", response_model=NoContentResponse)
@@ -366,11 +234,7 @@ async def forgot_password(
     """
 
     client_ip = request.client.host if request.client else None
-    try:
-        await service_send_password_reset_code(db, payload.email, client_ip=client_ip)
-    except Exception as e:
-        # 不向外暴露内部错误，避免泄露用户存在性
-        log.error(f"Forgot password failed internally: {str(e)}", exc_info=True)
+    await service_send_password_reset_code(db, payload.email, client_ip=client_ip)
     return NoContentResponse()
 
 
@@ -381,11 +245,5 @@ async def reset_password(
 ):
     """重置密码：校验邮箱验证码并设置新密码。"""
 
-    try:
-        await service_reset_password_with_code(db, payload.email, payload.verification_code, payload.new_password)
-        return NoContentResponse()
-    except exceptions.BusinessException as e:
-        raise HTTPException(status_code=e.code, detail=e.message)
-    except exceptions.AppException as e:
-        log.error(f"Reset password failed: {str(e)}", exc_info=True)
-        raise HTTPException(status_code=e.code, detail=e.message)
+    await service_reset_password_with_code(db, payload.email, payload.verification_code, payload.new_password)
+    return NoContentResponse()
