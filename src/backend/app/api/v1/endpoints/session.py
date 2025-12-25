@@ -12,12 +12,13 @@ from api.v1 import deps
 from service.session_service import session_service
 from schema.session import SessionCreate, SessionUpdate, SessionResponse
 from schema.user import UserMe
+from schema.unified_response import UnifiedResponse
 from core.log import log
 
 router = APIRouter()
 
 
-@router.get("/", response_model=List[SessionResponse], summary="获取会话列表")
+@router.get("/", response_model=UnifiedResponse[List[SessionResponse]], summary="获取会话列表")
 async def read_sessions(
     db: AsyncSession = Depends(deps.get_db),
     current_user: UserMe = Depends(deps.get_current_active_user),
@@ -36,18 +37,19 @@ async def read_sessions(
         limit (int): 返回记录数限制。
 
     Returns:
-        List[SessionResponse]: 会话列表。
+        UnifiedResponse[List[SessionResponse]]: 会话列表响应。
     """
-    return await session_service.get_sessions(
+    result = await session_service.get_sessions(
         db=db,
         user=current_user,
         project_id=project_id,
         skip=skip,
         limit=limit
     )
+    return UnifiedResponse.success(data=result, message="获取会话列表成功")
 
 
-@router.post("/", response_model=SessionResponse, summary="创建新会话")
+@router.post("/", response_model=UnifiedResponse[SessionResponse], summary="创建新会话")
 async def create_session(
     session_in: SessionCreate,
     db: AsyncSession = Depends(deps.get_db),
@@ -62,17 +64,18 @@ async def create_session(
         session_in (SessionCreate): 会话创建请求体。
 
     Returns:
-        SessionResponse: 创建后的会话信息。
+        UnifiedResponse[SessionResponse]: 创建后的会话信息响应。
     """
     log.info("创建会话")
-    return await session_service.create_session(
+    result = await session_service.create_session(
         db=db,
         user=current_user,
         session_in=session_in
     )
+    return UnifiedResponse.success(data=result, message="会话创建成功")
 
 
-@router.get("/{session_id}", response_model=SessionResponse, summary="获取会话详情")
+@router.get("/{session_id}", response_model=UnifiedResponse[SessionResponse], summary="获取会话详情")
 async def read_session(
     db: AsyncSession = Depends(deps.get_db),
     current_user: UserMe = Depends(deps.get_current_active_user),
@@ -87,16 +90,17 @@ async def read_session(
         session_id (int): 会话ID。
 
     Returns:
-        SessionResponse: 会话详情。
+        UnifiedResponse[SessionResponse]: 会话详情响应。
     """
-    return await session_service.get_session(
+    result = await session_service.get_session(
         db=db,
         user=current_user,
         session_id=session_id
     )
+    return UnifiedResponse.success(data=result, message="获取会话详情成功")
 
 
-@router.put("/{session_id}", response_model=SessionResponse, summary="更新会话信息")
+@router.put("/{session_id}", response_model=UnifiedResponse[SessionResponse], summary="更新会话信息")
 async def update_session(
     db: AsyncSession = Depends(deps.get_db),
     current_user: UserMe = Depends(deps.get_current_active_user),
@@ -113,17 +117,18 @@ async def update_session(
         session_in (SessionUpdate): 会话更新请求体。
 
     Returns:
-        SessionResponse: 更新后的会话信息。
+        UnifiedResponse[SessionResponse]: 更新后的会话信息响应。
     """
-    return await session_service.update_session(
+    result = await session_service.update_session(
         db=db,
         user=current_user,
         session_id=session_id,
         session_in=session_in
     )
+    return UnifiedResponse.success(data=result, message="会话更新成功")
 
 
-@router.delete("/{session_id}", response_model=bool, summary="删除会话")
+@router.delete("/{session_id}", response_model=UnifiedResponse[bool], summary="删除会话")
 async def delete_session(
     db: AsyncSession = Depends(deps.get_db),
     current_user: UserMe = Depends(deps.get_current_active_user),
@@ -138,10 +143,11 @@ async def delete_session(
         session_id (int): 会话ID。
 
     Returns:
-        bool: 删除成功返回True。
+        UnifiedResponse[bool]: 删除结果响应。
     """
-    return await session_service.delete_session(
+    result = await session_service.delete_session(
         db=db,
         user=current_user,
         session_id=session_id
     )
+    return UnifiedResponse.success(data=result, message="会话删除成功")
