@@ -20,7 +20,7 @@ async def get_current_user_id(token: str = Depends(get_token_str)) -> int:
     if redis:
         is_valid = await redis.get(f"token:{token}")
         if not is_valid:
-            raise HTTPException(status_code=401, detail="Token revoked")
+            raise HTTPException(status_code=401, detail="令牌已被撤销")
     
     # 解码
     return decode_jwt_token(token)
@@ -32,9 +32,9 @@ async def get_current_active_user(
 ) -> UserMe:
     user_orm = await crud_user_account.get(db, user_id)
     if not user_orm:
-        raise HTTPException(status_code=404, detail="User not found")
+        raise HTTPException(status_code=404, detail="用户未找到")
     if user_orm.status != "normal":
-        raise HTTPException(status_code=403, detail="User inactive")
+        raise HTTPException(status_code=403, detail="用户未激活")
     return UserMe.model_validate(user_orm)
 
 
@@ -46,6 +46,6 @@ async def get_current_admin_user(user: UserMe = Depends(get_current_active_user)
     if not user.is_admin:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Operation forbidden: Admin privileges required"
+            detail="操作禁止：需要管理员权限"
         )
     return user

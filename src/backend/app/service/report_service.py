@@ -106,10 +106,10 @@ async def _verify_project_ownership(
 ):
     project = await db.get(Project, project_id)
     if not project:
-        raise HTTPException(status_code=404, detail="Project not found")
+        raise HTTPException(status_code=404, detail="项目未找到")
 
     if project.user_id != user_id:
-        raise HTTPException(status_code=403, detail="Permission denied")
+        raise HTTPException(status_code=403, detail="权限拒绝")
 
     return project
 
@@ -120,7 +120,7 @@ async def _verify_report_ownership(
 ) -> AnalysisReport:
     report = await db.get(AnalysisReport, report_id)
     if not report:
-        raise HTTPException(status_code=404, detail="Report not found")
+        raise HTTPException(status_code=404, detail="报表未找到")
 
     project = await db.get(Project, report.project_id)
     if not project or project.user_id != user_id:
@@ -155,7 +155,7 @@ async def get_report_list(
     # [修复问题1]：先检查项目是否存在
     project = await db.get(Project, project_id)
     if not project:
-        raise HTTPException(status_code=404, detail=f"Project with ID {project_id} not found")
+        raise HTTPException(status_code=404, detail=f"ID 为 {project_id} 的项目未找到")
 
     stmt = (
         select(AnalysisReport, QueryResult, AIGeneratedStatement)
@@ -315,7 +315,7 @@ async def create_report_service(
     # 2. 校验数据源 (Query Result) 是否存在
     result_exists = await db.get(QueryResult, payload.query_id)
     if not result_exists:
-        raise HTTPException(status_code=404, detail="Query result (Data Source) not found")
+        raise HTTPException(status_code=404, detail="查询结果（数据源）未找到")
 
     data = result_exists.result_data if isinstance(result_exists.result_data, list) else []
     normalized = [r for r in data if isinstance(r, dict)]

@@ -39,7 +39,7 @@ class AppException(Exception):
         detail (Optional[str]): 开发者可见的详细错误信息。
     """
     code: int  # HTTP状态码
-    message: str = "Internal Error" # 用户可读的异常信息
+    message: str = "内部错误" # 用户可读的异常信息
     detail: Optional[str] = None  # 开发者可见的详细错误
 
     def __init__(self, code: int, detail: Optional[str] = None):
@@ -51,37 +51,37 @@ class AppException(Exception):
 class TokenInvalidException(BusinessException):
     """Token 无效/解析失败异常。"""
     def __init__(self):
-        super().__init__(code=401, message="Could not validate credentials")
+        super().__init__(code=401, message="无法验证凭据")
 
 class EmailHasBeenRegisteredException(BusinessException):
     """邮箱已被注册异常。"""
     def __init__(self):
-        super().__init__(code=400, message="Email has been registered")
+        super().__init__(code=400, message="邮箱已被注册")
 
 class UsernameHasBeenRegisteredException(BusinessException):
     """用户名已被注册异常。"""
     def __init__(self):
-        super().__init__(code=400, message="Username has been registered")
+        super().__init__(code=400, message="用户名已被注册")
 
 class SendVerificationCodeFailedException(BusinessException):
     """发送验证码失败异常。"""
     def __init__(self):
-        super().__init__(code=500, message="Failed to send verification code")
+        super().__init__(code=500, message="发送验证码失败")
 
 class CodeInvalidException(BusinessException):
     """验证码无效或已过期异常。"""
     def __init__(self):
-        super().__init__(code=400, message="Invalid or expired code")
+        super().__init__(code=400, message="验证码无效或已过期")
 
 class UserNotFoundException(BusinessException):
     """用户不存在异常。"""
     def __init__(self):
-        super().__init__(code=401, message="Incorrect username or password")
+        super().__init__(code=401, message="用户名或密码不正确")
 
 class PasswordMismatchException(BusinessException):
     """密码不匹配异常。"""
     def __init__(self):
-        super().__init__(code=400, message="Password mismatch")
+        super().__init__(code=400, message="密码不匹配")
 
 class UserStatusForbiddenException(BusinessException):
     """
@@ -92,7 +92,7 @@ class UserStatusForbiddenException(BusinessException):
     """
     user_id: int
     def __init__(self, status: str, user_id: int):
-        super().__init__(code=403, message=f"User account status is '{status}'")
+        super().__init__(code=403, message=f"用户账号状态为 '{status}'")
         self.user_id = user_id
 
 class PasswordInvalidException(BusinessException):
@@ -104,64 +104,64 @@ class PasswordInvalidException(BusinessException):
     """
     user_id: int
     def __init__(self, user_id: int):
-        super().__init__(code=401, message="Incorrect username or password")
+        super().__init__(code=401, message="用户名或密码不正确")
         self.user_id = user_id
 
 class ValidationException(BusinessException):
     """数据验证失败异常。"""
-    def __init__(self, message: str = "Validation failed"):
+    def __init__(self, message: str = "数据验证失败"):
         super().__init__(code=400, message=message)
 
 class EmailNotVerifiedException(BusinessException):
     """邮箱未验证异常。"""
     def __init__(self):
-        super().__init__(code=400, message="Email not verified")
+        super().__init__(code=400, message="邮箱未验证")
 
 class UserAlreadyExistsException(BusinessException):
     """用户已存在异常。"""
     def __init__(self):
-        super().__init__(code=400, message="User already exists")
+        super().__init__(code=400, message="用户已存在")
 
 class OperationNotPermittedException(BusinessException):
     """操作不允许异常。"""
-    def __init__(self, message: str = "Operation not permitted"):
+    def __init__(self, message: str = "操作不允许"):
         super().__init__(code=403, message=message)
 
 class ForbiddenException(BusinessException):
     """禁止访问异常。"""
-    def __init__(self, message: str = "Access forbidden"):
+    def __init__(self, message: str = "禁止访问"):
         super().__init__(code=403, message=message)
 
 class ItemNotFoundException(BusinessException):
     """资源未找到异常。"""
-    def __init__(self, message: str = "Item not found"):
+    def __init__(self, message: str = "资源未找到"):
         super().__init__(code=404, message=message)
 
 class InvalidOperationException(BusinessException):
     """无效的操作异常。"""
-    def __init__(self, message: str = "Invalid operation"):
+    def __init__(self, message: str = "无效的操作"):
         super().__init__(code=400, message=message)
 
 class SQLSecurityException(BusinessException):
     """SQL 安全异常。"""
-    def __init__(self, message: str = "SQL security exception"):
+    def __init__(self, message: str = "SQL安全异常"):
         super().__init__(code=500, message=message)
 
 class DatabaseOperationFailedException(AppException):
     """数据库操作失败异常。"""
-    def __init__(self, operation: str = "operation", ):
-        super().__init__(code=500, detail=f"Database {operation} failed")
+    def __init__(self, operation: str = "操作", ):
+        super().__init__(code=500, detail=f"数据库 {operation} 失败")
 
 class RedisOperationFailedException(AppException):
     """Redis 操作失败异常。"""
-    def __init__(self, operation: str = "operation"):
-        super().__init__(code=500, detail=f"Redis {operation} failed")
+    def __init__(self, operation: str = "操作"):
+        super().__init__(code=500, detail=f"Redis {operation} 失败")
 
 
 class SQLOperationFailedException(AppException):
     """SQL 执行失败异常。"""
-    def __init__(self, operation: str = "operation", detail: str = ""):
+    def __init__(self, operation: str = "操作", detail: str = ""):
         if detail:
-            super().__init__(code=500, detail=f"SQL {operation} failed: {detail}")
+            super().__init__(code=500, detail=f"SQL {operation} 失败: {detail}")
         else:
-            super().__init__(code=500, detail=f"SQL {operation} failed")
+            super().__init__(code=500, detail=f"SQL {operation} 失败")

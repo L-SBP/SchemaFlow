@@ -98,14 +98,14 @@ async def _verify_session_ownership(db: AsyncSession, session_id: int, user_id: 
     session = result.scalar_one_or_none()
 
     if not session:
-        raise HTTPException(status_code=404, detail="Session not found")
+        raise HTTPException(status_code=404, detail="会话未找到")
     
     if not session.project:
-        raise HTTPException(status_code=404, detail="Project not found for this session")
+        raise HTTPException(status_code=404, detail="此会话的项目未找到")
 
     if session.project.user_id != user_id:
         log.warning(f"Security Alert: User {user_id} tried to access session {session_id}")
-        raise HTTPException(status_code=403, detail="Permission denied")
+        raise HTTPException(status_code=403, detail="权限拒绝")
 
     return session.project_id
 
@@ -116,7 +116,7 @@ async def _get_session_obj(db: AsyncSession, session_id: int) -> SessionModel:
     result = await db.execute(stmt)
     session_obj = result.scalar_one_or_none()
     if not session_obj:
-        raise HTTPException(status_code=404, detail="Session lost")
+        raise HTTPException(status_code=404, detail="会话已丢失")
     return session_obj
 
 
@@ -535,7 +535,7 @@ async def _get_message_context(
     result = await db.execute(stmt)
     message = result.scalar_one_or_none()
     if not message:
-        raise HTTPException(status_code=404, detail="Message not found")
+        raise HTTPException(status_code=404, detail="消息未找到")
 
     stmt_session = select(SessionModel).where(SessionModel.session_id == message.session_id)
     result_session = await db.execute(stmt_session)
@@ -547,7 +547,7 @@ async def _get_message_context(
     result_project = await db.execute(stmt_project)
     project = result_project.scalar_one_or_none()
     if not project:
-        raise HTTPException(status_code=404, detail="Project not found")
+        raise HTTPException(status_code=404, detail="项目未找到")
 
     return message, session_obj, project
 
@@ -555,11 +555,11 @@ async def _get_message_context(
 def _validate_confirmation(message: MessageModel, project: ProjectModel, user_id: int) -> None:
     """验证确认操作的合法性。"""
     if project.user_id != user_id:
-        raise HTTPException(status_code=403, detail="Access denied")
+        raise HTTPException(status_code=403, detail="访问拒绝")
     if not message.requires_confirmation:
-        raise HTTPException(status_code=400, detail="This message does not require confirmation")
+        raise HTTPException(status_code=400, detail="此消息不需要确认")
     if message.user_confirmed:
-        raise HTTPException(status_code=400, detail="Already confirmed/executed")
+        raise HTTPException(status_code=400, detail="已确认/执行")
 
 
 def _extract_sql_from_content(content: str) -> str:
