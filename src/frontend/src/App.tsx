@@ -15,9 +15,9 @@ import { AdminStatus } from './pages/AdminStatus.tsx';
 import { Announcements } from './pages/Announcements.tsx';
 import { UserRole, Project, User } from './types.ts';
 import { authApi } from './api/auth.ts';
-import { getUserProfile } from './api/user.ts'; // 新增：引入获取用户信息接口
+import { getUserProfile } from './api/user.ts';
 import { ProjectDTO } from './api/project.ts';
-import { Loader2 } from 'lucide-react'; // 新增：引入 Loading 图标
+import { Loader2 } from 'lucide-react';
 
 const App: React.FC = () => {
   // 新增：isLoading 状态，用于在检查 Token 时显示加载动画，防止登录页闪烁

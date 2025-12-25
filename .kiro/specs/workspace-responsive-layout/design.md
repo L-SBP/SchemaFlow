@@ -159,27 +159,27 @@ Based on the prework analysis, the following consolidated properties have been i
 
 ### Property 1: DataViewer 宽度钳制
 
-*For any* drag delta value applied to the DataViewer resize handle, the resulting panel width shall be clamped between minWidth (200px) and maxWidth (60% of viewport width).
+*For any* drag delta value applied to the DataViewer resize handle, the resulting panel width shall be clamped between minWidth (150px) and maxWidth (40% of viewport width).
 
-**Validates: Requirements 1.4**
+**Validates: Requirements 2.9**
 
 ### Property 2: 控件容器边界约束
 
 *For any* viewport width (320px-2560px) and zoom level (100%-500%) combination, all child controls (Model_Selector, Send_Button, Header buttons) shall remain completely within their parent container boundaries (Input_Bar, Header_Bar respectively).
 
-**Validates: Requirements 2.1, 2.5, 3.1, 3.3**
+**Validates: Requirements 3.1, 3.5**
 
 ### Property 3: 无水平溢出
 
 *For any* supported viewport width (320px to 2560px) and zoom level (100% to 500%), the Workspace shall not produce horizontal scrollbars at the page level (document.body.scrollWidth === document.body.clientWidth).
 
-**Validates: Requirements 1.3, 5.3**
+**Validates: Requirements 1.3**
 
 ### Property 4: 最小可点击区域
 
-*For any* interactive button element in the Workspace (including Panel_Toggle_Button, Send_Button, Header buttons), the clickable area shall be at least 36x36 pixels in compact mode or 44x44 pixels in normal mode.
+*For any* interactive button element in the Workspace (including Panel_Toggle_Button, Send_Button, Header buttons), the clickable area shall be at least 44x44 pixels at 100% zoom, scaling proportionally with zoom level.
 
-**Validates: Requirements 2.4, 3.5, 6.2**
+**Validates: Requirements 3.4**
 
 ### Property 5: 点击区域与视觉边界一致性
 
@@ -189,12 +189,24 @@ Based on the prework analysis, the following consolidated properties have been i
 
 ### Property 6: 响应式断点适配
 
-*For any* viewport width below the defined breakpoint thresholds, the corresponding responsive behavior shall be triggered:
-- Width < 768px: non-essential panels collapsed or stacked
-- Width < 400px: Model_Selector shows icon only
-- DataViewer width < 400px: explorer sidebar auto-collapses
+*For any* viewport width below the defined breakpoint thresholds, the corresponding responsive behavior shall be triggered with strict priority order:
+- Width < 1024px: DataViewer panel minimized to icon-only mode
+- Width < 768px: Session panel (right sidebar) collapsed or hidden first
+- Zoom > 200%: panels minimized in strict order: Session panel → DataViewer panel → Chat_Area (preserved last)
 
-**Validates: Requirements 1.2, 2.2, 2.3, 4.2**
+**Validates: Requirements 2.1, 2.2, 2.3**
+
+### Property 7: 面板互斥展开
+
+*For any* zoom level exceeding 200%, when a user manually expands one panel (DataViewer or Session), all other non-Chat_Area panels shall automatically minimize to ensure sufficient interface space.
+
+**Validates: Requirements 2.4, 2.5, 2.6**
+
+### Property 8: 全局比例缩放
+
+*For any* zoom level exceeding 300%, all interface elements across the entire frontend application (including workspace, settings, user management, database views, and other pages) shall apply proportional scaling reduction using the global scale factor (0.9x at 300%, 0.8x at 400%, 0.7x at 500%), while maintaining minimum clickable areas for accessibility.
+
+**Validates: Requirements 6.1, 6.2, 6.3, 6.5, 6.8**
 
 ## Error Handling
 

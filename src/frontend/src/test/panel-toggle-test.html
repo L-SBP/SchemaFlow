@@ -1,0 +1,185 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Panel Toggle Button Test</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      margin: 20px;
+      background-color: #f5f5f5;
+    }
+
+    .test-container {
+      background: white;
+      padding: 20px;
+      border-radius: 8px;
+      box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+      margin-bottom: 20px;
+    }
+
+    .panel-toggle-button {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      box-sizing: border-box;
+      padding: 10px;
+      min-width: 44px;
+      min-height: 44px;
+      background: transparent;
+      border: none;
+      border-radius: 6px;
+      color: #6b7280;
+      cursor: pointer;
+      transition: all 0.2s ease;
+    }
+
+    .panel-toggle-button:hover {
+      background-color: #f3f4f6;
+      color: #374151;
+    }
+
+    .panel-toggle-button:focus {
+      outline: 2px solid #1677ff;
+      outline-offset: 2px;
+    }
+
+    .panel-toggle-button:active {
+      background-color: #e5e7eb;
+    }
+
+    .status {
+      margin-top: 10px;
+      padding: 10px;
+      background: #f0f9ff;
+      border: 1px solid #0ea5e9;
+      border-radius: 4px;
+      color: #0c4a6e;
+    }
+
+    .icon {
+      width: 18px;
+      height: 18px;
+      stroke: currentColor;
+      fill: none;
+      stroke-width: 2;
+    }
+  </style>
+</head>
+
+<body>
+  <h1>面板切换按钮测试</h1>
+
+  <div class="test-container">
+    <h2>左侧面板切换按钮</h2>
+    <p>测试数据库面板的展开/收起功能</p>
+
+    <button id="leftToggle" class="panel-toggle-button" title="切换左侧面板">
+      <svg class="icon" viewBox="0 0 24 24">
+        <path d="M9 18l6-6-6-6" />
+      </svg>
+    </button>
+
+    <div id="leftStatus" class="status">
+      左侧面板状态: <span id="leftState">展开</span>
+    </div>
+  </div>
+
+  <div class="test-container">
+    <h2>右侧面板切换按钮</h2>
+    <p>测试会话列表的展开/收起功能</p>
+
+    <button id="rightToggle" class="panel-toggle-button" title="切换右侧面板">
+      <svg class="icon" viewBox="0 0 24 24">
+        <path d="M15 18l-6-6 6-6" />
+      </svg>
+    </button>
+
+    <div id="rightStatus" class="status">
+      右侧面板状态: <span id="rightState">展开</span>
+    </div>
+  </div>
+
+  <div class="test-container">
+    <h2>测试说明</h2>
+    <ul>
+      <li>点击按钮应该能够切换面板状态</li>
+      <li>按钮应该有明显的悬停效果</li>
+      <li>按钮的点击区域应该至少为 44x44 像素</li>
+      <li>图标应该根据状态改变方向</li>
+    </ul>
+  </div>
+
+  <script>
+    // 模拟面板状态
+    let leftPanelOpen = true;
+    let rightPanelOpen = true;
+
+    // 获取元素
+    const leftToggle = document.getElementById('leftToggle');
+    const rightToggle = document.getElementById('rightToggle');
+    const leftState = document.getElementById('leftState');
+    const rightState = document.getElementById('rightState');
+
+    // 更新图标方向
+    function updateLeftIcon() {
+      const icon = leftToggle.querySelector('svg path');
+      if (leftPanelOpen) {
+        icon.setAttribute('d', 'M15 18l-6-6 6-6'); // 指向左
+        leftToggle.setAttribute('title', '最小化数据库面板');
+      } else {
+        icon.setAttribute('d', 'M9 18l6-6-6-6'); // 指向右
+        leftToggle.setAttribute('title', '展开数据库面板');
+      }
+      leftState.textContent = leftPanelOpen ? '展开' : '最小化';
+    }
+
+    function updateRightIcon() {
+      const icon = rightToggle.querySelector('svg path');
+      if (rightPanelOpen) {
+        icon.setAttribute('d', 'M9 18l6-6-6-6'); // 指向右
+        rightToggle.setAttribute('title', '最小化会话列表');
+      } else {
+        icon.setAttribute('d', 'M15 18l-6-6 6-6'); // 指向左
+        rightToggle.setAttribute('title', '展开会话列表');
+      }
+      rightState.textContent = rightPanelOpen ? '展开' : '最小化';
+    }
+
+    // 添加点击事件
+    leftToggle.addEventListener('click', function () {
+      console.log('左侧面板按钮被点击');
+      leftPanelOpen = !leftPanelOpen;
+      updateLeftIcon();
+    });
+
+    rightToggle.addEventListener('click', function () {
+      console.log('右侧面板按钮被点击');
+      rightPanelOpen = !rightPanelOpen;
+      updateRightIcon();
+    });
+
+    // 初始化图标
+    updateLeftIcon();
+    updateRightIcon();
+
+    // 添加键盘支持
+    document.addEventListener('keydown', function (e) {
+      if (e.key === 'Enter' || e.key === ' ') {
+        if (document.activeElement === leftToggle) {
+          e.preventDefault();
+          leftToggle.click();
+        } else if (document.activeElement === rightToggle) {
+          e.preventDefault();
+          rightToggle.click();
+        }
+      }
+    });
+
+    console.log('面板切换按钮测试页面已加载');
+  </script>
+</body>
+
+</html>

@@ -6,6 +6,9 @@ import { sessionApi } from '../api/session';
 import { ProjectWizard } from '../components/ProjectWizard';
 import { PanelToggleButton } from '../components/PanelToggleButton';
 import DatabaseViewer from './DatabaseViewer';
+import { useZoomLevel } from '../hooks/useZoomLevel';
+import { useGlobalZoomLevel } from '../utils/globalZoomLevel';
+import { useViewportWidth } from '../hooks/useViewportWidth';
 
 interface WorkspaceProps {
   project: Project;
@@ -140,26 +143,162 @@ export const Workspace: React.FC<WorkspaceProps> = ({ project, onBack }) => {
   const [leftPanelWidth, setLeftPanelWidth] = useState(800);
   const [isResizingLeftPanel, setIsResizingLeftPanel] = useState(false);
 
+  // 用户手动操作状态跟踪，防止自动逻辑覆盖用户意图
+  // 使用 ref 而不是 state，避免触发不必要的重渲染和 useEffect
+  const userManuallyOpenedLeftRef = useRef(false);
+  const userManuallyOpenedRightRef = useRef(false);
+
   const workspaceRootRef = useRef<HTMLDivElement>(null);
   const leftPanelWidthRef = useRef<number>(800);
   const pendingLeftPanelWidthRef = useRef<number>(800);
   const resizeRafIdRef = useRef<number | null>(null);
 
-  // 视口宽度状态
-  const [viewportWidth, setViewportWidth] = useState(window.innerWidth);
+  // 跟踪上一次的环境状态，用于检测环境变化
+  const prevZoomLevelRef = useRef(100);
+  const prevBreakpointRef = useRef<string>('desktop');
 
-  // 监听视口宽度变化
+  // 视口宽度状态 - 使用 useViewportWidth Hook
+  const { width: viewportWidth, breakpoint, is } = useViewportWidth();
+
+  // 缩放级别检测
+  const { zoomLevel, isHighZoom } = useZoomLevel();
+  const { isExtremeZoom, thresholds } = useGlobalZoomLevel();
+
+  // 计算高缩放适配类名
+  const getZoomAdaptiveClasses = (): string => {
+    const classes: string[] = [];
+
+    if (thresholds.above500 || zoomLevel >= 500) {
+      classes.push('extreme-zoom-adaptive');
+    } else if (thresholds.above300 || zoomLevel >= 300) {
+      classes.push('high-zoom-adaptive');
+    }
+
+    // 工作区专用适配
+    if (isHighZoom || zoomLevel > 200) {
+      classes.push('workspace-zoom-adaptive');
+    }
+
+    return classes.join(' ');
+  };
+
+  // 面板切换逻辑
+  // 用户手动操作优先，记录用户意图
+  const handleLeftPanelToggle = (newState: boolean) => {
+    console.log('用户手动操作左侧面板:', newState ? '展开' : '收起');
+    setIsLeftPanelOpen(newState);
+
+    // 记录用户手动操作状态
+    if (newState) {
+      // 用户手动展开面板，标记为用户主动展开
+      userManuallyOpenedLeftRef.current = true;
+      console.log('标记: 用户手动展开左侧面板');
+    } else {
+      // 用户手动收起面板，清除"手动展开"标记
+      userManuallyOpenedLeftRef.current = false;
+      console.log('标记: 用户手动收起左侧面板');
+    }
+
+    // 如果是高缩放模式且用户展开左侧面板，自动最小化右侧面板（互斥逻辑）
+    if (isHighZoom && newState && isRightPanelOpen) {
+      setIsRightPanelOpen(false);
+      userManuallyOpenedRightRef.current = false;
+      console.log('互斥逻辑: 展开左侧面板时自动关闭右侧面板');
+    }
+  };
+
+  const handleRightPanelToggle = (newState: boolean) => {
+    console.log('用户手动操作右侧面板:', newState ? '展开' : '收起');
+    setIsRightPanelOpen(newState);
+
+    // 记录用户手动操作状态
+    if (newState) {
+      // 用户手动展开面板，标记为用户主动展开
+      userManuallyOpenedRightRef.current = true;
+      console.log('标记: 用户手动展开右侧面板');
+    } else {
+      // 用户手动收起面板，清除"手动展开"标记
+      userManuallyOpenedRightRef.current = false;
+      console.log('标记: 用户手动收起右侧面板');
+    }
+
+    // 如果是高缩放模式且用户展开右侧面板，自动最小化左侧面板（互斥逻辑）
+    if (isHighZoom && newState && isLeftPanelOpen) {
+      setIsLeftPanelOpen(false);
+      userManuallyOpenedLeftRef.current = false;
+      console.log('互斥逻辑: 展开右侧面板时自动关闭左侧面板');
+    }
+  };
+
+  // 自适应面板最小化策略
+  // 根据视口宽度和缩放级别自动最小化面板
+  // 核心原则：
+  // 1. 只在环境变化时触发自动逻辑（缩放级别变化、断点变化）
+  // 2. 用户手动展开的面板不会被自动收起
+  // 3. 用户手动收起的面板不会被自动展开
   useEffect(() => {
-    const handleResize = () => {
-      setViewportWidth(window.innerWidth);
-    };
+    const prevZoomLevel = prevZoomLevelRef.current;
+    const prevBreakpoint = prevBreakpointRef.current;
 
-    window.addEventListener('resize', handleResize);
-    return () => window.removeEventListener('resize', handleResize);
-  }, []);
+    // 检测环境是否发生变化
+    const zoomLevelChanged = Math.abs(zoomLevel - prevZoomLevel) >= 10; // 缩放变化超过10%
+    const breakpointChanged = breakpoint !== prevBreakpoint;
 
-  // 计算最大宽度（视口宽度的60%）
-  const getMaxLeftPanelWidth = () => Math.floor(viewportWidth * 0.6);
+    // 更新 ref 记录当前环境
+    prevZoomLevelRef.current = zoomLevel;
+    prevBreakpointRef.current = breakpoint;
+
+    // 响应式断点适配：视口宽度 <1024px 时自动最小化 DataViewer
+    // 这是强制性的，不管用户是否手动展开
+    if ((is.mobile || is.tablet) && breakpointChanged) {
+      if (isLeftPanelOpen) {
+        setIsLeftPanelOpen(false);
+        userManuallyOpenedLeftRef.current = false;
+        console.log('响应式断点: 自动收起左侧面板 (小屏幕)');
+      }
+    }
+
+    // 响应式断点适配：视口宽度 <768px 时自动隐藏 Session 面板
+    // 这是强制性的，不管用户是否手动展开
+    if (is.mobile && breakpointChanged) {
+      if (isRightPanelOpen) {
+        setIsRightPanelOpen(false);
+        userManuallyOpenedRightRef.current = false;
+        console.log('响应式断点: 自动收起右侧面板 (移动端)');
+      }
+    }
+
+    // 缩放级别响应式面板管理 - 只在缩放级别变化时触发
+    // 并且只有在用户没有手动展开的情况下才自动收起
+    if (zoomLevelChanged && zoomLevel > 200 && is.desktop) {
+      // 首先最小化左侧数据库侧边栏（全局侧边栏）- 最先自动收起
+      // 只有在用户没有手动展开的情况下才自动收起
+      if (isLeftPanelOpen && !userManuallyOpenedLeftRef.current) {
+        setIsLeftPanelOpen(false);
+        console.log('缩放响应: 自动收起左侧数据库面板 (缩放级别:', zoomLevel + '%)');
+      }
+
+      // 如果缩放级别更高（>250%），也最小化右侧会话栏
+      if (zoomLevel > 250 && isRightPanelOpen && !userManuallyOpenedRightRef.current) {
+        setIsRightPanelOpen(false);
+        console.log('缩放响应: 自动收起右侧会话面板 (缩放级别:', zoomLevel + '%)');
+      }
+    }
+
+    // 注意：不自动展开面板，让用户完全控制面板状态
+  }, [viewportWidth, zoomLevel, breakpoint, is, isLeftPanelOpen, isRightPanelOpen]);
+
+  // 计算最大宽度（使用 CSS 变量定义的百分比，默认 40%）
+  const getMaxLeftPanelWidth = () => {
+    // 从 CSS 变量获取最大宽度百分比，默认为 40%
+    const maxWidthPercent = parseFloat(
+      getComputedStyle(document.documentElement)
+        .getPropertyValue('--workspace-left-panel-max-width-percent')
+        .replace('%', '')
+    ) || 40;
+
+    return Math.floor(viewportWidth * (maxWidthPercent / 100));
+  };
   const getMinLeftPanelWidth = () => {
     const maxWidth = getMaxLeftPanelWidth();
     // 确保最小宽度不超过最大宽度，在极小视口下优先保证最大宽度约束
@@ -537,7 +676,19 @@ export const Workspace: React.FC<WorkspaceProps> = ({ project, onBack }) => {
   return (
     <div
       ref={workspaceRootRef}
-      className="h-full flex bg-white overflow-hidden"
+      className={`h-full flex bg-white overflow-hidden ${
+        // 响应式字体大小调整
+        is.mobile ? 'text-sm' : is.tablet ? 'text-base' : 'text-base'
+        } ${
+        // 响应式间距调整
+        is.mobile ? 'gap-0' : is.tablet ? 'gap-1' : 'gap-0'
+        } ${
+        // 响应式布局类
+        is.mobile ? 'workspace-mobile' : is.tablet ? 'workspace-tablet' : 'workspace-desktop'
+        } ${
+        // 高缩放级别适配类
+        getZoomAdaptiveClasses()
+        }`}
       style={{ ['--workspace-left-panel-width' as any]: `${leftPanelWidth}px` }}
     >
       {/* 左侧收起后：最左侧展开把手 */}
@@ -545,7 +696,7 @@ export const Workspace: React.FC<WorkspaceProps> = ({ project, onBack }) => {
         <div className="w-10 border-r border-gray-200 bg-white shrink-0 flex items-start justify-center pt-3">
           <PanelToggleButton
             isOpen={false}
-            onToggle={() => setIsLeftPanelOpen(true)}
+            onToggle={() => handleLeftPanelToggle(true)}
             position="left"
           />
         </div>
@@ -563,7 +714,7 @@ export const Workspace: React.FC<WorkspaceProps> = ({ project, onBack }) => {
           </div>
           <PanelToggleButton
             isOpen={true}
-            onToggle={() => setIsLeftPanelOpen(false)}
+            onToggle={() => handleLeftPanelToggle(false)}
             position="left"
           />
         </div>
@@ -596,25 +747,44 @@ export const Workspace: React.FC<WorkspaceProps> = ({ project, onBack }) => {
       {/* 中间：对话区 */}
       <div className="flex-1 flex flex-col min-w-0 bg-white">
         {/* 顶部标题栏 */}
-        <div className="px-6 py-4 border-b border-gray-200 flex justify-between items-center bg-white sticky top-0 z-10 shadow-sm min-h-12">
+        <div className={`${
+          // 响应式内边距调整
+          is.mobile ? 'px-3 py-2' : is.tablet ? 'px-4 py-3' : 'px-6 py-4'
+          } border-b border-gray-200 flex justify-between items-center bg-white sticky top-0 z-10 shadow-sm min-h-12`}>
           <div className="flex items-center gap-3 min-w-0 flex-1">
             <div className="min-w-0 flex-1">
               <div className="flex items-center gap-2 mb-1 min-w-0">
-                <h2 className="font-bold text-gray-800 text-lg truncate min-w-0">{project.name}</h2>
-                <span className="px-2 py-0.5 bg-gray-100 text-gray-500 text-xs rounded-full border border-gray-200 shrink-0">
+                <h2 className={`font-bold text-gray-800 truncate min-w-0 ${
+                  // 响应式标题字体大小
+                  is.mobile ? 'text-base' : is.tablet ? 'text-lg' : 'text-lg'
+                  }`}>{project.name}</h2>
+                <span className={`px-2 py-0.5 bg-gray-100 text-gray-500 rounded-full border border-gray-200 shrink-0 ${
+                  // 响应式标签字体大小
+                  is.mobile ? 'text-xs' : 'text-xs'
+                  }`}>
                   {project.type}
                 </span>
               </div>
-              <p className="text-xs text-gray-400 flex items-center gap-2 truncate">
-                <span className={`w-2 h-2 rounded-full ${activeSessionId ? 'bg-green-500' : 'bg-gray-300'} shrink-0`}></span>
+              <p className={`text-gray-400 flex items-center gap-2 truncate ${
+                // 响应式副标题字体大小
+                is.mobile ? 'text-xs' : 'text-xs'
+                }`}>
+                <span className={`rounded-full shrink-0 ${activeSessionId ? 'bg-green-500' : 'bg-gray-300'
+                  } ${
+                  // 响应式状态指示器大小
+                  is.mobile ? 'w-1.5 h-1.5' : 'w-2 h-2'
+                  }`}></span>
                 <span className="truncate">当前会话: {activeSession?.name || '未选择'}</span>
               </p>
             </div>
           </div>
-          <div className="flex gap-2 items-center shrink-0">
+          <div className={`flex items-center shrink-0 ${
+            // 响应式按钮间距
+            is.mobile ? 'gap-1' : 'gap-2'
+            }`}>
             <Button
               variant="default"
-              icon={<Info size={16} />}
+              icon={<Info size={is.mobile ? 14 : 16} />}
               onClick={() => setIsInfoModalOpen(true)}
               className="header-button-icon-only"
             >
@@ -623,7 +793,7 @@ export const Workspace: React.FC<WorkspaceProps> = ({ project, onBack }) => {
             {!isRightPanelOpen && (
               <PanelToggleButton
                 isOpen={false}
-                onToggle={() => setIsRightPanelOpen(true)}
+                onToggle={() => handleRightPanelToggle(true)}
                 position="right"
               />
             )}
@@ -639,7 +809,10 @@ export const Workspace: React.FC<WorkspaceProps> = ({ project, onBack }) => {
             const distanceToBottom = el.scrollHeight - el.scrollTop - el.clientHeight;
             isNearBottomRef.current = distanceToBottom < 80;
           }}
-          className="flex-1 overflow-y-auto p-6 space-y-6 bg-gray-50/30"
+          className={`flex-1 overflow-y-auto bg-gray-50/30 ${
+            // 响应式内边距和间距
+            is.mobile ? 'p-3 space-y-3' : is.tablet ? 'p-4 space-y-4' : 'p-6 space-y-6'
+            }`}
         >
           {!activeSessionId ? (
             <div className="h-full flex flex-col items-center justify-center text-gray-400">
@@ -796,7 +969,10 @@ export const Workspace: React.FC<WorkspaceProps> = ({ project, onBack }) => {
         </div>
 
         {/* 底部输入区 */}
-        <div className="p-4 sm:p-6 bg-white border-t border-gray-200">
+        <div className={`bg-white border-t border-gray-200 ${
+          // 响应式内边距
+          is.mobile ? 'p-3' : is.tablet ? 'p-4' : 'p-4 sm:p-6'
+          }`}>
           <div className="max-w-4xl mx-auto">
             {/* 响应式 flex 布局容器 - 改进的布局结构 */}
             <div className="input-bar-container flex items-center bg-gray-50 border border-gray-300 rounded-xl focus-within:ring-2 focus-within:ring-primary focus-within:border-primary shadow-sm overflow-hidden">
@@ -811,20 +987,34 @@ export const Workspace: React.FC<WorkspaceProps> = ({ project, onBack }) => {
                   }
                 }}
                 placeholder={activeSessionId ? "输入您的指令..." : "请先选择左侧会话"}
-                className="input-bar-textarea flex-1 min-w-0 pl-4 py-4 bg-transparent border-none focus:ring-0 focus:outline-none resize-none text-sm h-14 overflow-hidden disabled:opacity-60 disabled:cursor-not-allowed"
+                className={`input-bar-textarea flex-1 min-w-0 bg-transparent border-none focus:ring-0 focus:outline-none resize-none overflow-hidden disabled:opacity-60 disabled:cursor-not-allowed ${
+                  // 响应式输入框样式
+                  is.mobile ? 'pl-3 py-3 text-sm h-12' : 'pl-4 py-4 text-sm h-14'
+                  }`}
                 disabled={isSending || !activeSessionId}
               />
 
               {/* 右侧控件组容器 - 使用绝对定位确保不溢出 */}
-              <div className="input-bar-controls flex items-center gap-1.5 px-2 py-2 shrink-0">
+              <div className={`input-bar-controls flex items-center shrink-0 ${
+                // 响应式控件间距和内边距
+                is.mobile ? 'gap-1 px-1.5 py-1.5' : 'gap-1.5 px-2 py-2'
+                }`}>
                 {/* 模型选择器 - 响应式收缩 */}
-                <div className="model-selector-compact flex items-center bg-white border border-gray-200 rounded-lg shadow-sm px-1.5 h-9 hover:border-gray-300 transition-colors shrink-0 overflow-hidden">
-                  <Bot size={14} className="text-gray-400 shrink-0" />
-                  <span className="model-label text-[10px] text-gray-400 mx-1 select-none hidden sm:inline whitespace-nowrap">模型</span>
+                <div className={`model-selector-compact flex items-center bg-white border border-gray-200 rounded-lg shadow-sm hover:border-gray-300 transition-colors shrink-0 overflow-hidden ${
+                  // 响应式模型选择器尺寸
+                  is.mobile ? 'px-1 h-8' : 'px-1.5 h-9'
+                  }`}>
+                  <Bot size={is.mobile ? 12 : 14} className="text-gray-400 shrink-0" />
+                  <span className="model-label text-gray-400 mx-1 select-none hidden sm:inline whitespace-nowrap" style={{
+                    fontSize: is.mobile ? '9px' : '10px'
+                  }}>模型</span>
                   <select
                     value={selectedModel}
                     onChange={(e) => setSelectedModel(e.target.value)}
-                    className="model-select text-xs bg-transparent border-none focus:ring-0 text-gray-700 font-medium cursor-pointer outline-none p-0 pr-1 truncate min-w-0 overflow-hidden"
+                    className={`model-select bg-transparent border-none focus:ring-0 text-gray-700 font-medium cursor-pointer outline-none p-0 pr-1 truncate min-w-0 overflow-hidden ${
+                      // 响应式选择器字体大小
+                      is.mobile ? 'text-xs' : 'text-xs'
+                      }`}
                     title={`当前模型: ${selectedModel}`}
                   >
                     <option value="xiyan-sql" title="xiyan-sql">xiyan-sql</option>
@@ -837,15 +1027,22 @@ export const Workspace: React.FC<WorkspaceProps> = ({ project, onBack }) => {
                 <button
                   onClick={() => handleSend()}
                   disabled={isSending || !inputValue.trim() || !activeSessionId}
-                  className="send-button p-2 bg-primary text-white rounded-lg hover:bg-primary-hover disabled:opacity-50 disabled:bg-gray-300 transition-colors shadow-sm flex items-center justify-center shrink-0"
-                  style={{ minWidth: '36px', minHeight: '36px' }}
+                  className="send-button bg-primary text-white rounded-lg hover:bg-primary-hover disabled:opacity-50 disabled:bg-gray-300 transition-colors shadow-sm flex items-center justify-center shrink-0"
+                  style={{
+                    minWidth: is.mobile ? '32px' : '36px',
+                    minHeight: is.mobile ? '32px' : '36px',
+                    padding: is.mobile ? '0.375rem' : '0.5rem'
+                  }}
                 >
-                  {isSending ? <Loader2 size={16} className="animate-spin" /> : <Send size={16} />}
+                  {isSending ? <Loader2 size={is.mobile ? 14 : 16} className="animate-spin" /> : <Send size={is.mobile ? 14 : 16} />}
                 </button>
               </div>
             </div>
           </div>
-          <p className="text-center text-xs text-gray-400 mt-2">
+          <p className={`text-center text-gray-400 mt-2 ${
+            // 响应式提示文字大小
+            is.mobile ? 'text-xs' : 'text-xs'
+            }`}>
             AI 内容仅供参考。涉及增删改操作时，系统会请求二次确认。
           </p>
         </div>
@@ -860,33 +1057,45 @@ export const Workspace: React.FC<WorkspaceProps> = ({ project, onBack }) => {
           </div>
           <PanelToggleButton
             isOpen={true}
-            onToggle={() => setIsRightPanelOpen(false)}
+            onToggle={() => handleRightPanelToggle(false)}
             position="right"
           />
         </div>
 
-        <div className="p-4 border-b border-gray-200">
-          <Button onClick={onBack} variant="text" className="mb-4 text-gray-500 hover:text-gray-800 -ml-2 text-sm">
-            <ChevronLeft size={16} className="mr-1" /> 返回项目列表
+        <div className={`p-${is.mobile ? '2' : '3'} border-b border-gray-200`}>
+          <Button onClick={onBack} variant="text" className={`mb-4 text-gray-500 hover:text-gray-800 -ml-2 ${
+            // 响应式按钮字体大小
+            is.mobile ? 'text-sm' : 'text-sm'
+            }`}>
+            <ChevronLeft size={is.mobile ? 14 : 16} className="mr-1" /> 返回项目列表
           </Button>
-          <Button onClick={handleCreateSession} variant="primary" className="w-full justify-center" icon={<Plus size={16} />}>
+          <Button onClick={handleCreateSession} variant="primary" className="w-full justify-center" icon={<Plus size={is.mobile ? 14 : 16} />}>
             新建会话
           </Button>
         </div>
 
-        <div className="flex-1 overflow-y-auto p-3 space-y-1">
+        <div className={`flex-1 overflow-y-auto space-y-1 ${
+          // 响应式会话列表内边距
+          is.mobile ? 'p-2' : 'p-3'
+          }`}>
           {loadingSessions ? (
             <div className="flex justify-center py-4"><Loader2 className="animate-spin text-gray-400" size={20} /></div>
           ) : sessions.map(session => (
             <div
               key={session.id}
               onClick={() => setActiveSessionId(session.id)}
-              className={`group flex items-center gap-3 px-3 py-3 rounded-lg text-sm cursor-pointer transition-colors border border-transparent ${activeSessionId === session.id
-                ? 'bg-white border-gray-200 shadow-sm text-primary'
-                : 'text-gray-600 hover:bg-gray-200/50'
+              className={`group flex items-center gap-3 rounded-lg cursor-pointer transition-colors border border-transparent ${
+                // 响应式会话项内边距
+                is.mobile ? 'px-2 py-2' : 'px-3 py-3'
+                } ${
+                // 响应式会话项字体大小
+                is.mobile ? 'text-sm' : 'text-sm'
+                } ${activeSessionId === session.id
+                  ? 'bg-white border-gray-200 shadow-sm text-primary'
+                  : 'text-gray-600 hover:bg-gray-200/50'
                 }`}
             >
-              <MessageSquare size={16} className="shrink-0" />
+              <MessageSquare size={is.mobile ? 14 : 16} className="shrink-0" />
 
               {editingSessionId === session.id ? (
                 <div className="flex-1 flex items-center gap-1 min-w-0">

@@ -1,0 +1,183 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>DataViewer Drag Resize Test</title>
+  <style>
+    body {
+      margin: 0;
+      font-family: Arial, sans-serif;
+      height: 100vh;
+      overflow: hidden;
+    }
+
+    .workspace {
+      display: flex;
+      height: 100vh;
+      --workspace-left-panel-width: 800px;
+    }
+
+    .left-panel {
+      width: var(--workspace-left-panel-width);
+      background: #f8f9fa;
+      border-right: 1px solid #e9ecef;
+      display: flex;
+      flex-direction: column;
+      flex-shrink: 0;
+    }
+
+    .resize-handle {
+      width: 4px;
+      background: transparent;
+      cursor: col-resize;
+      flex-shrink: 0;
+      transition: background-color 0.2s;
+    }
+
+    .resize-handle:hover {
+      background: #6c757d;
+    }
+
+    .chat-area {
+      flex: 1;
+      background: white;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      min-width: 320px;
+    }
+
+    .panel-header {
+      padding: 1rem;
+      background: #e9ecef;
+      border-bottom: 1px solid #dee2e6;
+      font-weight: bold;
+    }
+
+    .panel-content {
+      flex: 1;
+      padding: 1rem;
+      overflow: auto;
+    }
+
+    .info {
+      position: fixed;
+      top: 10px;
+      right: 10px;
+      background: #007bff;
+      color: white;
+      padding: 10px;
+      border-radius: 4px;
+      font-size: 12px;
+    }
+  </style>
+</head>
+
+<body>
+  <div class="info">
+    <div>Left Panel Width: <span id="width-display">800px</span></div>
+    <div>Viewport Width: <span id="viewport-width">0px</span></div>
+    <div>Max Width (60%): <span id="max-width">0px</span></div>
+  </div>
+
+  <div class="workspace" id="workspace">
+    <div class="left-panel">
+      <div class="panel-header">DataViewer Panel</div>
+      <div class="panel-content">
+        <p>This simulates the DataViewer component.</p>
+        <p>Try dragging the resize handle to the right to adjust the width.</p>
+        <p>The width should be clamped between 200px and 60% of viewport width.</p>
+        <ul>
+          <li>Minimum width: 200px</li>
+          <li>Maximum width: 60% of viewport</li>
+          <li>Current viewport: <span id="current-viewport">0px</span></li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="resize-handle" id="resize-handle" title="Drag to resize"></div>
+
+    <div class="chat-area">
+      <div>
+        <h2>Chat Area</h2>
+        <p>This area should always remain visible and functional.</p>
+        <p>It should have a minimum width of 320px.</p>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const workspace = document.getElementById('workspace');
+    const resizeHandle = document.getElementById('resize-handle');
+    const widthDisplay = document.getElementById('width-display');
+    const viewportWidthDisplay = document.getElementById('viewport-width');
+    const maxWidthDisplay = document.getElementById('max-width');
+    const currentViewportDisplay = document.getElementById('current-viewport');
+
+    let isResizing = false;
+    let startX = 0;
+    let startWidth = 800;
+
+    function updateDisplays() {
+      const viewportWidth = window.innerWidth;
+      const maxWidth = Math.floor(viewportWidth * 0.6);
+      const currentWidth = parseInt(workspace.style.getPropertyValue('--workspace-left-panel-width') || '800');
+
+      widthDisplay.textContent = currentWidth + 'px';
+      viewportWidthDisplay.textContent = viewportWidth + 'px';
+      maxWidthDisplay.textContent = maxWidth + 'px';
+      currentViewportDisplay.textContent = viewportWidth + 'px';
+    }
+
+    function clampWidth(width) {
+      const minWidth = 200;
+      const maxWidth = Math.floor(window.innerWidth * 0.6);
+      return Math.max(minWidth, Math.min(maxWidth, width));
+    }
+
+    resizeHandle.addEventListener('mousedown', (e) => {
+      isResizing = true;
+      startX = e.clientX;
+      startWidth = parseInt(workspace.style.getPropertyValue('--workspace-left-panel-width') || '800');
+
+      document.body.style.userSelect = 'none';
+      document.body.style.cursor = 'col-resize';
+
+      e.preventDefault();
+    });
+
+    document.addEventListener('mousemove', (e) => {
+      if (!isResizing) return;
+
+      const dx = e.clientX - startX;
+      const newWidth = startWidth + dx;
+      const clampedWidth = clampWidth(newWidth);
+
+      workspace.style.setProperty('--workspace-left-panel-width', clampedWidth + 'px');
+      updateDisplays();
+    });
+
+    document.addEventListener('mouseup', () => {
+      if (isResizing) {
+        isResizing = false;
+        document.body.style.userSelect = '';
+        document.body.style.cursor = '';
+      }
+    });
+
+    window.addEventListener('resize', updateDisplays);
+
+    // Initial update
+    updateDisplays();
+
+    // Test the clamping function
+    console.log('Testing width clamping:');
+    console.log('clampWidth(100):', clampWidth(100)); // Should be 200
+    console.log('clampWidth(400):', clampWidth(400)); // Should be 400
+    console.log('clampWidth(1000):', clampWidth(1000)); // Should be clamped to max
+  </script>
+</body>
+
+</html>
