@@ -4,6 +4,7 @@
  */
 
 import React, { useEffect, useCallback } from 'react';
+import { createPortal } from 'react-dom';
 import { ProjectDetailsModalProps } from '../types/project-overview';
 import { formatProjectDate } from '../utils/project-overview';
 import { CSS_CLASSES } from '../constants/project-overview';
@@ -80,7 +81,8 @@ export const ProjectDetailsModal: React.FC<ProjectDetailsModalProps> = ({
 
   const statusInfo = getStatusInfo(project.project_status);
 
-  return (
+  // 创建弹窗内容
+  const modalContent = (
     <div
       className={`${CSS_CLASSES.modal} ${CSS_CLASSES.modalOpen}`}
       onClick={handleBackdropClick}
@@ -160,6 +162,9 @@ export const ProjectDetailsModal: React.FC<ProjectDetailsModalProps> = ({
       </div>
     </div>
   );
+
+  // 使用 Portal 将弹窗渲染到 document.body 中，确保相对于整个页面定位
+  return isOpen ? createPortal(modalContent, document.body) : null;
 };
 
 export default ProjectDetailsModal;
