@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Announcement } from '../types.ts';
-import { Card, Button, Tag, Input, Modal } from '../components/UI.tsx';
+import { Card, Button, Tag, Input, Modal, message, ConfirmDialog } from '../components/UI.tsx';
 import { Plus, Edit, Trash, Megaphone, Loader2 } from 'lucide-react';
 import { announcementApi, CreateAnnouncementParams, UpdateAnnouncementParams } from '../api/announcement.ts';
 
@@ -18,6 +18,10 @@ export const AdminAnnouncements: React.FC = () => {
     const [title, setTitle] = useState('');
     const [content, setContent] = useState('');
     const [status, setStatus] = useState<'published' | 'draft'>('draft');
+
+    // 确认删除对话框状态
+    const [isDeleteConfirmOpen, setIsDeleteConfirmOpen] = useState(false);
+    const [announcementToDelete, setAnnouncementToDelete] = useState<number | null>(null);
 
     // --- 数据获取 ---
     const fetchAnnouncements = async () => {
@@ -88,22 +92,28 @@ export const AdminAnnouncements: React.FC = () => {
             setIsModalOpen(false);
         } catch (error) {
             console.error("Failed to save announcement", error);
-            alert("保存失败，请重试");
+            message.error("保存失败，请重试");
         } finally {
             setIsSaving(false);
         }
     };
 
     const handleDelete = async (id: number) => {
-        if (confirm('确定要删除这条公告吗？')) {
-            try {
-                await announcementApi.delete(id);
-                // 乐观更新 UI
-                setAnnouncements(prev => prev.filter(a => a.announcement_id !== id));
-            } catch (error) {
-                console.error("Delete failed", error);
-                alert("删除失败");
-            }
+        setAnnouncementToDelete(id);
+        setIsDeleteConfirmOpen(true);
+    };
+
+    const confirmDelete = async () => {
+        if (!announcementToDelete) return;
+
+        try {
+            await announcementApi.delete(announcementToDelete);
+            // 乐观更新 UI
+            setAnnouncements(prev => prev.filter(a => a.announcement_id !== announcementToDelete));
+            message.success("公告已删除");
+        } catch (error) {
+            console.error("Delete failed", error);
+            message.error("删除失败");
         }
     };
 
@@ -203,6 +213,19 @@ export const AdminAnnouncements: React.FC = () => {
                     </div>
                 </div>
             </Modal>
+
+            {/* 删除公告确认对话框 */}
+            <ConfirmDialog
+                isOpen={isDeleteConfirmOpen}
+                onClose={() => setIsDeleteConfirmOpen(false)}
+                onConfirm={confirmDelete}
+                title="删除公告"
+                message="确定要删除这条公告吗？删除后无法恢复。"
+                confirmText="删除"
+                cancelText="取消"
+                isDangerous={true}
+                showWarningIcon={true}
+            />
         </div>
     );
 };

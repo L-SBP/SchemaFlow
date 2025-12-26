@@ -12,13 +12,13 @@ from api.v1 import deps
 from service.session_service import session_service
 from schema.session import SessionCreate, SessionUpdate, SessionResponse
 from schema.user import UserMe
-from schema.unified_response import UnifiedResponse
+from schema.unified_response import UnifiedResponse, PageData
 from core.log import log
 
 router = APIRouter()
 
 
-@router.get("/", response_model=UnifiedResponse[List[SessionResponse]], summary="获取会话列表")
+@router.get("/", response_model=UnifiedResponse[PageData[List[SessionResponse]]], summary="获取会话列表")
 async def read_sessions(
     db: AsyncSession = Depends(deps.get_db),
     current_user: UserMe = Depends(deps.get_current_active_user),
@@ -37,16 +37,32 @@ async def read_sessions(
         limit (int): 返回记录数限制。
 
     Returns:
-        UnifiedResponse[List[SessionResponse]]: 会话列表响应。
+        UnifiedResponse[PageData[List[SessionResponse]]]: 分页会话列表响应。
     """
-    result = await session_service.get_sessions(
+    sessions = await session_service.get_sessions(
         db=db,
         user=current_user,
         project_id=project_id,
         skip=skip,
         limit=limit
     )
-    return UnifiedResponse.success(data=result, message="获取会话列表成功")
+    
+    # 获取总数
+    total = await session_service.get_sessions_count(
+        db=db,
+        user=current_user,
+        project_id=project_id
+    )
+    
+    # 构建分页数据
+    page_data = PageData(
+        total=total,
+        page=(skip // limit) + 1,
+        page_size=limit,
+        items=sessions
+    )
+    
+    return UnifiedResponse.success(data=page_data, message="获取会话列表成功")
 
 
 @router.post("/", response_model=UnifiedResponse[SessionResponse], summary="创建新会话")

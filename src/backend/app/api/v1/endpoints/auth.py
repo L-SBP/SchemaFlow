@@ -177,20 +177,18 @@ async def login(
 
     access_token = create_access_token(data={"sub": f"{exist_user.user_id}"})
     if not await service_save_token_in_redis(access_token):
-        log.error("Failed to save token in redis_client")
+        log.error("无法在Redis中保存令牌")
         raise exceptions.RedisOperationFailedException()
+
+    # 获取完整的用户信息
+    from service import user_service
+    user_info = await user_service.get_user_me_service(db, exist_user.user_id)
 
     return UnifiedResponse.success(
         data=LoginData(
             access_token=access_token,
             token_type="bearer",
-            user={
-                "user_id": exist_user.user_id,
-                "username": exist_user.username,
-                "email": exist_user.email,
-                "is_admin": exist_user.is_admin,
-                "avatar_url": exist_user.avatar_url
-            }
+            user=user_info.dict()
         ),
         message="用户登录成功"
     )

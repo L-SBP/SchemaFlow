@@ -8,7 +8,7 @@
 
 from datetime import datetime
 from typing import Optional
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, ConfigDict
 
 # 基础 Schema，包含共享字段
 class SessionBase(BaseModel):
@@ -58,5 +58,4 @@ class SessionResponse(SessionBase):
     created_at: datetime
     last_activity: Optional[datetime]
 
-    class Config:
-        from_attributes = True  # 允许从 ORM 对象读取数据 (Pydantic V2 使用 model_config)
+    model_config = ConfigDict(from_attributes=True)

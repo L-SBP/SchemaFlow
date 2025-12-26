@@ -116,7 +116,7 @@ async def get_table_schema(
     
     # Basic validation
     if not table_name.isidentifier():
-         raise ValidationException("Invalid table name")
+         raise ValidationException("无效的表名")
 
     schema = []
     # === MySQL ===
@@ -174,7 +174,7 @@ async def get_table_data(
     instance = await get_db_instance_by_session(db, session_id, current_user.user_id)
 
     if not table_name.isidentifier():
-        raise ValidationException("Invalid table name")
+        raise ValidationException("无效的表名")
 
     limit = min(limit, 1000)
 

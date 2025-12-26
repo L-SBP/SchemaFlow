@@ -24,7 +24,7 @@ async def service_send_verification_code(email: str) -> None:
     result = await send_verify_email(email)
 
     if not result:
-        log.error(f"Failed to send verification code to {email}")
+        log.error(f"无法发送验证码到 {email}")
         raise exceptions.SendVerificationCodeFailedException()
 
 async def service_verify_code(email: str, code: str) -> bool:
@@ -45,5 +45,5 @@ async def service_verify_code(email: str, code: str) -> bool:
     if result:
         log.info(f"Verified verification code {code} for {email}")
         return True
-    log.error(f"Invalid verification code {code} for {email}")
+    log.error(f"验证码 {code} 对邮箱 {email} 无效")
     raise exceptions.CodeInvalidException()

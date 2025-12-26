@@ -76,7 +76,7 @@ async def generate_ddl(
 # =========================================================
 # 执行部署 (第三步：用户确认 DDL 后调用)
 # =========================================================
-@router.post("/{project_id}/deploy", response_model=UnifiedResponse[schemas.ProjectResponse])
+@router.post("/{project_id}/deploy", response_model=UnifiedResponse[schemas.ProjectDetailOut])
 async def deploy_project(
     project_id: int,
     deploy_data: schemas.ProjectDeployRequest,
@@ -96,7 +96,7 @@ async def deploy_project(
         current_user (Any): 当前登录用户。
 
     Returns:
-        UnifiedResponse[schemas.ProjectResponse]: 部署后的项目信息。
+        UnifiedResponse[schemas.ProjectDetailOut]: 部署后的项目信息。
     """
     result = await project_service.deploy_project_service(
         db, project_id, current_user.user_id, deploy_data
@@ -105,7 +105,7 @@ async def deploy_project(
 
 
 # 2. 获取列表 (分页)
-@router.get("/", response_model=UnifiedResponse[PageData[List[schemas.ProjectResponse]]])
+@router.get("/", response_model=UnifiedResponse[PageData[List[schemas.ProjectListOne]]])
 async def read_projects(
     search: Optional[str] = Query(None),
     page: int = Query(1, ge=1),
@@ -124,7 +124,7 @@ async def read_projects(
         current_user (Any): 当前登录用户。
 
     Returns:
-        UnifiedResponse[PageData[List[schemas.ProjectResponse]]]: 分页项目列表响应。
+        UnifiedResponse[PageData[List[schemas.ProjectListOne]]]: 分页项目列表响应。
     """
     result = await project_service.get_projects_list_service(db, current_user.user_id, search, page, page_size)
     page_data = PageData(
@@ -136,7 +136,7 @@ async def read_projects(
     return UnifiedResponse.success(data=page_data, message="获取项目列表成功")
 
 # 3. 获取详情
-@router.get("/{project_id}", response_model=UnifiedResponse[schemas.ProjectResponse])
+@router.get("/{project_id}", response_model=UnifiedResponse[schemas.ProjectDetailOut])
 async def read_project_detail(
     project_id: int,
     db: Session = Depends(deps.get_db),
@@ -151,13 +151,13 @@ async def read_project_detail(
         current_user (Any): 当前登录用户。
 
     Returns:
-        UnifiedResponse[schemas.ProjectResponse]: 项目详情响应。
+        UnifiedResponse[schemas.ProjectDetailOut]: 项目详情响应。
     """
     result = await project_service.get_project_detail_service(db, project_id, current_user.user_id)
     return UnifiedResponse.success(data=result, message="获取项目详情成功")
 
 # 4. 更新项目
-@router.patch("/{project_id}", response_model=UnifiedResponse[schemas.ProjectResponse])
+@router.patch("/{project_id}", response_model=UnifiedResponse[schemas.ProjectDetailOut])
 async def update_project_info(
     project_id: int,
     update_data: schemas.ProjectUpdate,
@@ -174,7 +174,7 @@ async def update_project_info(
         current_user (Any): 当前登录用户。
 
     Returns:
-        UnifiedResponse[schemas.ProjectResponse]: 更新后的项目信息响应。
+        UnifiedResponse[schemas.ProjectDetailOut]: 更新后的项目信息响应。
     """
     result = await project_service.update_project_info_service(db, project_id, current_user.user_id, update_data.model_dump(exclude_unset=True))
     return UnifiedResponse.success(data=result, message="项目信息更新成功")

@@ -72,7 +72,8 @@ async def validation_exception_handler(request: Request, exc: RequestValidationE
     Returns:
         JSONResponse: 标准化的错误响应
     """
-    log.warning(f"ValidationError: {exc.errors()}", extra={"path": request.url.path, "method": request.method})
+    error_info = str(exc.errors())
+    log.warning(f"ValidationError: {error_info}", extra={"path": request.url.path, "method": request.method})
     
     # 提取验证错误信息
     error_details = []
@@ -102,7 +103,8 @@ async def pydantic_validation_exception_handler(request: Request, exc: Validatio
     Returns:
         JSONResponse: 标准化的错误响应
     """
-    log.warning(f"PydanticValidationError: {exc.errors()}", extra={"path": request.url.path, "method": request.method})
+    error_info = str(exc.errors())
+    log.warning(f"PydanticValidationError: {error_info}", extra={"path": request.url.path, "method": request.method})
     
     # 提取验证错误信息
     error_details = []

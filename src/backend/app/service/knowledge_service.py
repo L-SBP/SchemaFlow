@@ -56,11 +56,11 @@ async def create_knowledge_service(
     # 1. 检查项目权限
     project = await crud_project.get(db, project_id)
     if not project or project.user_id != user_id:
-        raise ItemNotFoundException("Project not found or access denied.")
+        raise ItemNotFoundException("项目未找到或访问被拒绝")
 
     # 2. 检查术语是否已存在
     if await crud_knowledge.check_term_exists(db, project_id, data.term):
-        raise ValidationException(f"Term '{data.term}' already exists in this project.")
+        raise ValidationException(f"术语 '{data.term}' 在此项目中已存在")
 
     # 3. 创建
     new_term = await crud_knowledge.create(db, project_id=project_id, **data.model_dump())
@@ -96,17 +96,17 @@ async def update_knowledge_service(
     # 1. 查数据
     db_obj = await crud_knowledge.get(db, knowledge_id)
     if not db_obj:
-        raise ItemNotFoundException(f"Term {knowledge_id} not found.")
+        raise ItemNotFoundException(f"术语 {knowledge_id} 未找到")
 
     # 2. 安全校验：确保 URL 里的 project_id 和数据库里记录的一致
     # 防止用户在 URL A 项目下，却试图修改 B 项目的术语
     if db_obj.project_id != project_id:
-        raise ItemNotFoundException("Term does not belong to this project.")
+        raise ItemNotFoundException("术语不属于此项目")
 
     # 3. 查权限 (检查用户是否拥有该项目)
     project = await crud_project.get(db, project_id=project_id)
     if not project or project.user_id != user_id:
-        raise OperationNotPermittedException("Access denied.")
+        raise OperationNotPermittedException("访问被拒绝")
 
     # 4. 更新
     updated_obj = await crud_knowledge.update(db, db_obj, update_data.model_dump(exclude_unset=True))
@@ -140,7 +140,7 @@ async def batch_delete_knowledge_service(
     # 1. 权限检查
     project = await crud_project.get(db, project_id)
     if not project or project.user_id != user_id:
-        raise OperationNotPermittedException("Access denied.")
+        raise OperationNotPermittedException("访问被拒绝")
 
     count = await crud_knowledge.remove_multi(db, project_id, knowledge_ids)
     return count
@@ -178,7 +178,7 @@ async def get_knowledge_list_service(
     # 1. 检查项目权限
     project = await crud_project.get(db, project_id)
     if not project or project.user_id != user_id:
-        raise ItemNotFoundException("Project not found.")
+        raise ItemNotFoundException("项目未找到")
 
     skip = (page - 1) * page_size
     total = await crud_knowledge.get_total_count(db, project_id, search)
@@ -217,11 +217,11 @@ async def import_knowledge_service(
     # 1. 权限检查
     project = await crud_project.get(db, project_id)
     if not project or project.user_id != user_id:
-        raise ItemNotFoundException("Project not found.")
+        raise ItemNotFoundException("项目未找到")
 
     # 2. 文件读取与解析 ---- 改为支持excel和csv
     if not file.filename.endswith(('.xlsx', '.xls', '.csv')):
-        raise ValidationException("Only .xlsx, .xls, .csv files are supported.")
+        raise ValidationException("仅支持 .xlsx, .xls, .csv 文件")
 
     # 2. 读取文件
     content = await file.read()
@@ -243,7 +243,7 @@ async def import_knowledge_service(
             # Excel 文件是二进制格式，不需要指定 encoding
             df = pd.read_excel(io.BytesIO(content))
     except Exception as e:
-        raise ValidationException(f"Failed to parse file: {str(e)}")
+        raise ValidationException(f"解析文件失败: {str(e)}")
 
     # 3. 校验表头 (假设模板列名为 term, definition, examples)
     # 支持中文列名，如 "术语", "定义", "示例"
@@ -321,7 +321,7 @@ async def export_knowledge_service(
     # 1. 权限检查
     project = await crud_project.get(db, project_id)
     if not project or project.user_id != user_id:
-        raise ItemNotFoundException("Project not found.")
+        raise ItemNotFoundException("项目未找到")
 
     # 2. 获取数据
     all_terms = await crud_knowledge.get_all_by_project(db, project_id)

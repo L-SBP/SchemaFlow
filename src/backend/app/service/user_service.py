@@ -278,7 +278,7 @@ async def service_logout(
     """
     # 从Redis中删除token，使其失效
     if not await service_abolish_token_in_redis(token):
-        log.error(f"Failed to abolish token {token} in redis_client")
+        log.error(f"无法废除Redis中的令牌 {token}")
         # 注意：即使 Redis 删除失败，通常也应该继续记录登出日志
 
     # 获取用户ID
@@ -401,7 +401,7 @@ async def update_password_service(
             raise exceptions.UserNotFoundException()
 
         if not verify_password(password_data.old_password, db_user.password_hash):
-            raise exceptions.PasswordInvalidException("Old password is incorrect.")
+            raise exceptions.PasswordInvalidException("旧密码不正确")
 
         new_hashed_password = get_password_hash(password_data.new_password)
 

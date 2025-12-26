@@ -140,7 +140,7 @@ async def batch_delete_terms(
         imported_count=0,
         failed_count=0,
         failures=[],
-        message=f"Successfully deleted {count} items."
+        message=f"成功删除 {count} 项"
     )
     return UnifiedResponse.success(data=delete_result, message="批量删除术语成功")
 

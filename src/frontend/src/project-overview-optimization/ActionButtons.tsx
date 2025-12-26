@@ -39,8 +39,8 @@ export const ActionButtons: React.FC<ActionButtonsProps> = ({
         title="编辑项目"
         aria-label={`编辑项目 ${projectId}`}
         style={{
-          minWidth: `${ACTION_BUTTON_MIN_SIZE}px`,
-          minHeight: `${ACTION_BUTTON_MIN_SIZE}px`,
+          minWidth: `24px`,
+          minHeight: `24px`,
         }}
       >
         <svg
@@ -65,8 +65,8 @@ export const ActionButtons: React.FC<ActionButtonsProps> = ({
         title="删除项目"
         aria-label={`删除项目 ${projectId}`}
         style={{
-          minWidth: `${ACTION_BUTTON_MIN_SIZE}px`,
-          minHeight: `${ACTION_BUTTON_MIN_SIZE}px`,
+          minWidth: `24px`,
+          minHeight: `24px`,
         }}
       >
         <svg

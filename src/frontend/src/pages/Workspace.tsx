@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Project, Message, QueryResult, ChatSession, ChatResponse } from '../types';
-import { Button, message as GlobalMessage, Modal } from '../components/UI';
+import { Button, message as GlobalMessage, Modal, ConfirmDialog } from '../components/UI';
 import { Send, Plus, MessageSquare, Edit2, Trash2, Check, X, ChevronLeft, Loader2, Sparkles, AlertTriangle, Play, Ban, Table as TableIcon, Info, Bot, Database, PanelLeftClose, PanelLeftOpen, PanelRightClose, PanelRightOpen } from 'lucide-react';
 import { sessionApi } from '../api/session';
 import { ProjectWizard } from '../components/ProjectWizard';
@@ -54,26 +54,27 @@ const mapBackendMessageToFrontend = (msg: ChatResponse): Message => {
   let type: Message['type'] = 'text';
   let tableData: QueryResult | undefined = undefined;
 
-  // 1. 如果有 data 字段且不为空，优先展示表格
-  if (msg.data && Array.isArray(msg.data) && msg.data.length > 0) {
+  // 判断是否是错误消息
+  const isError = msg.sql_type === 'ERROR' || (msg.content && msg.content.trim().startsWith('❌'));
+
+  // 1. 如果是错误消息，设置为错误类型
+  if (isError) {
+    type = 'error';
+  }
+  // 2. 如果有 data 字段且不为空，优先展示表格
+  else if (msg.data && Array.isArray(msg.data) && msg.data.length > 0) {
     type = 'table';
-    // 假设 data 是对象数组，取第一个对象的 key 作为列名
-    const columns = Object.keys(msg.data[0]);
     tableData = {
-      columns: columns,
+      columns: msg.data.length > 0 ? Object.keys(msg.data[0]) : [],
       data: msg.data
     };
   }
 
   // 初始获取内容
   let displayText = msg.content || '';
-  let sqlText = msg.sql_text;
+  let sqlText = msg.sql_text; // 直接使用后端返回的sql_text
 
-  // 判断是否是错误消息
-  const isError = displayText.trim().startsWith('❌');
-
-  // --- 关键修复：如果后端未返回 sql_text (如历史记录)，尝试从文本提取 ---
-  // FIX: 如果是错误消息，不尝试提取 SQL，避免将错误详情中的 SQL 关键字误判为代码
+  // --- 关键修复：优先使用后端返回的sql_text，仅作为兜底才从文本提取 ---
   if (!sqlText && !isError) {
     // 1. 尝试匹配 Markdown 代码块 (```sql ... ```)
     const markdownMatch = displayText.match(/```(sql)?\s*([\s\S]*?)\s*```/i);
@@ -82,11 +83,8 @@ const mapBackendMessageToFrontend = (msg: ChatResponse): Message => {
     }
     // 2. 尝试匹配纯文本模式 (针对 "已生成查询语句：" 这种无 Markdown 的场景)
     else {
-      // FIX: 优化正则，使用非贪婪匹配 [\s\S]+? 并尝试在分号 ; 或双换行 \n\n 处停止，
-      // 防止正则吞掉 SQL 语句后面的普通文本说明。
       const plainMatch = displayText.match(/(?:已生成SQL语句[：:]\s*)?\n?((?:SELECT|INSERT|UPDATE|DELETE|DROP|CREATE|ALTER)\s+[\s\S]+?(?:;|\n\n|$))/i);
       if (plainMatch && plainMatch[1]) {
-        // 简单的二次校验：长度大于 10 且包含空格，避免误判
         const potentialSql = plainMatch[1].trim();
         if (potentialSql.length > 10) {
           sqlText = potentialSql;
@@ -96,20 +94,16 @@ const mapBackendMessageToFrontend = (msg: ChatResponse): Message => {
   }
 
   // 如果提取到了 SQL，进行文本清洗，避免重复显示
-  if (sqlText && sqlText.trim()) {
-    // 1. 优先移除 Markdown 块 (Markdown 结构明确，移除是安全的)
+  if (sqlText && sqlText.trim() && !isError) {
+    // 1. 优先移除 Markdown 块
     const codeBlockRegex = /```(sql)?\s*[\s\S]*?\s*```/gi;
     if (codeBlockRegex.test(displayText)) {
       displayText = displayText.replace(codeBlockRegex, '');
     }
-    // 2. 针对纯文本 SQL 的清理逻辑：仅从文本中移除 SQL 部分，保留其他说明文字
+    // 2. 针对纯文本 SQL 的清理逻辑
     else {
       displayText = displayText.replace(sqlText, '');
     }
-
-    // 3. 移除特定的提示语 (如果 SQL 被提取了，这些提示语也就没用了)
-    // FIX: 注释掉此行，以保留 "已生成查询语句：" 这样的提示文字，实现文字与SQL的分离显示
-    // displayText = displayText.replace(/已生成查询语句[：:]\s*/g, '');
 
     // 额外的清理：移除可能残留的空 Markdown 标记
     displayText = displayText.replace(/```\s*```/g, '');
@@ -125,7 +119,7 @@ const mapBackendMessageToFrontend = (msg: ChatResponse): Message => {
     sql: sqlText || undefined, // SQL 语句，有值时前端会渲染黑框
     tableData: tableData,
     timestamp: Date.now(), // 历史接口暂无时间戳，使用当前时间
-    requiresConfirmation: msg.requires_confirmation // 是否需要确认
+    requiresConfirmation: msg.requires_confirmation || false // 使用后端返回的确认标志
   };
 };
 
@@ -136,6 +130,10 @@ export const Workspace: React.FC<WorkspaceProps> = ({ project, onBack }) => {
   const [loadingSessions, setLoadingSessions] = useState(false);
   // loadingMessages 未直接使用在 JSX 中，但可用于后续扩展 loading 骨架屏
   const [loadingMessages, setLoadingMessages] = useState(false);
+
+  // 确认删除对话框状态
+  const [isDeleteConfirmOpen, setIsDeleteConfirmOpen] = useState(false);
+  const [sessionToDelete, setSessionToDelete] = useState<string>('');
 
   // 布局状态：左右面板最小化/展开
   const [isLeftPanelOpen, setIsLeftPanelOpen] = useState(true);
@@ -445,15 +443,17 @@ export const Workspace: React.FC<WorkspaceProps> = ({ project, onBack }) => {
       setLoadingSessions(true);
       try {
         if (!project.id) return;
-        // 调用后端获取会话列表
+        // 调用后端获取会话列表 - API已更新为UnifiedResponse格式
         const res = await sessionApi.getList(project.id);
 
         if (isMounted) {
-          const mappedSessions: ChatSession[] = res.map(item => ({
+          // 处理分页响应数据
+          const sessionItems = Array.isArray(res) ? res : (res?.items || []);
+          const mappedSessions: ChatSession[] = sessionItems.map(item => ({
             id: item.session_id.toString(),
             name: item.session_name,
             messages: [], // 列表接口不返回消息详情，需懒加载
-            updatedAt: new Date(item.created_at).getTime()
+            updated_at: new Date(item.created_at).getTime()
           }));
           setSessions(mappedSessions);
 
@@ -464,7 +464,10 @@ export const Workspace: React.FC<WorkspaceProps> = ({ project, onBack }) => {
         }
       } catch (error) {
         console.error('Fetch sessions error:', error);
-        GlobalMessage.error('获取会话列表失败');
+        // 错误已由API客户端统一处理，这里只需记录日志
+        if (isMounted) {
+          GlobalMessage.error('获取会话列表失败，请稍后重试');
+        }
       } finally {
         if (isMounted) setLoadingSessions(false);
       }
@@ -485,16 +488,21 @@ export const Workspace: React.FC<WorkspaceProps> = ({ project, onBack }) => {
 
       setLoadingMessages(true);
       try {
-        // 调用后端获取消息历史
+        // 调用后端获取消息历史 - API已更新为UnifiedResponse格式
         const res = await sessionApi.getMessages(Number(activeSessionId));
+
+        // 处理响应数据 - 后端返回ChatResponse[]数组
+        const messageItems = Array.isArray(res) ? res : [];
         // 使用更新后的 map 函数处理消息
-        const mappedMessages = res.map(mapBackendMessageToFrontend);
+        const mappedMessages = messageItems.map(mapBackendMessageToFrontend);
 
         setSessions(prev => prev.map(s =>
           s.id === activeSessionId ? { ...s, messages: mappedMessages } : s
         ));
       } catch (error) {
         console.error('Fetch messages error:', error);
+        // 错误已由API客户端统一处理，这里只需记录日志
+        GlobalMessage.error('获取消息历史失败，请稍后重试');
       } finally {
         setLoadingMessages(false);
       }
@@ -513,32 +521,41 @@ export const Workspace: React.FC<WorkspaceProps> = ({ project, onBack }) => {
         id: res.session_id.toString(),
         name: res.session_name,
         messages: [],
-        updatedAt: Date.now()
+        updated_at: Date.now()
       };
       setSessions(prev => [newSession, ...prev]);
       setActiveSessionId(newSession.id);
       GlobalMessage.success('会话创建成功');
     } catch (error) {
-      GlobalMessage.error('创建会话失败');
+      console.error('Create session error:', error);
+      // 错误已由API客户端统一处理，这里只需记录日志
+      GlobalMessage.error('创建会话失败，请稍后重试');
     }
   };
 
   const handleDeleteSession = async (e: React.MouseEvent, id: string) => {
     e.stopPropagation();
-    if (!confirm("确定要删除此会话吗？")) return;
+    setSessionToDelete(id);
+    setIsDeleteConfirmOpen(true);
+  };
+
+  const confirmDeleteSession = async () => {
+    if (!sessionToDelete) return;
 
     try {
-      await sessionApi.delete(Number(id));
+      await sessionApi.delete(Number(sessionToDelete));
       setSessions(prev => {
-        const remaining = prev.filter(s => s.id !== id);
-        if (activeSessionId === id) {
+        const remaining = prev.filter(s => s.id !== sessionToDelete);
+        if (activeSessionId === sessionToDelete) {
           setActiveSessionId(remaining.length > 0 ? remaining[0].id : '');
         }
         return remaining;
       });
       GlobalMessage.success('会话已删除');
     } catch (error) {
-      GlobalMessage.error('删除会话失败');
+      console.error('Delete session error:', error);
+      // 错误已由API客户端统一处理，这里只需记录日志
+      GlobalMessage.error('删除会话失败，请稍后重试');
     }
   };
 
@@ -558,7 +575,9 @@ export const Workspace: React.FC<WorkspaceProps> = ({ project, onBack }) => {
         ));
         GlobalMessage.success('重命名成功');
       } catch (error) {
-        GlobalMessage.error('重命名失败');
+        console.error('Rename session error:', error);
+        // 错误已由API客户端统一处理，这里只需记录日志
+        GlobalMessage.error('重命名失败，请稍后重试');
       }
     }
     setEditingSessionId(null);
@@ -582,7 +601,7 @@ export const Workspace: React.FC<WorkspaceProps> = ({ project, onBack }) => {
 
     setSessions(prev => prev.map(s =>
       s.id === activeSessionId
-        ? { ...s, messages: [...s.messages, userMsg], updatedAt: Date.now() }
+        ? { ...s, messages: [...s.messages, userMsg], updated_at: Date.now() }
         : s
     ));
     setInputValue('');
@@ -616,10 +635,11 @@ export const Workspace: React.FC<WorkspaceProps> = ({ project, onBack }) => {
 
     } catch (error: any) {
       console.error('Send message failed:', error);
+      // 错误已由API客户端统一处理，这里只需记录日志和显示用户友好的错误消息
       const errorMsg: Message = {
         id: `err_${Date.now()}`,
         role: 'model',
-        text: '抱歉，请求失败或超时，请稍后重试。',
+        text: '抱歉，请求失败或超时，请稍后重试。如果问题持续存在，请联系管理员。',
         type: 'error',
         timestamp: Date.now()
       };
@@ -645,18 +665,38 @@ export const Workspace: React.FC<WorkspaceProps> = ({ project, onBack }) => {
           if (s.id !== activeSessionId) return s;
 
           // 更新原消息状态，移除确认按钮
-          const updatedMessages = s.messages.map(m =>
-            m.id === messageId ? { ...m, requiresConfirmation: false } : m
-          );
+          const updatedMessages = s.messages.map(m => {
+            if (m.id === messageId) {
+              // 根据执行结果更新消息
+              if (res.sql_type === 'ERROR') {
+                return {
+                  ...m,
+                  requiresConfirmation: false,
+                  type: 'error' as const,
+                  text: res.content // 显示错误信息
+                };
+              } else {
+                return {
+                  ...m,
+                  requiresConfirmation: false,
+                  type: aiMsg.type,
+                  tableData: aiMsg.tableData,
+                  text: m.text + '\n\n✅ 执行成功'
+                };
+              }
+            }
+            return m;
+          });
 
           return {
             ...s,
-            messages: [...updatedMessages, aiMsg]
+            messages: updatedMessages
           };
         }));
       } catch (error) {
         console.error('Confirm message failed:', error);
-        GlobalMessage.error('执行失败');
+        // 错误已由API客户端统一处理，这里只需记录日志
+        GlobalMessage.error('执行失败，请稍后重试');
       } finally {
         setIsSending(false);
       }
@@ -1152,6 +1192,19 @@ export const Workspace: React.FC<WorkspaceProps> = ({ project, onBack }) => {
           viewOnly={true}
         />
       </Modal>
+
+      {/* 删除会话确认对话框 */}
+      <ConfirmDialog
+        isOpen={isDeleteConfirmOpen}
+        onClose={() => setIsDeleteConfirmOpen(false)}
+        onConfirm={confirmDeleteSession}
+        title="删除会话"
+        message="确定要删除此会话吗？删除后无法恢复。"
+        confirmText="删除"
+        cancelText="取消"
+        isDangerous={true}
+        showWarningIcon={true}
+      />
     </div>
   );
 };

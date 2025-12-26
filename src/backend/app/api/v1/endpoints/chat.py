@@ -116,4 +116,9 @@ async def confirm_message_execution(
 ):
     log.info(f"User {current_user.user_id} confirming message {message_id}")
     result = await confirm_and_execute_sql(db, message_id, current_user.user_id)
-    return UnifiedResponse.success(data=result, message="SQL 执行成功")
+    
+    # 根据执行结果返回不同的消息
+    if result.sql_type == "ERROR":
+        return UnifiedResponse.success(data=result, message="SQL 执行失败")
+    else:
+        return UnifiedResponse.success(data=result, message="SQL 执行成功")

@@ -11,6 +11,7 @@ from pydantic import BaseModel, Field, ConfigDict
 from typing import Optional, List, Literal, Any
 from datetime import datetime
 from schema.user import UserMe  # 确保这里能导入 UserMe
+from schema.announcement import AnnouncementResponse  # 导入统一的公告响应模型
 
 
 # ----------------------------------------------------------------------
@@ -206,30 +207,6 @@ class AnnouncementUpdateRequest(BaseModel):
     title: Optional[str] = None
     content: Optional[str] = None
     status: Optional[Literal["draft", "published", "unpublished", "expired"]] = None
-
-
-class AnnouncementResponse(BaseModel):
-    """
-    公告响应 Schema。
-
-    Attributes:
-        announcement_id (int): 公告 ID。
-        title (str): 公告标题。
-        content (str): 公告内容。
-        status (str): 公告状态。
-        created_at (datetime): 创建时间。
-        updated_at (Optional[datetime]): 更新时间。
-        created_by (Optional[int]): 创建人 ID。
-    """
-    announcement_id: int
-    title: str
-    content: str
-    status: str
-    created_at: datetime
-    updated_at: Optional[datetime] = None
-    created_by: Optional[int] = None  # 允许为空
-
-    model_config = ConfigDict(from_attributes=True)
 
 
 # ----------------------------------------------------------------------

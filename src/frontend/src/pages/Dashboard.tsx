@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { ProjectDTO, fetchProjects, createProject, updateProject, confirmDeleteProject, deleteProject } from '../api/project';
 import { ProjectStatusEnum } from '../types';
-import { Button, Modal, Input } from '../components/UI';
-import { Plus, PlayCircle, Sparkles, Edit3, Trash2, AlertTriangle, LayoutDashboard, Database } from 'lucide-react';
+import { Button, Modal, Input, message } from '../components/UI';
+import { Plus, PlayCircle, Sparkles, AlertTriangle, LayoutDashboard, Database } from 'lucide-react';
 import { ProjectWizard } from '../components/ProjectWizard';
 import { ProjectOverview } from '../project-overview-optimization/ProjectOverview';
 import { ProjectData } from '../types/project-overview';
@@ -68,7 +68,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ onProjectSelect }) => {
     setError(null);
     try {
       const data = await fetchProjects();
-      setProjects(data);
+      setProjects(data.items);
     } catch (error) {
       console.error("Failed to load projects:", error);
       setError("Failed to load projects. Please try again.");
@@ -98,7 +98,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ onProjectSelect }) => {
       console.error("Failed to create project:", e);
       setIsDeploying(false);
       setCurrentProjectId(null);
-      alert("创建失败，请检查网络或重试");
+      message.error("创建失败，请检查网络或重试");
     }
   };
 
@@ -147,7 +147,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ onProjectSelect }) => {
       loadProjects();
     } catch (err) {
       console.error("Delete failed", err);
-      alert("删除失败，请确认输入的验证信息正确");
+      message.error("删除失败，请确认输入的验证信息正确");
     }
   };
 
@@ -173,7 +173,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ onProjectSelect }) => {
       loadProjects();
     } catch (err) {
       console.error("Update failed", err);
-      alert("更新项目信息失败");
+      message.error("更新项目信息失败");
     }
   };
 

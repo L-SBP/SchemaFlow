@@ -6,19 +6,20 @@
 .action-buttons {
   /* Requirement 5.1: Positioned in top-right corner */
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   justify-content: flex-end;
-  margin-top: -2px;
-  /* Align with title baseline */
+  /* 调整垂直对齐，使图标与标题文本基线对齐 */
+  margin-top: 0;
+  height: 24px;
+  /* 与图标高度一致 */
 }
 
 .action-button {
-  /* Requirement 5.2: Compact design with reduced width */
-  /* Requirement 5.3: Minimum 32x32 pixel clickable area */
-  min-width: 32px;
-  min-height: 32px;
-  width: 32px;
-  height: 32px;
+  /* 缩小点击区域 - 从28x28减小到24x24 */
+  min-width: 24px;
+  min-height: 24px;
+  width: 24px;
+  height: 24px;
 
   /* Requirement 5.4: Icon-only display */
   padding: 0;

@@ -1,17 +1,7 @@
 // src/api/auth.ts
 import client from './client.ts';
-// 假设您现有的 UserRole 定义在 types 目录
-import { UserRole } from '../types.ts';
 
 // --- 类型定义 (参考 API 文档 V1.3) ---
-
-
-export interface ApiResponse<T> {
-  code: number;
-  message: string;
-  data: T;
-}
-
 
 // 2.3 登录请求参数
 export interface LoginRequest {
@@ -19,17 +9,25 @@ export interface LoginRequest {
   password: string;
 }
 
-// 2.3 登录响应结构
-export interface LoginResponse {
+// User information structure
+export interface UserMe {
+  user_id: number;
+  username: string;
+  email: string;
+  status: 'normal' | 'suspended' | 'banned';
+  used_databases: number;
+  max_databases: number;
+  avatar_url: string | null;
+  is_admin: boolean;
+  last_login_at: string | null;
+  created_at: string;
+}
+
+// 2.3 登录响应数据结构 (适配 UnifiedResponse<LoginData>)
+export interface LoginData {
   access_token: string;
   token_type: string;
-  user: {
-    user_id: number;
-    username: string;
-    email: string;
-    is_admin: boolean;
-    avatar_url: string;
-  };
+  user: UserMe;
 }
 
 // 2.2 注册请求参数
@@ -82,9 +80,10 @@ export const authApi = {
   /**
    * 2.3 用户登录
    * @param data 登录凭证
+   * @returns Promise<LoginData> - 登录成功后的用户数据和令牌
    */
   login: (data: LoginRequest) => {
-    return client.post<any, ApiResponse<LoginResponse>>('/v1/auth/login', data);
+    return client.post<any, LoginData>('/v1/auth/login', data);
   },
 
   /**

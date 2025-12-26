@@ -281,11 +281,14 @@ export const Modal: React.FC<ModalProps> = ({ isOpen, onClose, title, children, 
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-gray-900/60 backdrop-blur-sm p-2 sm:p-4 transition-opacity duration-300 overflow-y-auto">
             <div className={`bg-white rounded-xl shadow-2xl w-full ${maxWidth} animate-in fade-in zoom-in-95 duration-200 flex flex-col max-h-[95vh] max-h-[95dvh] overflow-hidden my-auto`}>
                 {/* Header */}
-                <div className="px-4 sm:px-8 py-4 sm:py-5 border-b border-gray-100 flex justify-between items-center shrink-0 bg-white gap-2">
-                    <h3 className="text-base sm:text-lg font-bold text-gray-800 tracking-tight truncate">{title}</h3>
-                    <button onClick={onClose} className="text-gray-400 hover:text-gray-600 transition-colors bg-gray-50 hover:bg-gray-100 p-1.5 rounded-full shrink-0">
-                        <span className="sr-only">Close</span>
-                        <X size={18} />
+                <div className="px-4 sm:px-8 py-4 sm:py-5 border-b border-gray-100 flex justify-between items-center shrink-0 bg-white gap-2 min-h-[64px]">
+                    <h3 className="text-base sm:text-lg font-bold text-gray-800 tracking-tight truncate flex-1 min-w-0 flex items-center">{title}</h3>
+                    <button
+                        onClick={onClose}
+                        className="text-gray-400 hover:text-gray-600 transition-colors hover:bg-gray-100 rounded-full shrink-0 w-7 h-7 flex items-center justify-center ml-2"
+                        aria-label="关闭弹窗"
+                    >
+                        <X size={14} />
                     </button>
                 </div>
                 {/* Content - 可滚动区域 */}
@@ -352,7 +355,7 @@ export const message = {
 /**
  * 全局消息容器组件
  * 需挂载在 App 根节点
- * 支持响应式布局
+ * 支持响应式布局，在画面中心显示
  */
 export const ToastContainer: React.FC = () => {
     const [toasts, setToasts] = useState<ToastData[]>([]);
@@ -373,32 +376,40 @@ export const ToastContainer: React.FC = () => {
     };
 
     return (
-        <div className="fixed top-2 sm:top-6 left-2 right-2 sm:left-auto sm:right-6 z-[100] flex flex-col gap-2 sm:gap-3 pointer-events-none">
-            {toasts.map(toast => (
-                <div
-                    key={toast.id}
-                    className={`pointer-events-auto w-full sm:min-w-[320px] sm:max-w-md p-3 sm:p-4 rounded-lg shadow-lg border-l-4 transform transition-all duration-300 animate-in slide-in-from-right-full fade-in bg-white flex items-start gap-2 sm:gap-3
-            ${toast.type === 'success' ? 'border-green-500 bg-green-50/50' :
-                            toast.type === 'error' ? 'border-red-500 bg-red-50/50' :
-                                toast.type === 'warning' ? 'border-orange-500 bg-orange-50/50' : 'border-blue-500 bg-blue-50/50'}`}
-                >
-                    {/* Icon */}
-                    <div className="shrink-0 mt-0.5">
-                        {toast.type === 'success' && <CheckCircle size={18} className="text-green-500" />}
-                        {toast.type === 'error' && <AlertCircle size={18} className="text-red-500" />}
-                        {toast.type === 'warning' && <AlertTriangle size={18} className="text-orange-500" />}
-                        {toast.type === 'info' && <Info size={18} className="text-blue-500" />}
+        <div className="fixed inset-0 z-[100] pointer-events-none flex items-center justify-center">
+            <div className="flex flex-col gap-3 max-w-md w-full mx-4">
+                {toasts.map(toast => (
+                    <div
+                        key={toast.id}
+                        className={`pointer-events-auto w-full p-4 rounded-lg shadow-xl border transform transition-all duration-300 animate-in zoom-in-95 fade-in bg-white flex items-center gap-3 min-h-[56px]
+                ${toast.type === 'success' ? 'border-green-200 bg-green-50/90 backdrop-blur-sm' :
+                                toast.type === 'error' ? 'border-red-200 bg-red-50/90 backdrop-blur-sm' :
+                                    toast.type === 'warning' ? 'border-orange-200 bg-orange-50/90 backdrop-blur-sm' : 'border-blue-200 bg-blue-50/90 backdrop-blur-sm'}`}
+                    >
+                        {/* Icon */}
+                        <div className="shrink-0 flex items-center justify-center">
+                            {toast.type === 'success' && <CheckCircle size={20} className="text-green-600" />}
+                            {toast.type === 'error' && <AlertCircle size={20} className="text-red-600" />}
+                            {toast.type === 'warning' && <AlertTriangle size={20} className="text-orange-600" />}
+                            {toast.type === 'info' && <Info size={20} className="text-blue-600" />}
+                        </div>
+                        {/* Content */}
+                        <div className="flex-1 text-sm text-gray-800 font-medium break-words leading-relaxed min-w-0 flex items-center">
+                            {toast.content}
+                        </div>
+                        {/* Close */}
+                        <button
+                            onClick={() => removeToast(toast.id)}
+                            className="text-gray-400 hover:text-gray-600 transition-colors shrink-0 rounded-full hover:bg-gray-100 w-6 h-6 flex items-center justify-center ml-2"
+                            aria-label="关闭消息"
+                        >
+                            <X size={12} />
+                        </button>
                     </div>
-                    {/* Content */}
-                    <div className="flex-1 text-xs sm:text-sm text-gray-800 font-medium break-words leading-relaxed min-w-0">
-                        {toast.content}
-                    </div>
-                    {/* Close */}
-                    <button onClick={() => removeToast(toast.id)} className="text-gray-400 hover:text-gray-600 transition-colors shrink-0 p-1">
-                        <X size={16} />
-                    </button>
-                </div>
-            ))}
+                ))}
+            </div>
         </div>
     );
 };
+// 导出 ConfirmDialog 组件
+export { ConfirmDialog } from './ConfirmDialog';

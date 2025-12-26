@@ -58,7 +58,8 @@ export const Login: React.FC<LoginProps> = ({ onLogin }) => {
         });
       }, 1000);
     } catch (err: any) {
-      setError(err.message || '发送验证码失败');
+      // 错误已由响应拦截器自动处理并显示，这里只需记录日志
+      console.error('Send register code failed:', err);
     }
   };
 
@@ -88,7 +89,8 @@ export const Login: React.FC<LoginProps> = ({ onLogin }) => {
         });
       }, 1000);
     } catch (err: any) {
-      setError(err.message || '发送验证码失败');
+      // 错误已由响应拦截器自动处理并显示，这里只需记录日志
+      console.error('Send reset code failed:', err);
     }
   };
 
@@ -123,7 +125,8 @@ export const Login: React.FC<LoginProps> = ({ onLogin }) => {
         setConfirmPassword('');
         setVerificationCode('');
       } catch (err: any) {
-        setError(err.message || '注册失败');
+        // 错误已由响应拦截器自动处理并显示，这里只需记录日志
+        console.error('Register failed:', err);
       } finally {
         setIsLoading(false);
       }
@@ -137,20 +140,17 @@ export const Login: React.FC<LoginProps> = ({ onLogin }) => {
 
       setIsLoading(true);
       try {
-        const response = await authApi.login({ username, password });
+        const loginData = await authApi.login({ username, password });
 
-        if (response.code !== 200) {
-          throw new Error(response.message || '登录失败');
-        }
+        localStorage.setItem('access_token', loginData.access_token);
 
-        localStorage.setItem('access_token', response.data.access_token);
-
-        const userData = response.data.user;
+        const userData = loginData.user;
         const role = userData.is_admin ? UserRole.ADMIN : UserRole.USER;
 
-        onLogin(role, userData.username, userData.avatar_url);
+        onLogin(role, userData.username, userData.avatar_url || undefined);
       } catch (err: any) {
-        setError(err.message || '登录失败，请检查用户名或密码');
+        // 错误已由响应拦截器自动处理并显示，这里只需记录日志
+        console.error('Login failed:', err);
       } finally {
         setIsLoading(false);
       }
@@ -192,7 +192,8 @@ export const Login: React.FC<LoginProps> = ({ onLogin }) => {
         setResetConfirmNewPassword('');
         setAuthView('login');
       } catch (err: any) {
-        setError(err.message || '重置失败，请稍后重试');
+        // 错误已由响应拦截器自动处理并显示，这里只需记录日志
+        console.error('Reset password failed:', err);
       } finally {
         setIsLoading(false);
       }

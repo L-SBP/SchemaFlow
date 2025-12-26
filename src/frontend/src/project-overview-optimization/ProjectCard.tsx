@@ -6,10 +6,10 @@
 import React, { useState } from 'react';
 import { ProjectCardProps } from '../types/project-overview';
 import { CSS_CLASSES } from '../constants/project-overview';
-import { truncateProjectName, descriptionNeedsTruncation, truncateDescription } from '../utils/project-overview';
+import { truncateProjectName, getProjectStatusLabel } from '../utils/project-overview';
+import { Tag } from '../components/UI';
 import DatabaseIcon from './DatabaseIcon';
 import ActionButtons from './ActionButtons';
-import ProjectStatusBadge from './ProjectStatusBadge';
 import DateDisplay from './DateDisplay';
 import ProjectDetailsModal from './ProjectDetailsModal';
 import './ProjectCard.css';
@@ -22,15 +22,19 @@ export const ProjectCard: React.FC<ProjectCardProps> = ({
 }) => {
   const [showDetailsModal, setShowDetailsModal] = useState(false);
 
-  // Calculate available width for description (approximate)
-  const availableDescriptionWidth = 240; // Card width minus padding and margins
-  const needsDescriptionTruncation = descriptionNeedsTruncation(
-    project.description,
-    availableDescriptionWidth
-  );
-  const truncatedDescription = needsDescriptionTruncation
-    ? truncateDescription(project.description, availableDescriptionWidth)
-    : project.description;
+  // 获取项目状态的颜色和标签
+  const getStatusColor = (status: string): 'blue' | 'green' | 'orange' | 'gray' => {
+    switch (status) {
+      case 'active':
+        return 'green';
+      case 'initializing':
+        return 'orange';
+      case 'inactive':
+        return 'gray';
+      default:
+        return 'gray';
+    }
+  };
 
   // Handle "查看完整详情" click
   // Requirement 7.3: Open modal with complete project information
@@ -103,44 +107,46 @@ export const ProjectCard: React.FC<ProjectCardProps> = ({
         />
       </div>
 
-      {/* Content Section - Requirements 7.1, 7.2 */}
+      {/* Content Section - 项目描述显示三行 */}
       <div className="project-card__content">
-        {/* Requirement 7.1: Truncated description display */}
         {project.description && (
           <div className="project-description-container">
-            <p
-              className={`${CSS_CLASSES.projectDescription} ${needsDescriptionTruncation ? CSS_CLASSES.projectDescriptionTruncated : ''}`}
-              title={needsDescriptionTruncation ? project.description : undefined}
-            >
-              {truncatedDescription}
+            <p className="project-description-multiline">
+              {project.description}
             </p>
           </div>
         )}
       </div>
 
-      {/* Footer Section - Requirements 6.1, 6.3, 6.4, 6.5, 8.3, 8.4 */}
+      {/* Footer Section - 状态、时间和查看详情按钮在同一行 */}
       <div className="project-card__footer">
         <div className="project-card__footer-left">
-          {/* Requirement 6.1: Project status in bottom-left corner */}
-          <ProjectStatusBadge status={project.project_status} />
+          {/* 使用 Tag 组件显示项目状态 */}
+          <Tag color={getStatusColor(project.project_status)}>
+            {getProjectStatusLabel(project.project_status as 'initializing' | 'active' | 'inactive')}
+          </Tag>
+        </div>
 
-          {/* Requirement 8.3, 8.4: Formatted date in bottom-right corner */}
+        {/* 中间显示时间 */}
+        <div className="project-card__footer-center">
           <DateDisplay date={project.updated_at} />
         </div>
 
-        {/* View Details Button */}
-        <button
-          className="view-details-button"
-          onClick={handleViewDetailsClick}
-          type="button"
-          aria-label="查看项目详情"
-          title="查看项目详情"
-        >
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
-            <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
-            <circle cx="12" cy="12" r="3" />
-          </svg>
-        </button>
+        {/* 右侧显示查看详情按钮 */}
+        <div className="project-card__footer-right">
+          <button
+            className="view-details-button"
+            onClick={handleViewDetailsClick}
+            type="button"
+            aria-label="查看项目详情"
+            title="查看项目详情"
+          >
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+              <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
+              <circle cx="12" cy="12" r="3" />
+            </svg>
+          </button>
+        </div>
       </div>
 
       {/* Project Details Modal - Requirements 7.3, 7.4, 7.5 */}

@@ -83,7 +83,7 @@ async def service_send_password_reset_code(db: AsyncSession, email: str, client_
     try:
         await redis.setex(redis_key, ttl, verify_code)
     except Exception as e:
-        log.error(f"Failed to save password reset code in redis_client: {e}")
+        log.error(f"无法在Redis中保存密码重置验证码: {e}")
         return
 
     expire_minutes = max(1, int(ttl / 60))
@@ -93,7 +93,7 @@ async def service_send_password_reset_code(db: AsyncSession, email: str, client_
             await redis.delete(redis_key)
         except Exception:
             pass
-        log.error(f"Failed to send password reset code email to {user.email}")
+        log.error(f"无法发送密码重置验证码邮件到 {user.email}")
 
 
 async def service_reset_password_with_code(db: AsyncSession, email: str, verification_code: str, new_password: str) -> None:
@@ -106,14 +106,14 @@ async def service_reset_password_with_code(db: AsyncSession, email: str, verific
     email_norm = (email or "").strip().lower()
     code = (verification_code or "").strip()
     if not email_norm:
-        raise exceptions.ValidationException("email is required")
+        raise exceptions.ValidationException("邮箱是必需的")
     if not code:
-        raise exceptions.ValidationException("verification_code is required")
+        raise exceptions.ValidationException("验证码是必需的")
 
     redis_key = f"pwdreset:code:{email_norm}"
     stored_code = await redis.get(redis_key)
     if not stored_code or stored_code != code:
-        raise exceptions.ValidationException("Invalid or expired code")
+        raise exceptions.ValidationException("验证码无效或已过期")
 
     # 一次性
     await redis.delete(redis_key)
@@ -121,7 +121,7 @@ async def service_reset_password_with_code(db: AsyncSession, email: str, verific
     user = await crud_user_account.get_by_email(db, email_norm)
     if not user:
         # 防枚举：不暴露用户不存在（但此时一般也无法通过验证码校验）
-        raise exceptions.ValidationException("Invalid or expired code")
+        raise exceptions.ValidationException("验证码无效或已过期")
 
     hashed = get_password_hash(new_password)
     await crud_user_account.update(db, user, password_hash=hashed)

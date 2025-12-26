@@ -135,4 +135,4 @@ class DatabaseInstance(Base):
                 database=db_file_path
             )
         else:
-            raise ValueError("Invalid database type")
+            raise ValueError("无效的数据库类型")

@@ -271,7 +271,7 @@ async def create_mysql_user(
 
             # 重新尝试初始化
             if not await init_user_engine_with_plugin(db_username, db_password, db_name, instance_id, "mysql_native_password"):
-                raise Exception("Failed to initialize user engine with both sha256_password and mysql_native_password")
+                raise Exception("使用sha256_password和mysql_native_password都无法初始化用户引擎")
 
     except Exception as e:
         log.error(f"[MySQL] Failed to create user: {str(e)}", exc_info=True)
@@ -401,7 +401,7 @@ async def execute_mysql_sql_with_user_check(
     try:
         # 1. 确保用户和引擎已准备好
         if not await ensure_user_and_engine(instance_obj.db_name, instance_obj.db_username, instance_obj.db_password, instance_obj.instance_id):
-            raise Exception(f"Failed to ensure user {instance_obj.db_username} and engine for instance {instance_obj.instance_id}")
+            raise Exception(f"无法确保用户 {instance_obj.db_username} 和实例 {instance_obj.instance_id} 的引擎")
 
         # 2. 执行 SQL
         if sql_type == "SELECT":

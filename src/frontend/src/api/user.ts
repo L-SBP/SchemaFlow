@@ -1,5 +1,5 @@
 import client from './client.ts';
-import { ApiResponse } from './auth.ts';
+import { PageData } from '../types.ts';
 
 // --- 类型定义 (参考 OpenAPI Schema) ---
 
@@ -36,23 +36,16 @@ export interface LoginHistoryItem {
   login_status: 'success' | 'failed' | 'expired' | 'forced_logout';
 }
 
-export interface PaginatedLoginHistory {
-  total: number;
-  page: number;
-  page_size: number;
-  items: LoginHistoryItem[];
-}
-
 // --- API 方法 ---
 
 // 1. 获取当前用户信息
 export const getUserProfile = () => {
-  return client.get<any, ApiResponse<UserMe>>('/v1/user/me');
+  return client.get<any, UserMe>('/v1/user/me');
 };
 
 // 2. 更新用户名
 export const updateUsername = (username: string) => {
-  return client.patch<any, ApiResponse<UserMe>>('/v1/user/me', { username });
+  return client.patch<any, UserMe>('/v1/user/me', { username });
 };
 
 // 3. 更新密码
@@ -62,7 +55,7 @@ export const updatePassword = (data: UpdatePasswordParams) => {
 
 // 4. 更新头像
 export const updateAvatar = (avatarUrl: string) => {
-  return client.post<any, ApiResponse<{ avatar_url: string }>>('/v1/user/me/avatar', { avatar_url: avatarUrl });
+  return client.post<any, { avatar_url: string }>('/v1/user/me/avatar', { avatar_url: avatarUrl });
 };
 
 // 5. 发送邮箱验证码
@@ -72,12 +65,12 @@ export const sendEmailVerificationCode = (newEmail: string) => {
 
 // 6. 确认修改邮箱
 export const confirmUpdateEmail = (data: UpdateEmailParams) => {
-  return client.put<any, ApiResponse<UserMe>>('/v1/user/me/email', data);
+  return client.put<any, UserMe>('/v1/user/me/email', data);
 };
 
-// 7. 获取登录历史
+// 7. 获取登录历史 (分页)
 export const getLoginHistory = (page: number = 1, pageSize: number = 10) => {
-  return client.get<any, ApiResponse<PaginatedLoginHistory>>('/v1/user/me/login-history', {
+  return client.get<any, PageData<LoginHistoryItem[]>>('/v1/user/me/login-history', {
     params: { page, page_size: pageSize }
   });
 };

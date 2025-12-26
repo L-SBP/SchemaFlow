@@ -1,4 +1,4 @@
-import { useGlobalZoomLevel, type GlobalZoomLevelInfo } from '../utils/globalZoomLevel';
+import { useGlobalZoomLevel } from '../utils/globalZoomLevel';
 
 /**
  * 缩放级别检测 Hook（兼容性包装器）

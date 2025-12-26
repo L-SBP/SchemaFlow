@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Card, Button, Input, Tag, Modal } from '../components/UI.tsx';
+import { Card, Button, Input, Tag, Modal, message } from '../components/UI.tsx';
 import { Save, User as UserIcon, Loader2, Edit2, Camera, Shield, Mail, History, Globe, MapPin, X, Check, UploadCloud, Image as ImageIcon } from 'lucide-react';
 import {
   getUserProfile,
@@ -119,18 +119,11 @@ export const Profile: React.FC<ProfileProps> = ({ onLogout }) => {
       if (updatedUser && updatedUser.username) {
         setUserProfile(prev => prev ? { ...prev, username: updatedUser.username } : null);
         setIsEditingName(false);
-        alert('用户名修改成功！');
+        message.success('用户名修改成功！');
       }
     } catch (error: any) {
-      // 优先从 error.response.data.detail 获取详细信息，如果不可用则使用 error.message
-      const errorMsg = error.response?.data?.detail || error.message || '';
-
-      // 针对 "Username has been registered" 进行本地化处理
-      if (typeof errorMsg === 'string' && errorMsg.includes('Username has been registered')) {
-        alert('修改失败：该用户名已被注册，请尝试其他用户名。');
-      } else {
-        alert(typeof errorMsg === 'string' ? errorMsg : '更新用户名失败');
-      }
+      // 错误已由响应拦截器自动处理并显示，这里只需记录日志
+      console.error('Update username failed:', error);
     }
   };
 
@@ -140,7 +133,7 @@ export const Profile: React.FC<ProfileProps> = ({ onLogout }) => {
     if (file) {
       // 限制文件大小 (例如 2MB)
       if (file.size > 2 * 1024 * 1024) {
-        alert('图片大小不能超过 2MB');
+        message.error('图片大小不能超过 2MB');
         return;
       }
       setSelectedFile(file);
@@ -168,7 +161,7 @@ export const Profile: React.FC<ProfileProps> = ({ onLogout }) => {
 
   const handleUpdateAvatar = async () => {
     if (!previewUrl) {
-      alert('请先选择图片');
+      message.error('请先选择图片');
       return;
     }
 
@@ -183,11 +176,12 @@ export const Profile: React.FC<ProfileProps> = ({ onLogout }) => {
       const updatedData = res.avatar_url ? res : res.data;
       if (updatedData && updatedData.avatar_url) {
         setUserProfile(prev => prev ? { ...prev, avatar_url: updatedData.avatar_url } : null);
-        alert('头像更新成功！');
+        message.success('头像更新成功！');
         closeAvatarModal();
       }
     } catch (error: any) {
-      alert(error.message || '更新头像失败');
+      // 错误已由响应拦截器自动处理并显示，这里只需记录日志
+      console.error('Update avatar failed:', error);
     }
   };
 
@@ -206,11 +200,11 @@ export const Profile: React.FC<ProfileProps> = ({ onLogout }) => {
 
   const handleUpdatePassword = async () => {
     if (!currentPassword || !newPassword || !confirmPasswordInput) {
-      alert('请填写所有密码字段');
+      message.error('请填写所有密码字段');
       return;
     }
     if (newPassword !== confirmPasswordInput) {
-      alert('新密码与确认密码不一致');
+      message.error('新密码与确认密码不一致');
       return;
     }
 
@@ -221,10 +215,11 @@ export const Profile: React.FC<ProfileProps> = ({ onLogout }) => {
         new_password: newPassword,
         confirm_password: confirmPasswordInput
       });
-      alert('密码修改成功，请重新登录');
+      message.success('密码修改成功，请重新登录');
       performLogout(); // 强制登出
     } catch (error: any) {
-      alert(error.message || '修改密码失败');
+      // 错误已由响应拦截器自动处理并显示，这里只需记录日志
+      console.error('Update password failed:', error);
     } finally {
       setLoadingForm(false);
     }
@@ -232,16 +227,17 @@ export const Profile: React.FC<ProfileProps> = ({ onLogout }) => {
 
   const handleSendCode = async () => {
     if (!newEmail) {
-      alert('请输入邮箱地址');
+      message.error('请输入邮箱地址');
       return;
     }
     setLoadingForm(true);
     try {
       await sendEmailVerificationCode(newEmail);
-      alert(`验证码已发送至 ${newEmail}`);
+      message.success(`验证码已发送至 ${newEmail}`);
       setEmailStep(2);
     } catch (error: any) {
-      alert(error.message || '发送失败');
+      // 错误已由响应拦截器自动处理并显示，这里只需记录日志
+      console.error('Send verification code failed:', error);
     } finally {
       setLoadingForm(false);
     }
@@ -249,7 +245,7 @@ export const Profile: React.FC<ProfileProps> = ({ onLogout }) => {
 
   const handleBindEmail = async () => {
     if (!verificationCode) {
-      alert('请输入验证码');
+      message.error('请输入验证码');
       return;
     }
     setLoadingForm(true);
@@ -258,11 +254,12 @@ export const Profile: React.FC<ProfileProps> = ({ onLogout }) => {
       // 修正：PUT /user/me/email 返回 UserMe 对象
       const updatedUser = res.email ? res : res.data;
       if (updatedUser && updatedUser.email) {
-        alert('邮箱绑定成功，请使用新邮箱重新登录！');
+        message.success('邮箱绑定成功，请使用新邮箱重新登录！');
         performLogout(); // 强制登出
       }
     } catch (error: any) {
-      alert(error.message || '绑定失败');
+      // 错误已由响应拦截器自动处理并显示，这里只需记录日志
+      console.error('Bind email failed:', error);
     } finally {
       setLoadingForm(false);
     }

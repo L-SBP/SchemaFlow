@@ -3,8 +3,7 @@ import {
   KnowledgeTerm,
   KnowledgeListResponse,
   KnowledgeImportResponse,
-  KnowledgeExportResponse,
-  ApiResponse
+  KnowledgeExportResponse
 } from '../types.ts';
 
 // 对应接口文档的请求参数类型

@@ -20,7 +20,7 @@ router = APIRouter()
 # -------------------------------------------
 @router.get("/reports", response_model=UnifiedResponse[List[Report]], summary="获取报表列表")
 async def read_reports(
-    projectId: int = Query(..., description="项目ID"),
+    project_id: int = Query(..., description="项目ID"),
     db: AsyncSession = Depends(get_db),
     user: UserMe = Depends(get_current_active_user),
 ):
@@ -28,7 +28,7 @@ async def read_reports(
     获取指定项目下的所有保存的报表配置（仅限当前用户的项目）。
 
     Args:
-        projectId (int): 项目ID。
+        project_id (int): 项目ID。
         db (AsyncSession): 数据库会话。
         user (UserMe): 当前登录用户。
 
@@ -37,7 +37,7 @@ async def read_reports(
     """
     result = await report_service.get_report_list(
         db=db,
-        project_id=projectId,
+        project_id=project_id,
         user_id=user.user_id
     )
     return UnifiedResponse.success(data=result, message="获取报表列表成功")
@@ -48,7 +48,7 @@ async def read_reports(
 # -------------------------------------------
 @router.get("/history-queries", response_model=UnifiedResponse[List[HistoryQuery]], summary="获取历史查询记录")
 async def read_history(
-    projectId: int = Query(..., description="项目ID"),
+    project_id: int = Query(..., description="项目ID"),
     db: AsyncSession = Depends(get_db),
     user: UserMe = Depends(get_current_active_user),
 ):
@@ -56,7 +56,7 @@ async def read_history(
     获取历史查询结果，用于作为创建新报表的数据源（仅限当前用户的项目）。
 
     Args:
-        projectId (int): 项目ID。
+        project_id (int): 项目ID。
         db (AsyncSession): 数据库会话。
         user (UserMe): 当前登录用户。
 
@@ -65,7 +65,7 @@ async def read_history(
     """
     result = await report_service.get_history_queries_service(
         db=db,
-        project_id=projectId,
+        project_id=project_id,
         user_id=user.user_id
     )
     return UnifiedResponse.success(data=result, message="获取历史查询记录成功")

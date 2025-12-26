@@ -60,9 +60,9 @@ async def _check_user_quota(db: Session, user_id: int) -> Any:
     """
     user = await crud_user_account.get(db, user_id)
     if not user:
-        raise ItemNotFoundException("User not found")
+        raise ItemNotFoundException("用户未找到")
     if user.used_databases >= user.max_databases:
-        raise OperationNotPermittedException("Quota exceeded.")
+        raise OperationNotPermittedException("配额已超出")
     return user
 
 
@@ -83,7 +83,7 @@ async def _verify_project_ownership(db: Session, project_id: int, user_id: int) 
     """
     project = await crud_project.get(db, project_id)
     if not project or project.user_id != user_id:
-        raise ItemNotFoundException("Project not found or access denied.")
+        raise ItemNotFoundException("项目未找到或访问被拒绝")
     return project
 
 
@@ -185,7 +185,7 @@ async def _generate_and_save_er(project_id: int, schema_text: str, ai_model: str
             None, AIService.generate_mermaid_code, schema_text, ai_model
         )
         if not er_code:
-            raise Exception("Empty ER code generated")
+            raise Exception("生成的ER代码为空")
 
         temp_engine = PsqlHelper._get_async_engine(config.db)
         async with PsqlHelper.get_session(temp_engine) as session:
@@ -469,7 +469,7 @@ async def deploy_project_service(
     project_id: int,
     user_id: int,
     deploy_data: schemas.ProjectDeployRequest
-) -> schemas.ProjectResponse:
+) -> schemas.ProjectDetailOut:
     """执行项目部署，接收用户确认的 DDL 并建库建表。"""
     # 1. 校验项目
     project = await _verify_project_ownership(db, project_id, user_id)
@@ -491,7 +491,7 @@ async def deploy_project_service(
         refreshed_project = await _update_deployment_success(
             db, project, instance, final_ddl, deploy_data.confirmed_schema
         )
-        return schemas.ProjectResponse(data=schemas.ProjectDetailOut.model_validate(refreshed_project))
+        return schemas.ProjectDetailOut.model_validate(refreshed_project)
 
     except Exception as e:
         # 失败回滚状态
@@ -530,10 +530,10 @@ async def get_project_detail_service(
     db: Session,
     project_id: int,
     user_id: int
-) -> schemas.ProjectResponse:
+) -> schemas.ProjectDetailOut:
     """获取项目详情，校验用户权限。"""
     db_obj = await _verify_project_ownership(db, project_id, user_id)
-    return schemas.ProjectResponse(data=schemas.ProjectDetailOut.model_validate(db_obj))
+    return schemas.ProjectDetailOut.model_validate(db_obj)
 
 
 # =========================================================
@@ -545,15 +545,15 @@ async def update_project_info_service(
     project_id: int,
     user_id: int,
     update_data: Dict[str, Any]
-) -> schemas.ProjectResponse:
+) -> schemas.ProjectDetailOut:
     """更新项目基本信息（名称或描述），不涉及 AI 生成或 DDL 执行。"""
     db_obj = await _verify_project_ownership(db, project_id, user_id)
 
     if db_obj.project_status == 'deleted':
-        raise OperationNotPermittedException("Cannot update a deleted project.")
+        raise OperationNotPermittedException("无法更新已删除的项目")
 
     updated_obj = await crud_project.update(db, project_id, **update_data)
-    return schemas.ProjectResponse(data=schemas.ProjectDetailOut.model_validate(updated_obj))
+    return schemas.ProjectDetailOut.model_validate(updated_obj)
 
 
 # =========================================================
@@ -583,7 +583,7 @@ async def confirm_delete_project_service(
         ItemNotFoundException: 项目不存在或无权限。
     """
     if confirmation_text != "DELETE":
-        raise ValidationException("Confirmation text must be 'DELETE'.")
+        raise ValidationException("确认文本必须是 'DELETE'")
 
     await _verify_project_ownership(db, project_id, user_id)
 
@@ -631,7 +631,7 @@ async def delete_project_service(
 ) -> bool:
     """执行项目删除操作，校验 Token 并释放用户额度。"""
     if not await _verify_delete_token(confirmation_token, user_id, project_id):
-        raise OperationNotPermittedException("Invalid token.")
+        raise OperationNotPermittedException("无效的令牌")
 
     project = await crud_project.get(db, project_id)
     if not project or project.project_status == 'deleted':
@@ -660,7 +660,7 @@ async def regenerate_project_er_service(
     user_id: int,
     schema_text: str,
     ai_model: str = "gpt4"
-) -> schemas.ProjectResponse:
+) -> schemas.ProjectDetailOut:
     """更新项目的 Schema 定义，并重新生成 Mermaid ER 代码。"""
     project = await _verify_project_ownership(db, project_id, user_id)
 
@@ -683,4 +683,4 @@ async def regenerate_project_er_service(
     await db.commit()
     await db.refresh(project)
 
-    return schemas.ProjectResponse(data=schemas.ProjectDetailOut.model_validate(project))
+    return schemas.ProjectDetailOut.model_validate(project)

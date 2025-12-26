@@ -19,7 +19,7 @@ import {
 import { KnowledgeTerm, KnowledgeImportResponse } from '../types.ts';
 import { glossaryApi, CreateTermParams } from '../api/glossary.ts';
 import { fetchProjects, ProjectDTO } from '../api/project.ts';
-import { Button, Input, Modal, Card } from '../components/UI.tsx';
+import { Button, Input, Modal, Card, message, ConfirmDialog } from '../components/UI.tsx';
 import { Pagination } from '../components/Pagination.tsx';
 
 export const Glossary: React.FC = () => {
@@ -46,6 +46,9 @@ export const Glossary: React.FC = () => {
   // 选中项 (用于批量删除)
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
 
+  // 确认删除对话框状态
+  const [isDeleteConfirmOpen, setIsDeleteConfirmOpen] = useState(false);
+
   // 模态框与表单
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingTerm, setEditingTerm] = useState<KnowledgeTerm | null>(null);
@@ -68,10 +71,10 @@ export const Glossary: React.FC = () => {
       setLoadingProjects(true);
       try {
         const data = await fetchProjects();
-        setProjectList(data);
+        setProjectList(data.items);
         // 如果当前没有选中项目且获取到了项目列表，默认选中第一个
-        if (data.length > 0 && !selectedProjectId) {
-          setSelectedProjectId(String(data[0].project_id));
+        if (data.items.length > 0 && !selectedProjectId) {
+          setSelectedProjectId(String(data.items[0].project_id));
         }
       } catch (error) {
         console.error("Failed to fetch projects", error);
@@ -130,11 +133,11 @@ export const Glossary: React.FC = () => {
 
   const handleSave = async () => {
     if (!selectedProjectId) {
-      alert("请先选择一个项目");
+      message.error("请先选择一个项目");
       return;
     }
     if (!formData.term.trim() || !formData.definition.trim()) {
-      alert("术语名称和定义不能为空");
+      message.error("术语名称和定义不能为空");
       return;
     }
 
@@ -150,15 +153,8 @@ export const Glossary: React.FC = () => {
       setIsModalOpen(false);
       fetchTerms(); // 刷新列表
     } catch (error: any) {
+      // 错误已由响应拦截器自动处理并显示，这里只需记录日志
       console.error("Save failed", error);
-
-      // 错误处理: 优先展示后端返回的 detail 信息
-      const backendDetail = error.response?.data?.detail;
-      const displayMsg = typeof backendDetail === 'string'
-        ? backendDetail
-        : (error.message || "保存失败，请重试");
-
-      alert(displayMsg);
     } finally {
       setIsSaving(false);
     }
@@ -166,17 +162,19 @@ export const Glossary: React.FC = () => {
 
   const handleBatchDelete = async () => {
     if (selectedIds.size === 0) return;
-    if (!confirm(`确定要删除选中的 ${selectedIds.size} 个术语吗？`)) return;
+    setIsDeleteConfirmOpen(true);
+  };
 
+  const confirmBatchDelete = async () => {
     try {
       const idsArray = Array.from(selectedIds);
       const res = await glossaryApi.deleteBatch(selectedProjectId, idsArray);
 
-      alert(`删除成功。成功: ${res.imported_count || selectedIds.size}, 失败: ${res.failed_count || 0}`);
+      message.success(`删除成功。成功: ${res.imported_count || selectedIds.size}, 失败: ${res.failed_count || 0}`);
       setSelectedIds(new Set());
       fetchTerms();
     } catch (error: any) {
-      alert("删除失败");
+      message.error("删除失败");
     }
   };
 
@@ -206,10 +204,10 @@ export const Glossary: React.FC = () => {
       if (res.download_url) {
         window.open(res.download_url, '_blank');
       } else {
-        alert("导出失败，未获取到下载链接");
+        message.error("导出失败，未获取到下载链接");
       }
     } catch (error) {
-      alert("导出请求失败");
+      message.error("导出请求失败");
     }
   };
 
@@ -220,13 +218,13 @@ export const Glossary: React.FC = () => {
     const fileName = file.name.toLowerCase();
     const validExtensions = ['.csv', '.xlsx', '.xls'];
     if (!validExtensions.some(ext => fileName.endsWith(ext))) {
-      alert("文件格式不支持：请上传 Excel (.xlsx/.xls) 或 CSV 文件");
+      message.error("文件格式不支持：请上传 Excel (.xlsx/.xls) 或 CSV 文件");
       if (fileInputRef.current) fileInputRef.current.value = '';
       return;
     }
 
     if (!selectedProjectId) {
-      alert("请先选择项目");
+      message.error("请先选择项目");
       return;
     }
 
@@ -241,7 +239,8 @@ export const Glossary: React.FC = () => {
         fetchTerms();
       }
     } catch (error: any) {
-      alert(error.message || "导入失败");
+      // 错误已由响应拦截器自动处理并显示，这里只需记录日志
+      console.error("Import failed", error);
     } finally {
       setIsImporting(false);
       if (fileInputRef.current) fileInputRef.current.value = ''; // 重置 input
@@ -540,6 +539,19 @@ export const Glossary: React.FC = () => {
           </div>
         )}
       </Modal>
+
+      {/* 批量删除确认对话框 */}
+      <ConfirmDialog
+        isOpen={isDeleteConfirmOpen}
+        onClose={() => setIsDeleteConfirmOpen(false)}
+        onConfirm={confirmBatchDelete}
+        title="批量删除术语"
+        message={`确定要删除选中的 ${selectedIds.size} 个术语吗？删除后无法恢复。`}
+        confirmText="删除"
+        cancelText="取消"
+        isDangerous={true}
+        showWarningIcon={true}
+      />
     </div>
   );
 };

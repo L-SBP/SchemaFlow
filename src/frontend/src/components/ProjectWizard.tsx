@@ -168,7 +168,7 @@ export const ProjectWizard: React.FC<ProjectWizardProps> = ({ projectId, onCompl
   useEffect(() => {
     if (!project || viewOnly) return;
 
-    const stage = project.creation_stage;
+    const stage = project.creation_stage || CreationStageEnum.INITIALIZING;
     let target = 0;
 
     // Determine target based on stage
@@ -232,15 +232,17 @@ export const ProjectWizard: React.FC<ProjectWizardProps> = ({ projectId, onCompl
 
   // Reset progress when entering a new "generating" stage
   useEffect(() => {
-    if (project?.creation_stage === CreationStageEnum.GENERATING_SCHEMA ||
-      project?.creation_stage === CreationStageEnum.GENERATING_DDL ||
-      project?.creation_stage === CreationStageEnum.EXECUTING_DDL) {
+    const currentStage = project?.creation_stage || CreationStageEnum.INITIALIZING;
+
+    if (currentStage === CreationStageEnum.GENERATING_SCHEMA ||
+      currentStage === CreationStageEnum.GENERATING_DDL ||
+      currentStage === CreationStageEnum.EXECUTING_DDL) {
       const restored = restoredSnapshotRef.current;
-      if (restored && restored.stage === project.creation_stage && restored.progress > 0) return;
+      if (restored && restored.stage === currentStage && restored.progress > 0) return;
       setVisualProgress(0);
     }
 
-    if (project?.creation_stage === CreationStageEnum.COMPLETED) {
+    if (currentStage === CreationStageEnum.COMPLETED) {
       restoredSnapshotRef.current = null;
       if (!viewOnly) {
         try {
@@ -292,7 +294,7 @@ export const ProjectWizard: React.FC<ProjectWizardProps> = ({ projectId, onCompl
   if (!project) return <div className="p-8 flex justify-center"><Loader2 className="animate-spin" /></div>;
 
   const renderStageContent = () => {
-    const stage = viewOnly ? CreationStageEnum.COMPLETED : project.creation_stage;
+    const stage = viewOnly ? CreationStageEnum.COMPLETED : (project.creation_stage || CreationStageEnum.INITIALIZING);
 
     // Common height for display areas
     const displayHeightClass = "h-[600px]";
@@ -465,7 +467,7 @@ export const ProjectWizard: React.FC<ProjectWizardProps> = ({ projectId, onCompl
         );
 
       default:
-        return <div className="text-red-500">未知阶段: {project.creation_stage}</div>;
+        return <div className="text-red-500">未知阶段: {project.creation_stage || 'undefined'}</div>;
     }
   };
 

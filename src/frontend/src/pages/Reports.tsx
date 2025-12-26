@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { Project, Report, ReportType } from '../types.ts';
-import { Card, Button, Modal, Input, Tag, Steps } from '../components/UI.tsx';
+import { Card, Button, Modal, Input, Tag, Steps, message } from '../components/UI.tsx';
 import { Pagination } from '../components/Pagination.tsx';
 import { Plus, BarChart2, PieChart, TrendingUp, Download, Trash2, Filter, Database, ScatterChart, ArrowRight, ArrowLeft, Save, Loader2, FileText } from 'lucide-react';
 import { BarChart, Bar, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart as RePieChart, Pie, Cell, ScatterChart as ReScatterChart, Scatter, ZAxis } from 'recharts';
@@ -57,11 +57,12 @@ export const Reports: React.FC<ReportsProps> = ({ projects }) => {
 
       try {
         const dtos = await fetchProjects();
-        const mapped = (dtos || []).map(mapProjectDTOToProject);
+        const mapped = (dtos.items || []).map(mapProjectDTOToProject);
         setAvailableProjects(mapped);
         if (!selectedProjectId && mapped.length > 0) setSelectedProjectId(mapped[0].id);
       } catch (error) {
         console.error('Failed to load projects for reports:', error);
+        // 错误已由API客户端统一处理，这里只需记录日志
       }
     };
 
@@ -118,6 +119,7 @@ export const Reports: React.FC<ReportsProps> = ({ projects }) => {
       setReports(data);
     } catch (error) {
       console.error("Failed to fetch reports", error);
+      // 错误已由API客户端统一处理，这里只需记录日志
     } finally {
       setIsLoading(false);
     }
@@ -132,6 +134,9 @@ export const Reports: React.FC<ReportsProps> = ({ projects }) => {
     if (isModalOpen && selectedProjectId) {
       reportApi.getHistoryQueries(selectedProjectId).then(data => {
         setHistoryQueries(data);
+      }).catch(error => {
+        console.error('Failed to load history queries:', error);
+        // 错误已由API客户端统一处理，这里只需记录日志
       });
     }
   }, [isModalOpen, selectedProjectId]);
@@ -142,7 +147,7 @@ export const Reports: React.FC<ReportsProps> = ({ projects }) => {
   // Initialize form when query changes
   useMemo(() => {
     if (selectedQueryObj) {
-      if (!reportName) setReportName(selectedQueryObj.queryText + ' 报表');
+      if (!reportName) setReportName(selectedQueryObj.query_text + ' 报表');
 
       const columns = selectedQueryObj.result?.columns || [];
       const fields = selectedQueryObj.result?.fields || [];
@@ -173,20 +178,21 @@ export const Reports: React.FC<ReportsProps> = ({ projects }) => {
     setIsSaving(true);
     try {
       await reportApi.createReport({
-        projectId: selectedProjectId,
+        project_id: selectedProjectId,
         name: reportName,
         type: reportType,
-        description: `源自查询: ${selectedQueryObj.queryText}`,
-        chartConfig: { xAxisKey, yAxisKey },
-        sourceQueryId: selectedQueryObj.id
+        description: `源自查询: ${selectedQueryObj.query_text}`,
+        chart_config: { x_axis_key: xAxisKey, y_axis_key: yAxisKey },
+        source_query_id: selectedQueryObj.id
       });
 
       // 刷新列表
       await fetchReports(selectedProjectId);
       setIsModalOpen(false);
     } catch (error) {
-      alert('创建失败'); // 实际项目中建议使用 Toast
-      console.error(error);
+      console.error('Create report failed:', error);
+      // 错误已由API客户端统一处理，这里只需记录日志
+      message.error('创建失败，请稍后重试');
     } finally {
       setIsSaving(false);
     }
@@ -207,6 +213,7 @@ export const Reports: React.FC<ReportsProps> = ({ projects }) => {
       setDeleteReportId('');
     } catch (error) {
       console.error("Delete failed", error);
+      // 错误已由API客户端统一处理，这里只需记录日志
     }
   };
 
@@ -214,7 +221,7 @@ export const Reports: React.FC<ReportsProps> = ({ projects }) => {
   const exportReportAsImage = async (reportId: string, name?: string) => {
     const el = document.getElementById(`report-chart-${reportId}`);
     if (!el) {
-      alert('未找到图表元素，导出失败');
+      message.error('未找到图表元素，导出失败');
       return;
     }
 
@@ -232,7 +239,8 @@ export const Reports: React.FC<ReportsProps> = ({ projects }) => {
       setIsExportModalOpen(true);
     } catch (err) {
       console.error('Export failed', err);
-      alert('导出失败，请在控制台查看错误信息');
+      // 错误已由API客户端统一处理，这里只需记录日志
+      message.error('导出失败，请稍后重试。如果问题持续存在，请联系管理员。');
     } finally {
       setExportingReportId('');
     }
@@ -247,9 +255,9 @@ export const Reports: React.FC<ReportsProps> = ({ projects }) => {
   };
 
   const renderDynamicChart = (report: Partial<Report>, height: number | string = "100%") => {
-    const { type, data, chartConfig } = report;
-    const X = chartConfig?.xAxisKey || '';
-    const Y = chartConfig?.yAxisKey || '';
+    const { type, data, chart_config } = report;
+    const X = chart_config?.x_axis_key || '';
+    const Y = chart_config?.y_axis_key || '';
 
     if (!data || data.length === 0) return <div className="text-center text-gray-400">无数据</div>;
 
@@ -365,7 +373,7 @@ export const Reports: React.FC<ReportsProps> = ({ projects }) => {
                       <span className="font-bold text-gray-700 text-sm sm:text-base truncate">{report.name}</span>
                       <div className="flex items-center gap-1 bg-blue-50 text-blue-700 px-2 py-1 rounded text-xs border border-blue-100 max-w-full truncate">
                         <Database size={12} className="shrink-0" />
-                        <span className="truncate">源: {report.sourceQueryText}</span>
+                        <span className="truncate">源: {report.source_query_text}</span>
                       </div>
                     </div>
                     <div className="flex gap-2 shrink-0">
@@ -509,7 +517,7 @@ export const Reports: React.FC<ReportsProps> = ({ projects }) => {
                         <div className="flex justify-between items-center mb-2">
                           <span className="font-bold text-gray-800 flex items-center gap-2">
                             <Database size={14} className="text-primary" />
-                            {q.queryText}
+                            {q.query_text}
                             {reportable ? null : (
                               <span className="ml-2 inline-flex items-center rounded-full bg-gray-100 text-gray-600 px-2 py-0.5 text-[11px] border border-gray-200">
                                 不可用于报表
@@ -519,9 +527,9 @@ export const Reports: React.FC<ReportsProps> = ({ projects }) => {
                           <span className="text-xs text-gray-400">{q.timestamp}</span>
                         </div>
 
-                        {!reportable && q.unreportableReason && (
+                        {!reportable && q.unreportable_reason && (
                           <div className="text-xs text-gray-500 mb-2">
-                            原因：{q.unreportableReason}
+                            原因：{q.unreportable_reason}
                           </div>
                         )}
 
@@ -628,13 +636,13 @@ export const Reports: React.FC<ReportsProps> = ({ projects }) => {
               <div className="col-span-2 bg-gray-50 rounded-xl border border-gray-200 p-4 flex flex-col">
                 <div className="text-xs font-bold text-gray-500 uppercase mb-2 flex justify-between">
                   <span>Preview</span>
-                  <span>{selectedQueryObj.queryText}</span>
+                  <span>{selectedQueryObj.query_text}</span>
                 </div>
                 <div className="flex-1 bg-white rounded-lg border border-gray-200 shadow-sm p-2">
                   {renderDynamicChart({
                     data: selectedQueryObj.result.data,
                     type: reportType,
-                    chartConfig: { xAxisKey, yAxisKey }
+                    chart_config: { x_axis_key: xAxisKey, y_axis_key: yAxisKey }
                   } as any, "100%")}
                 </div>
               </div>

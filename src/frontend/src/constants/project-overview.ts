@@ -11,7 +11,7 @@ export const DATABASE_ICON_MARGIN = 8; // 8px margin from project name
 export const PROJECT_NAME_MAX_LENGTH = 6; // 6 characters before ellipsis
 
 // Action button dimensions (Requirement 5.3)
-export const ACTION_BUTTON_MIN_SIZE = 32; // 32x32 pixel minimum clickable area
+export const ACTION_BUTTON_MIN_SIZE = 24; // 24x24 pixel minimum clickable area (缩小点击区域)
 export const ACTION_BUTTON_SPACING = 4; // 4px spacing between buttons
 export const ACTION_BUTTON_MARGIN = 8; // 8px margin from card edges
 

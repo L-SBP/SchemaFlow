@@ -34,7 +34,7 @@ async def init_redis():
         await redis.ping()
         log.info("Connected to Redis")
     except Exception as e:
-        log.error(f"Failed to connect to Redis: {e}")
+        log.error(f"无法连接到Redis: {e}")
 
 async def init_redis_listener():
     """
@@ -58,7 +58,7 @@ async def init_redis_listener():
         await redis_listener.ping()
         log.info("Connected to Redis listener")
     except Exception as e:
-        log.error(f"Failed to connect to Redis listener: {e}")
+        log.error(f"无法连接到Redis监听器: {e}")
 
 def get_redis():
     """
@@ -100,7 +100,7 @@ async def close_redis():
             await redis.aclose()
             log.info("Closed Redis connection")
         except Exception as e:
-            log.error(f"Failed to close Redis connection: {e}")
+            log.error(f"无法关闭Redis连接: {e}")
         finally:
             redis = None
 
@@ -116,6 +116,6 @@ async def close_redis_listener():
             await redis_listener.aclose()
             log.info("Closed Redis listener connection")
         except Exception as e:
-            log.error(f"Failed to close Redis listener connection: {e}")
+            log.error(f"无法关闭Redis监听器连接: {e}")
         finally:
             redis_listener = None

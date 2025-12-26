@@ -133,6 +133,38 @@ class SessionService:
         )
 
     @staticmethod
+    async def get_sessions_count(
+        db: AsyncSession,
+        user: UserMe,
+        project_id: Optional[int]
+    ) -> int:
+        """
+        获取会话总数。
+
+        支持按 project_id 过滤，强制校验 project 属于当前用户。
+
+        Args:
+            db (AsyncSession): 数据库会话。
+            user (UserMe): 当前用户对象。
+            project_id (Optional[int]): 项目 ID 过滤。
+
+        Returns:
+            int: 会话总数。
+        """
+        if project_id:
+            await SessionService._check_project_owner(db, project_id, user)
+            return await crud_session.count_by_project(
+                db=db,
+                project_id=project_id
+            )
+
+        # 如果不传 project_id，则返回当前用户所有项目下的会话总数
+        return await crud_session.count_by_user(
+            db=db,
+            user_id=user.user_id
+        )
+
+    @staticmethod
     async def create_session(
         db: AsyncSession,
         user: UserMe,

@@ -73,7 +73,7 @@ async def redis_expire_listener():
                 await asyncio.sleep(3)
                 
     except Exception as e:
-        log.error(f"Failed to start Redis expiration listener: {e}")
+        log.error(f"无法启动Redis过期监听器: {e}")
     finally:
         try:
             await redis_conn.aclose()

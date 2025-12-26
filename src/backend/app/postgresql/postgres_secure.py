@@ -74,7 +74,7 @@ def validate_safe_sql(sql: str, is_root: bool) -> None:
         forbidden = config.sql_permissions.normal.forbidden_operations
 
     if match_operation(normalized_sql, forbidden):
-        raise SQLSecurityException("Operation is forbidden")
+        raise SQLSecurityException("操作被禁止")
 
     if not match_operation(normalized_sql, allowed):
-        raise SQLSecurityException("Operation is not allowed")
+        raise SQLSecurityException("操作不被允许")

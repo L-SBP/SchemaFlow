@@ -1,10 +1,11 @@
 import client from './client.ts';
 import {
   AdminStats,
-  AdminUserListResponse,
   AdminUserDetailResponse,
-  AdminListResponse,
-  ViolationLogListResponse
+  PageData,
+  ViolationLogListItem,
+  AdminUserListItem,
+  AdminListItem
 } from '../types.ts';
 
 // 2.2 更新用户状态请求体
@@ -32,7 +33,7 @@ export const adminApi = {
    * GET /api/v1/users
    */
   getUsers: (page: number = 1, pageSize: number = 20, search?: string, status: string = 'all') => {
-    return client.get<any, AdminUserListResponse>('/v1/users', {
+    return client.get<any, PageData<AdminUserListItem[]>>('/v1/users', {
       params: {
         page,
         page_size: pageSize,
@@ -77,7 +78,7 @@ export const adminApi = {
    * GET /api/v1/admins
    */
   getAdmins: (page: number = 1, pageSize: number = 20) => {
-    return client.get<any, AdminListResponse>('/v1/admins', {
+    return client.get<any, PageData<AdminListItem[]>>('/v1/admins', {
       params: {
         page,
         page_size: pageSize
@@ -95,7 +96,7 @@ export const adminApi = {
     riskLevel?: string,
     resolutionStatus?: string
   ) => {
-    return client.get<any, ViolationLogListResponse>('/v1/violations', {
+    return client.get<any, PageData<ViolationLogListItem[]>>('/v1/violations', {
       params: {
         page,
         page_size: pageSize,

@@ -9,7 +9,7 @@
 
 from pydantic import BaseModel, ConfigDict
 from datetime import datetime
-from typing import List
+from typing import List, Optional
 
 
 class AnnouncementBase(BaseModel):
@@ -36,12 +36,16 @@ class AnnouncementResponse(BaseModel):
         content (str): 公告内容。
         status (str): 公告状态。
         created_at (datetime): 创建时间。
+        updated_at (Optional[datetime]): 更新时间。
+        created_by (Optional[int]): 创建人 ID。
     """
     announcement_id: int
     title: str
     content: str
     status: str
     created_at: datetime
+    updated_at: Optional[datetime] = None
+    created_by: Optional[int] = None
 
     # Pydantic v2 版本的 orm_mode
     model_config = ConfigDict(from_attributes=True)

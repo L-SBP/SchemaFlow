@@ -1142,6 +1142,8 @@ label {
   /* pt-4 */
   margin-top: var(--spacing-4);
   /* mt-4 */
+  /* ??????????? */
+  box-shadow: 0 2px 4px -1px rgba(0, 0, 0, 0.06), 0 1px 2px -1px rgba(0, 0, 0, 0.04);
 }
 
 .pagination-wrapper {
@@ -1362,6 +1364,18 @@ label {
   }
 }
 
+@keyframes zoomIn {
+  from {
+    opacity: 0;
+    transform: scale(0.95);
+  }
+
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
 .animate-fade-in {
   animation: fadeIn 0.2s ease-out;
 }
@@ -1372,6 +1386,20 @@ label {
 
 .animate-slide-right {
   animation: slideInRight 0.2s ease-out;
+}
+
+.animate-in {
+  animation-duration: 0.3s;
+  animation-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+  animation-fill-mode: both;
+}
+
+.zoom-in-95 {
+  animation-name: zoomIn;
+}
+
+.fade-in {
+  animation-name: fadeIn;
 }
 
 /* ========================================

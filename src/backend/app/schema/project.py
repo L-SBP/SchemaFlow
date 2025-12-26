@@ -170,12 +170,10 @@ class ProjectDetailOut(ProjectListOne):
     Attributes:
         created_at (datetime): 创建时间。
         creation_stage (Optional[CreationStageEnum]): 创建进度阶段。
-        progress_percentage (Optional[int]): 创建进度百分比。
         schema_definition (Optional[Dict[str, Any]]): AI生成的包含 'schema' 和 'ddl' 的JSON对象。
     """
     created_at: datetime
     creation_stage: Optional[CreationStageEnum] = CreationStageEnum.INITIALIZING
-    progress_percentage: Optional[int] = 0
     # 可以添加 analysis_result, ddl_result 等字段
     # =========================================================
     # 将数据库中的 JSONB 字段返回给前端
@@ -189,16 +187,8 @@ class ProjectDetailOut(ProjectListOne):
     model_config = ConfigDict(from_attributes=True)
 
 
-class ProjectResponse(BaseModel):
-    """
-    单个项目包装器。
-
-    Attributes:
-        data (ProjectDetailOut): 项目详情数据。
-    """
-    data: ProjectDetailOut
-
-    model_config = ConfigDict(from_attributes=True)
+# Removed ProjectResponse wrapper to avoid unnecessary nesting
+# ProjectDetailOut is used directly in API responses
 
 
 class ConfirmationTokenResponse(BaseModel):
