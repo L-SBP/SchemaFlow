@@ -32,6 +32,8 @@ const DatabaseViewer: React.FC<DatabaseViewerProps> = ({ sessionId, className })
     tables: true
   });
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
+  const [isManuallyCollapsed, setIsManuallyCollapsed] = useState(false);
+  const [isManuallyExpanded, setIsManuallyExpanded] = useState(false);
 
   const rootRef = useRef<HTMLDivElement>(null);
   const [explorerWidth, setExplorerWidth] = useState(256);
@@ -77,15 +79,15 @@ const DatabaseViewer: React.FC<DatabaseViewerProps> = ({ sessionId, className })
       for (const entry of entries) {
         const { width } = entry.contentRect;
 
-        // 当 DataViewer 宽度 < 400px 时自动折叠侧边栏
-        if (width < 400 && !isSidebarCollapsed) {
+        // 当 DataViewer 宽度 < 400px 时自动折叠侧边栏，但不覆盖手动展开操作
+        if (width < 400 && !isSidebarCollapsed && !isManuallyExpanded) {
           setIsSidebarCollapsed(true);
+          // 自动折叠时不设置手动折叠标记
         }
-        // 当宽度 >= 500px 时可以考虑自动展开（可选，避免频繁切换）
-        else if (width >= 500 && isSidebarCollapsed) {
-          // 只有在用户没有手动折叠的情况下才自动展开
-          // 这里简化处理，可以根据需要添加更复杂的状态管理
+        // 当宽度 >= 500px 时，只有在非手动折叠的情况下才自动展开
+        else if (width >= 500 && isSidebarCollapsed && !isManuallyCollapsed) {
           setIsSidebarCollapsed(false);
+          setIsManuallyExpanded(false); // 清除手动展开标记
         }
       }
     });
@@ -98,7 +100,7 @@ const DatabaseViewer: React.FC<DatabaseViewerProps> = ({ sessionId, className })
         resizeObserverRef.current = null;
       }
     };
-  }, [isSidebarCollapsed]); // 依赖 isSidebarCollapsed 状态
+  }, [isSidebarCollapsed, isManuallyCollapsed, isManuallyExpanded]); // 添加 isManuallyExpanded 依赖
 
   useEffect(() => {
     if (!isResizingExplorer) return;
@@ -212,14 +214,19 @@ const DatabaseViewer: React.FC<DatabaseViewerProps> = ({ sessionId, className })
         className={`${isSidebarCollapsed ? 'w-10' : ''} border-r border-gray-200 bg-gray-50 flex flex-col relative ${isResizingExplorer ? '' : 'transition-[width] duration-200'} motion-reduce:transition-none`}
         style={!isSidebarCollapsed ? { width: 'var(--dbv-explorer-width)' } : undefined}
       >
-        <div className={`p-4 border-b border-gray-200 font-semibold text-gray-700 flex items-center ${isSidebarCollapsed ? 'justify-center' : 'justify-between'}`}>
-          <div className={`flex items-center gap-2 min-w-0 ${isSidebarCollapsed ? 'justify-center' : ''}`}>
-
-            {!isSidebarCollapsed && <span className="truncate">Explorer</span>}
-          </div>
+        <div className={`h-14 px-4 border-b border-gray-200 bg-white font-semibold text-gray-700 flex items-center ${isSidebarCollapsed ? 'justify-center' : 'justify-between'}`}>
+          {!isSidebarCollapsed && (
+            <div className="flex items-center gap-2 min-w-0">
+              <span className="truncate">资源管理器</span>
+            </div>
+          )}
           {!isSidebarCollapsed && (
             <button
-              onClick={() => setIsSidebarCollapsed(true)}
+              onClick={() => {
+                setIsSidebarCollapsed(true);
+                setIsManuallyCollapsed(true);
+                setIsManuallyExpanded(false);
+              }}
               className="p-1 hover:bg-gray-200 rounded text-gray-500 transition-colors"
               title="最小化侧边栏"
               type="button"
@@ -229,7 +236,11 @@ const DatabaseViewer: React.FC<DatabaseViewerProps> = ({ sessionId, className })
           )}
           {isSidebarCollapsed && (
             <button
-              onClick={() => setIsSidebarCollapsed(false)}
+              onClick={() => {
+                setIsSidebarCollapsed(false);
+                setIsManuallyCollapsed(false);
+                setIsManuallyExpanded(true);
+              }}
               className="p-1 hover:bg-gray-200 rounded text-gray-500 transition-colors"
               title="展开侧边栏"
               type="button"
@@ -249,7 +260,7 @@ const DatabaseViewer: React.FC<DatabaseViewerProps> = ({ sessionId, className })
               >
                 {expanded.database ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
                 <HardDrive className="w-4 h-4 text-yellow-600" />
-                <span className="font-medium">Database</span>
+                <span className="font-medium">数据库</span>
               </div>
 
               {expanded.database && (
@@ -261,7 +272,7 @@ const DatabaseViewer: React.FC<DatabaseViewerProps> = ({ sessionId, className })
                   >
                     {expanded.tables ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
                     <Table className="w-4 h-4 text-green-600" />
-                    <span className="font-medium">Tables</span>
+                    <span className="font-medium">表</span>
                   </div>
 
                   {expanded.tables && (
@@ -308,13 +319,8 @@ const DatabaseViewer: React.FC<DatabaseViewerProps> = ({ sessionId, className })
         <div className="h-14 border-b border-gray-200 flex items-center justify-between px-4 bg-white shrink-0">
           <div className="flex items-center gap-4 min-w-0">
             <h2 className="text-lg font-semibold text-gray-800 truncate">
-              {selectedTable || 'Select a table'}
+              {selectedTable || '选择一个表'}
             </h2>
-            {selectedTable && (
-              <span className="px-2 py-0.5 bg-gray-100 text-gray-600 text-xs rounded-full border border-gray-200 font-medium shrink-0">
-                Read-only
-              </span>
-            )}
           </div>
 
           <div className="flex items-center gap-2 shrink-0">
@@ -364,7 +370,7 @@ const DatabaseViewer: React.FC<DatabaseViewerProps> = ({ sessionId, className })
                     {data.length === 0 && !loading && (
                       <tr>
                         <td colSpan={columns.length} className="px-6 py-8 text-center text-gray-500">
-                          No data available
+                          暂无数据
                         </td>
                       </tr>
                     )}
@@ -375,7 +381,7 @@ const DatabaseViewer: React.FC<DatabaseViewerProps> = ({ sessionId, className })
           ) : (
             <div className="h-full flex flex-col items-center justify-center text-gray-400">
               <Database className="w-16 h-16 mb-4 opacity-20" />
-              <p>Select a table</p>
+              <p>选择一个表</p>
             </div>
           )}
         </div>
