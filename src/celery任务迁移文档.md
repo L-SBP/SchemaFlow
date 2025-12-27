@@ -21,6 +21,224 @@
 4. 又离开 → DDL 已保存
 5. 再回来 → 获取已生成的 DDL，确认后部署
 
+---
+
+## 开发者指南：如何添加新的 Celery 任务
+
+### 步骤 1：创建任务文件或在现有文件中添加任务
+
+任务文件位置：`src/backend/app/tasks/`
+
+**创建新任务文件示例：**
+
+```python
+# backend/app/tasks/my_new_tasks.py
+
+"""
+新任务模块
+
+在此添加模块说明
+"""
+
+import asyncio
+from celery import shared_task
+from celery.utils.log import get_task_logger
+
+from celery_app import celery_app
+from core.config import config
+from core.database import PsqlHelper
+
+logger = get_task_logger(__name__)
+
+
+# =========================================================
+# 辅助函数：同步运行异步代码
+# =========================================================
+
+def run_async(coro):
+    """
+    在同步环境中运行异步协程。
+    
+    Celery Worker 是同步的，需要用此方法包装异步代码。
+    """
+    loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(loop)
+    try:
+        return loop.run_until_complete(coro)
+    finally:
+        loop.close()
+
+
+# =========================================================
+# 任务定义
+# =========================================================
+
+@celery_app.task(
+    name="tasks.my_task",           # 任务名称（必须唯一）
+    bind=True,                       # 绑定 self，可访问任务实例
+    max_retries=3,                   # 最大重试次数
+    default_retry_delay=30,          # 重试间隔（秒）
+    soft_time_limit=300,             # 软超时（秒）- 触发 SoftTimeLimitExceeded
+    time_limit=360,                  # 硬超时（秒）- 强制终止
+)
+def my_task(self, param1: str, param2: int) -> dict:
+    """
+    我的新任务
+    
+    Args:
+        self: Celery 任务实例（bind=True 时可用）
+        param1: 参数1
+        param2: 参数2
+        
+    Returns:
+        dict: 任务执行结果
+    """
+    logger.info(f"[Task] Starting my_task with param1={param1}, param2={param2}")
+    
+    try:
+        # 执行异步代码
+        result = run_async(_async_business_logic(param1, param2))
+        
+        logger.info(f"[Task] my_task completed successfully")
+        return {
+            "success": True,
+            "result": result
+        }
+        
+    except Exception as e:
+        logger.error(f"[Task] my_task failed: {e}")
+        
+        # 可选：触发重试
+        # raise self.retry(exc=e, countdown=30)
+        
+        return {
+            "success": False,
+            "error": str(e)
+        }
+
+
+async def _async_business_logic(param1: str, param2: int):
+    """异步业务逻辑（内部实现）"""
+    # 如果需要数据库操作，创建临时引擎
+    temp_engine = PsqlHelper._get_async_engine(config.db)
+    try:
+        async with PsqlHelper.get_session(temp_engine) as session:
+            # 执行数据库操作
+            pass
+        return "success"
+    finally:
+        await temp_engine.dispose()
+```
+
+### 步骤 2：注册任务模块到 Celery
+
+编辑 `celery_app.py`，在 `include` 列表中添加新模块：
+
+```python
+# backend/app/celery_app.py
+
+celery_app = Celery(
+    "app",
+    broker=CELERY_BROKER_URL,
+    backend=CELERY_RESULT_BACKEND,
+    include=[
+        "tasks.ai_generation_tasks",   # 已有的 AI 生成任务
+        "tasks.my_new_tasks",          # 新增：我的新任务模块
+    ]
+)
+```
+
+### 步骤 3：在 Service 层调用任务
+
+```python
+# backend/app/service/my_service.py
+
+from tasks.my_new_tasks import my_task
+
+def trigger_my_task(param1: str, param2: int) -> str:
+    """
+    触发异步任务
+    
+    Returns:
+        str: Celery 任务 ID
+    """
+    task = my_task.delay(param1, param2)
+    return task.id
+
+
+def get_task_result(task_id: str) -> dict:
+    """
+    查询任务状态和结果
+    """
+    from celery.result import AsyncResult
+    from celery_app import celery_app
+    
+    result = AsyncResult(task_id, app=celery_app)
+    
+    return {
+        "task_id": task_id,
+        "status": result.status,      # PENDING, STARTED, SUCCESS, FAILURE, RETRY
+        "ready": result.ready(),      # 是否完成
+        "successful": result.successful() if result.ready() else None,
+        "result": result.result if result.ready() else None,
+    }
+```
+
+### 步骤 4：重启 Celery Worker
+
+**⚠️ 重要：修改任务代码后必须重启 Worker！**
+
+```bash
+# 停止当前 Worker (Ctrl+C)
+
+# 重新启动
+cd src/backend/app
+celery -A celery_app worker --loglevel=info --pool=solo  # Windows
+celery -A celery_app worker --loglevel=info              # Linux/Mac
+```
+
+### 常用任务装饰器参数
+
+| 参数 | 说明 | 示例 |
+|------|------|------|
+| `name` | 任务名称（全局唯一） | `"tasks.my_task"` |
+| `bind` | 绑定 self 参数 | `True` |
+| `max_retries` | 最大重试次数 | `3` |
+| `default_retry_delay` | 默认重试间隔（秒） | `30` |
+| `soft_time_limit` | 软超时（触发异常） | `300` |
+| `time_limit` | 硬超时（强制终止） | `360` |
+| `autoretry_for` | 自动重试的异常类型 | `(ConnectionError,)` |
+| `retry_backoff` | 指数退避重试 | `True` |
+| `ignore_result` | 不存储结果 | `True` |
+
+### 任务调用方式
+
+```python
+# 1. 异步调用（推荐）
+task = my_task.delay(param1, param2)
+
+# 2. 异步调用（完整参数）
+task = my_task.apply_async(
+    args=[param1, param2],
+    countdown=10,        # 延迟10秒执行
+    expires=3600,        # 任务过期时间
+    queue="default",     # 指定队列
+)
+
+# 3. 同步调用（阻塞，仅用于测试）
+result = my_task.apply(args=[param1, param2]).get()
+
+# 4. 任务链（顺序执行）
+from celery import chain
+chain(task1.s(arg1), task2.s()).apply_async()
+
+# 5. 任务组（并行执行）
+from celery import group
+group(task1.s(arg1), task2.s(arg2)).apply_async()
+```
+
+---
+
 ## 项目创建流程
 
 ```
