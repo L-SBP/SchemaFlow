@@ -160,8 +160,19 @@ class AIService:
             content = response.choices[0].message.content
             content = content.replace("```mermaid", "").replace("```", "").strip()
 
-            # 拼接主题初始化指令
-            return build_mermaid_init_directive() + content
+            # 确保 content 以 erDiagram 开头，如果不是则添加换行符
+            if not content.startswith('erDiagram'):
+                # 如果内容不是以 erDiagram 开头，可能需要添加换行符
+                content = content.lstrip()
+            
+            # 拼接主题初始化指令，确保格式正确
+            result = build_mermaid_init_directive() + content
+            
+            # 记录生成的内容用于调试
+            log.info(f"[ERGen] Generated ER diagram code length: {len(result)}")
+            log.debug(f"[ERGen] Generated ER diagram preview: {result[:200]}...")
+            
+            return result
 
         except Exception as e:
             log.error(f"[ERGen] Error generating mermaid code: {e}")

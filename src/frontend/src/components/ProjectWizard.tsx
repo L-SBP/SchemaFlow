@@ -1,16 +1,9 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { ProjectDTO, CreationStageEnum, ProjectStatusEnum } from '../types';
-import { getProjectDetail, generateDDL, deployProject, updateProject } from '../api/project';
-import { Button, ProgressBar, Input } from './UI';
-import { Loader2, CheckCircle2, AlertTriangle, FileJson, Database, Code2, Play } from 'lucide-react';
-import mermaid from 'mermaid';
-
-// Initialize mermaid
-mermaid.initialize({
-  startOnLoad: false,
-  theme: 'default',
-  securityLevel: 'loose',
-});
+import { getProjectDetail, generateDDL, deployProject } from '../api/project';
+import { Button, ProgressBar } from './UI';
+import { Loader2, CheckCircle2, AlertTriangle, FileJson, Code2, Play } from 'lucide-react';
+import { InteractiveERRenderer } from './InteractiveERRenderer';
 
 interface ProjectWizardProps {
   projectId: string | number;
@@ -18,33 +11,6 @@ interface ProjectWizardProps {
   onClose: () => void;
   viewOnly?: boolean;
 }
-
-const MermaidChart: React.FC<{ chart: string; className?: string }> = ({ chart, className = '' }) => {
-  const containerRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    const renderChart = async () => {
-      if (containerRef.current && chart) {
-        try {
-          containerRef.current.innerHTML = '';
-          const id = `mermaid-${Date.now()}`;
-          const { svg } = await mermaid.render(id, chart);
-          if (containerRef.current) {
-            containerRef.current.innerHTML = svg;
-          }
-        } catch (error) {
-          console.error('Mermaid render error:', error);
-          if (containerRef.current) {
-            containerRef.current.innerHTML = '<div class="text-red-500">无法渲染图表</div>';
-          }
-        }
-      }
-    };
-    renderChart();
-  }, [chart]);
-
-  return <div ref={containerRef} className={`overflow-auto p-4 bg-white rounded border ${className}`} />;
-};
 
 const formatDisplayContent = (content: any) => {
   if (!content) return '';
@@ -70,13 +36,12 @@ const formatDisplayContent = (content: any) => {
 
 export const ProjectWizard: React.FC<ProjectWizardProps> = ({ projectId, onComplete, onClose, viewOnly = false }) => {
   const [project, setProject] = useState<ProjectDTO | null>(null);
-  const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   // Edit states
   const [editedSchema, setEditedSchema] = useState<string>('');
   const [editedDDL, setEditedDDL] = useState<string>('');
-  const [requirements, setRequirements] = useState<string>('');
+  const [requirements] = useState<string>('');
   const [activeTab, setActiveTab] = useState('概览');
 
   // Progress animation state
@@ -96,7 +61,6 @@ export const ProjectWizard: React.FC<ProjectWizardProps> = ({ projectId, onCompl
       try {
         const data = await getProjectDetail(projectId);
         setProject(data);
-        setLoading(false);
 
         // Initialize edit states if empty
         if (data.creation_stage === CreationStageEnum.SCHEMA_GENERATED && !editedSchema && data.schema_definition) {
@@ -258,7 +222,6 @@ export const ProjectWizard: React.FC<ProjectWizardProps> = ({ projectId, onCompl
   const handleConfirmSchema = async () => {
     if (!project) return;
     try {
-      setLoading(true);
       setVisualProgress(0); // Reset progress for next stage
 
       // 乐观更新：立即切换到生成 DDL 状态，显示进度条
@@ -269,14 +232,12 @@ export const ProjectWizard: React.FC<ProjectWizardProps> = ({ projectId, onCompl
     } catch (err) {
       console.error("Failed to confirm schema:", err);
       setError("确认 Schema 失败。");
-      setLoading(false);
     }
   };
 
   const handleConfirmDDL = async () => {
     if (!project) return;
     try {
-      setLoading(true);
       setVisualProgress(0); // Reset progress for next stage
 
       // 乐观更新：立即切换到执行 DDL 状态，显示进度条
@@ -287,7 +248,6 @@ export const ProjectWizard: React.FC<ProjectWizardProps> = ({ projectId, onCompl
     } catch (err) {
       console.error("Failed to deploy project:", err);
       setError("部署项目失败。");
-      setLoading(false);
     }
   };
 
@@ -426,30 +386,52 @@ export const ProjectWizard: React.FC<ProjectWizardProps> = ({ projectId, onCompl
             </div>
 
             <div className={`${displayHeightClass} w-full`}>
-              {activeTab === '概览' && project.er_diagram_code && (
-                <div className="h-full border rounded-lg p-4 overflow-hidden flex flex-col">
+              {activeTab === '概览' && project?.er_diagram_code && project.er_diagram_code.trim() && (
+                <div className="h-full border rounded-lg p-4 flex flex-col" style={{ overflow: 'hidden' }}>
                   <h4 className="font-medium mb-4 text-gray-700 shrink-0">ER 图</h4>
-                  <MermaidChart chart={project.er_diagram_code} className="flex-1 min-h-0" />
+                  <InteractiveERRenderer chart={project.er_diagram_code} className="flex-1 min-h-0" />
+                </div>
+              )}
+
+              {activeTab === '概览' && (!project?.er_diagram_code || !project.er_diagram_code.trim()) && (
+                <div className="h-full border rounded-lg p-4 flex flex-col" style={{ overflow: 'hidden' }}>
+                  <h4 className="font-medium mb-4 text-gray-700 shrink-0">ER 图</h4>
+                  <div className="flex-1 flex items-center justify-center text-gray-500">
+                    <div className="text-center">
+                      <p className="mb-2">ER 图不可用</p>
+                      <p className="text-sm">暂无可用的 ER 图数据</p>
+                    </div>
+                  </div>
                 </div>
               )}
 
               {activeTab === 'Schema' && (
-                <div className="h-full border rounded-md overflow-hidden bg-gray-50">
-                  <textarea
-                    readOnly
-                    className="w-full h-full p-4 font-mono text-sm resize-none focus:outline-none bg-transparent"
-                    value={project.schema_definition ? formatDisplayContent(project.schema_definition) : ''}
-                  />
+                <div className="h-full border rounded-md bg-gray-50" style={{ overflow: 'hidden' }}>
+                  <div
+                    className="w-full h-full p-4 font-mono text-sm bg-transparent whitespace-pre-wrap"
+                    style={{
+                      overflow: 'hidden',
+                      wordBreak: 'break-word',
+                      lineHeight: '1.5'
+                    }}
+                  >
+                    {project.schema_definition ? formatDisplayContent(project.schema_definition) : ''}
+                  </div>
                 </div>
               )}
 
               {activeTab === 'DDL' && (
-                <div className="h-full border rounded-md overflow-hidden bg-gray-50">
-                  <textarea
-                    readOnly
-                    className="w-full h-full p-4 font-mono text-sm resize-none focus:outline-none bg-transparent"
-                    value={project.ddl_statement ? formatDisplayContent(project.ddl_statement) : ''}
-                  />
+                <div className="h-full border rounded-md bg-gray-50" style={{ overflow: 'hidden' }}>
+                  <div
+                    className="w-full h-full p-4 font-mono text-sm bg-transparent whitespace-pre-wrap"
+                    style={{
+                      overflow: 'hidden',
+                      wordBreak: 'break-word',
+                      lineHeight: '1.5'
+                    }}
+                  >
+                    {project.ddl_statement ? formatDisplayContent(project.ddl_statement) : ''}
+                  </div>
                 </div>
               )}
             </div>
@@ -472,7 +454,7 @@ export const ProjectWizard: React.FC<ProjectWizardProps> = ({ projectId, onCompl
   };
 
   return (
-    <div className="bg-white rounded-lg shadow-sm p-6 max-w-4xl mx-auto w-full">
+    <div className="bg-white rounded-lg shadow-sm p-6 max-w-4xl mx-auto w-full" style={{ overflow: 'hidden' }}>
       <div className="mb-6 border-b pb-4">
         <h2 className="text-2xl font-bold text-gray-800">{project.project_name}</h2>
         <p className="text-gray-500">{project.description}</p>
@@ -485,7 +467,9 @@ export const ProjectWizard: React.FC<ProjectWizardProps> = ({ projectId, onCompl
         </div>
       )}
 
-      {renderStageContent()}
+      <div style={{ overflow: 'hidden' }}>
+        {renderStageContent()}
+      </div>
     </div>
   );
 };
