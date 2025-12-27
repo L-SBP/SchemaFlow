@@ -7,6 +7,7 @@ from core.auth import decode_jwt_token # 导入刚才纯净版的工具函数
 from crud.crud_user_account import crud_user_account
 from schema.user import UserMe
 from redis_client.redis import get_redis
+from redis_client.redis_keys import redis_key_manager
 from core.log import log
 
 # 1. 这一步只负责从 Header 拿 Token 字符串
@@ -18,7 +19,7 @@ async def get_current_user_id(token: str = Depends(get_token_str)) -> int:
     # 增加 Redis 黑名单检查 (队友的逻辑)
     redis = get_redis()
     if redis:
-        is_valid = await redis.get(f"token:{token}")
+        is_valid = await redis.get(redis_key_manager.get_token_key(token))
         if not is_valid:
             raise HTTPException(status_code=401, detail="令牌已被撤销")
     

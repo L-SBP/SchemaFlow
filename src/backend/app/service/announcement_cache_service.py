@@ -9,14 +9,12 @@ import logging
 from typing import List, Optional, Dict, Any, Tuple
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func
+from redis_client.redis_keys import redis_key_manager
 
 from models.system_announcement import SystemAnnouncement as Announcement
 from redis_client.redis import get_redis
 from core.log import log
 
-# 缓存键前缀
-ANNOUNCEMENT_LIST_KEY = "announcement:list:published"
-ANNOUNCEMENT_DETAIL_KEY_PREFIX = "announcement:detail:"
 # 缓存过期时间（秒）：1小时
 CACHE_TTL = 3600
 
@@ -48,7 +46,7 @@ class AnnouncementCacheService:
         if not redis_conn:
             return None
             
-        cache_key = f"{ANNOUNCEMENT_LIST_KEY}:page_{page}:size_{page_size}"
+        cache_key = redis_key_manager.get_announcement_list_key(page, page_size)
         try:
             cached_data = await redis_conn.get(cache_key)
             if cached_data:
@@ -75,7 +73,7 @@ class AnnouncementCacheService:
         if not redis_conn:
             return
             
-        cache_key = f"{ANNOUNCEMENT_LIST_KEY}:page_{page}:size_{page_size}"
+        cache_key = redis_key_manager.get_announcement_list_key(page, page_size)
         try:
             cache_data = {
                 "total": total,
@@ -101,7 +99,7 @@ class AnnouncementCacheService:
         if not redis_conn:
             return None
             
-        cache_key = f"{ANNOUNCEMENT_DETAIL_KEY_PREFIX}{announcement_id}"
+        cache_key = redis_key_manager.get_announcement_detail_key(announcement_id)
         try:
             cached_data = await redis_conn.get(cache_key)
             if cached_data:
@@ -126,7 +124,7 @@ class AnnouncementCacheService:
         if not redis_conn:
             return
             
-        cache_key = f"{ANNOUNCEMENT_DETAIL_KEY_PREFIX}{announcement_id}"
+        cache_key = redis_key_manager.get_announcement_detail_key(announcement_id)
         try:
             await redis_conn.setex(cache_key, CACHE_TTL, json.dumps(announcement_data, default=str))
             log.info(f"Cache set for announcement detail: {announcement_id}")
@@ -145,7 +143,7 @@ class AnnouncementCacheService:
             
         try:
             # 使用 SCAN 命令查找并删除所有公告列表缓存
-            pattern = f"{ANNOUNCEMENT_LIST_KEY}:*"
+            pattern = redis_key_manager.get_announcement_list_pattern()
             cursor = 0
             while True:
                 cursor, keys = await redis_conn.scan(cursor=cursor, match=pattern, count=100)
@@ -170,7 +168,7 @@ class AnnouncementCacheService:
         if not redis_conn:
             return
             
-        cache_key = f"{ANNOUNCEMENT_DETAIL_KEY_PREFIX}{announcement_id}"
+        cache_key = redis_key_manager.get_announcement_detail_key(announcement_id)
         try:
             await redis_conn.delete(cache_key)
             log.info(f"Deleted announcement detail cache: {announcement_id}")
@@ -191,7 +189,7 @@ class AnnouncementCacheService:
             await AnnouncementCacheService.invalidate_list_cache()
             
             # 清除所有详情缓存
-            pattern = f"{ANNOUNCEMENT_DETAIL_KEY_PREFIX}*"
+            pattern = redis_key_manager.get_announcement_detail_pattern()
             cursor = 0
             while True:
                 cursor, keys = await redis_conn.scan(cursor=cursor, match=pattern, count=100)
