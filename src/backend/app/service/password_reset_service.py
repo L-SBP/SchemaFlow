@@ -22,6 +22,7 @@ from crud.crud_user_account import crud_user_account
 from redis_client.redis import get_redis
 from core import exceptions
 from core.email_utils import send_password_reset_code_email
+from redis_client.redis_keys import redis_key_manager
 
 
 def _generate_code(length: int = 6) -> str:
@@ -41,7 +42,6 @@ async def _rate_limit(redis, key: str, limit: int, window_seconds: int) -> bool:
 
 async def service_send_password_reset_code(db: AsyncSession, email: str, client_ip: str | None = None) -> None:
     """发送密码重置验证码：若邮箱存在则发邮件；无论如何不抛用户可见异常。"""
-
     redis = get_redis()
     if redis is None:
         log.error("Redis is not initialized")
@@ -55,7 +55,7 @@ async def service_send_password_reset_code(db: AsyncSession, email: str, client_
     window = 3600
     if not await _rate_limit(
         redis,
-        key=f"pwdreset:rl:email:{email_norm}",
+        key=redis_key_manager.get_password_reset_rate_limit_key(email_norm),
         limit=getattr(config, "password_reset_request_limit_per_email_per_hour", 3),
         window_seconds=window,
     ):
@@ -65,7 +65,7 @@ async def service_send_password_reset_code(db: AsyncSession, email: str, client_
     if client_ip:
         if not await _rate_limit(
             redis,
-            key=f"pwdreset:rl:ip:{client_ip}",
+            key=redis_key_manager.get_password_reset_rate_limit_key(email_norm, client_ip),
             limit=getattr(config, "password_reset_request_limit_per_ip_per_hour", 20),
             window_seconds=window,
         ):
@@ -78,7 +78,7 @@ async def service_send_password_reset_code(db: AsyncSession, email: str, client_
 
     verify_code = _generate_code(6)
     ttl = int(getattr(config.smtp, "expire_time_seconds", 600))
-    redis_key = f"pwdreset:code:{email_norm}"
+    redis_key = redis_key_manager.get_password_reset_code_key(email_norm)
 
     try:
         await redis.setex(redis_key, ttl, verify_code)
@@ -110,7 +110,7 @@ async def service_reset_password_with_code(db: AsyncSession, email: str, verific
     if not code:
         raise exceptions.ValidationException("验证码是必需的")
 
-    redis_key = f"pwdreset:code:{email_norm}"
+    redis_key = redis_key_manager.get_password_reset_code_key(email_norm)
     stored_code = await redis.get(redis_key)
     if not stored_code or stored_code != code:
         raise exceptions.ValidationException("验证码无效或已过期")

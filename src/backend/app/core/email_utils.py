@@ -15,6 +15,7 @@ from aiosmtplib import SMTP
 from core.config import config
 from core.log import log
 from redis_client.redis import get_redis
+from redis_client.redis_keys import redis_key_manager
 
 def _generate_code(length: int = 6) -> str:
     """
@@ -95,7 +96,7 @@ async def send_verify_email(to_email: str, subject: str = "【auto_db_deployment
             log.info(f"Sent verification code {verify_code} to {to_email}")
 
         await redis.setex(
-            f"verification:{to_email}",
+            redis_key_manager.get_verification_key(to_email),
             config.smtp.expire_time_seconds,
             verify_code,
         )
@@ -124,7 +125,8 @@ async def verify_code(to_email: str, code: str) -> bool:
         redis = get_redis()
         if redis is None:
             raise ValueError("Redis is not initialized")
-        stored_code = await redis.get(f"verification:{to_email}")
+        from redis_client.redis_keys import redis_key_manager
+        stored_code = await redis.get(redis_key_manager.get_verification_key(to_email))
         if stored_code is None:
             return False
         return stored_code == code

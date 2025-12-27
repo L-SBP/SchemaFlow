@@ -31,29 +31,12 @@ class RedisFrequencyLimiter:
     - 如果在指定时间窗口内请求次数超过阈值，标记为风险状态
     """
     
-    def __init__(self, redis_host: str = settings.redis.host, 
-                 redis_port: int = settings.redis.port,
-                 redis_db: int = 0):
+    def __init__(self):
         """
-        初始化 Redis 连接。
-        
-        Args:
-            redis_host: Redis 服务器地址
-            redis_port: Redis 服务器端口
-            redis_db: Redis 数据库号
+        初始化 Redis 连接（使用全局 Redis 客户端）。
         """
-        try:
-            self.redis_client = redis_client.Redis(
-                host=redis_host,
-                port=redis_port,
-                db=redis_db,
-                decode_responses=True
-            )
-            self.redis_client.ping()
-            log.info("Redis 连接成功")
-        except Exception as e:
-            log.error(f"Redis 连接失败: {e}")
-            self.redis_client = None
+        from redis_client.redis import get_redis
+        self.redis_client = get_redis()
     
     def check_frequency(self, user_id: int, 
                        time_window: int = 10,  # 时间窗口（秒）
@@ -77,7 +60,8 @@ class RedisFrequencyLimiter:
             return False, 0
         
         try:
-            key = f"user:freq:{user_id}"
+            from redis_client.redis_keys import redis_key_manager
+            key = redis_key_manager.get_frequency_limit_key(user_id)
             
             # INCR 操作：增加请求计数
             current_count = self.redis_client.incr(key)
@@ -112,7 +96,8 @@ class RedisFrequencyLimiter:
             return 0
         
         try:
-            key = f"user:freq:{user_id}"
+            from redis_client.redis_keys import redis_key_manager
+            key = redis_key_manager.get_frequency_limit_key(user_id)
             count = self.redis_client.get(key)
             return int(count) if count else 0
         except Exception as e:
@@ -133,7 +118,8 @@ class RedisFrequencyLimiter:
             return False
         
         try:
-            key = f"user:freq:{user_id}"
+            from redis_client.redis_keys import redis_key_manager
+            key = redis_key_manager.get_frequency_limit_key(user_id)
             self.redis_client.delete(key)
             log.info(f"已重置用户 {user_id} 的请求频率")
             return True

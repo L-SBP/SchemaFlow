@@ -14,6 +14,7 @@ from app.core.security import (
     ViolationLogger, 
     BlacklistManager
 )
+from app.redis_client.redis_keys import RedisKeyManager
 from app.models.user_account import UserAccount
 from app.models.violation_log import ViolationLog
 
@@ -91,7 +92,7 @@ class TestRedisFrequencyLimiter:
         
         # 验证 Redis 中的键
         if self.limiter.redis_client:
-            key = f"user:freq:{user_id}"
+            key = RedisKeyManager.get_frequency_limit_key(user_id)
             value = self.limiter.redis_client.get(key)
             assert value is not None
             assert int(value) >= 1
@@ -100,7 +101,7 @@ class TestRedisFrequencyLimiter:
         """清理：删除测试数据"""
         if self.limiter.redis_client:
             for i in range(9996, 10000):
-                key = f"user:freq:{i}"
+                key = RedisKeyManager.get_frequency_limit_key(str(i))
                 self.limiter.redis_client.delete(key)
 
 
