@@ -7,7 +7,7 @@
 
 # backend/app/schema/admin.py
 
-from pydantic import BaseModel, Field, ConfigDict
+from pydantic import BaseModel, Field, ConfigDict, validator
 from typing import Optional, List, Literal, Any
 from datetime import datetime
 from schema.user import UserMe  # 确保这里能导入 UserMe
@@ -111,7 +111,13 @@ class AdminUpdateUserQuotaRequest(BaseModel):
     Attributes:
         max_databases (int): 新的最大数据库额度。
     """
-    max_databases: int = Field(..., gt=0, description="新的最大数据库额度")
+    max_databases: int = Field(..., description="新的最大数据库额度")
+    
+    @validator('max_databases')
+    def max_databases_positive(cls, v):
+        if v <= 0:
+            raise ValueError('最大数据库额度必须大于0')
+        return v
 
 
 # 4.1.3. 调整用户资源额度 - Response (新增，解决 ImportError)
@@ -190,9 +196,15 @@ class AnnouncementCreateRequest(BaseModel):
         content (str): 公告内容。
         status (str): 公告状态 (默认 "published")。
     """
-    title: str = Field(..., min_length=1, max_length=100)
+    title: str = Field(..., description="公告标题")
     content: str
     status: Literal['draft', 'published'] = 'published'
+    
+    @validator('title')
+    def title_length(cls, v):
+        if not 1 <= len(v) <= 100:
+            raise ValueError('公告标题长度必须在1到100个字符之间')
+        return v
 
 
 class AnnouncementUpdateRequest(BaseModel):

@@ -7,7 +7,7 @@
 
 # backend/app/schema/knowledge.py
 
-from pydantic import BaseModel, Field, ConfigDict
+from pydantic import BaseModel, Field, ConfigDict, validator
 from typing import List, Optional
 from datetime import datetime
 
@@ -21,9 +21,15 @@ class KnowledgeBase(BaseModel):
         definition (str): 术语定义。
         examples (Optional[str]): 使用示例。
     """
-    term: str = Field(..., description="业务术语", min_length=1, max_length=100)
+    term: str = Field(..., description="业务术语")
     definition: str = Field(..., description="术语定义")
     examples: Optional[str] = Field(None, description="使用示例")
+    
+    @validator('term')
+    def term_length(cls, v):
+        if not 1 <= len(v) <= 100:
+            raise ValueError('业务术语长度必须在1到100个字符之间')
+        return v
 
 # --- 3.4.1 创建/更新请求 ---
 class KnowledgeCreate(KnowledgeBase):
@@ -42,7 +48,7 @@ class KnowledgeUpdate(KnowledgeBase):
         definition (Optional[str]): 术语定义。
         examples (Optional[str]): 使用示例。
     """
-    term: Optional[str] = Field(None, min_length=1, max_length=100)
+    term: Optional[str] = Field(None, description="业务术语")
     definition: Optional[str] = None
     examples: Optional[str] = None
 

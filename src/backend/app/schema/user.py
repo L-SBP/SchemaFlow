@@ -4,7 +4,7 @@
 本模块定义了用户个人信息的查询、更新、修改密码及头像等操作的请求和响应模型。
 """
 
-from pydantic import BaseModel, Field, EmailStr, field_validator, model_validator, ConfigDict
+from pydantic import BaseModel, EmailStr, Field, field_validator, model_validator, ConfigDict, validator
 from typing import Optional, Literal, List, Any
 from datetime import datetime
 
@@ -18,8 +18,14 @@ class UserBase(BaseModel):
         username (str): 用户名。
         email (EmailStr): 邮箱。
     """
-    username: str = Field(..., min_length=3, max_length=50)
+    username: str = Field(..., description="用户名")
     email: EmailStr
+    
+    @validator('username')
+    def username_length(cls, v):
+        if not 3 <= len(v) <= 50:
+            raise ValueError('用户名长度必须在3到50个字符之间')
+        return v
 # 当前用户响应
 class UserMe(BaseModel):
     """
@@ -60,7 +66,13 @@ class UserUpdateUsername(BaseModel):
     Attributes:
         username (str): 新用户名。
     """
-    username: str = Field(..., min_length=3, max_length=50)
+    username: str = Field(..., description="用户名")
+    
+    @validator('username')
+    def username_length(cls, v):
+        if not 3 <= len(v) <= 50:
+            raise ValueError('用户名长度必须在3到50个字符之间')
+        return v
 
 # 更新用户邮箱请求
 class UserUpdateEmailRequest(BaseModel):
@@ -82,7 +94,13 @@ class UserUpdateEmailConfirm(BaseModel):
         code (str): 验证码。
     """
     new_email: EmailStr
-    code: str = Field(..., min_length=6, max_length=6, description="验证码")
+    code: str = Field(..., description="验证码")
+    
+    @validator('code')
+    def code_length(cls, v):
+        if not 6 <= len(v) <= 6:
+            raise ValueError('验证码必须为6个字符')
+        return v
 
 # 更新头像
 class UserUpdateAvatar(BaseModel):
@@ -104,11 +122,16 @@ class UserUpdatePassword(BaseModel):
         new_password (str): 新密码。
         confirm_password (str): 确认密码。
     """
-    old_password: str = Field(..., min_length=6, max_length=50, description="旧密码")
-    new_password: str = Field(..., min_length=6, max_length=50, description="新密码")
-    confirm_password: str = Field(..., min_length=6, max_length=50, description="确认密码")
-
-
+    old_password: str = Field(..., description="旧密码")
+    new_password: str = Field(..., description="新密码")
+    confirm_password: str = Field(..., description="确认密码")
+    
+    @validator('old_password', 'new_password', 'confirm_password')
+    def password_length(cls, v):
+        if not 6 <= len(v) <= 50:
+            raise ValueError('密码长度必须在6到50个字符之间')
+        return v
+    
     @model_validator(mode='before')
     @classmethod
     def passwords_match(cls, data: Any) -> Any:
@@ -118,7 +141,7 @@ class UserUpdatePassword(BaseModel):
             confirm_password = data.get('confirm_password')
 
             if new_password and confirm_password and new_password != confirm_password:
-                raise ValueError('passwords do not match')
+                raise ValueError('两次输入的密码不一致')
         return data
 
 

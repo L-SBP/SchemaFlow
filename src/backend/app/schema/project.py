@@ -6,7 +6,7 @@
 
 # backend/app/schema/project.py
 
-from pydantic import BaseModel, Field, ConfigDict
+from pydantic import BaseModel, Field, ConfigDict, validator
 from typing import Optional, Literal, List, Any,Dict
 from datetime import datetime
 from enum import Enum
@@ -43,10 +43,22 @@ class ProjectCreate(BaseModel):
         description (str): 项目描述。
         ai_model (Literal): 用于生成Schema的AI模型。
     """
-    project_name: str = Field(..., min_length=1, max_length=50, description="项目名称")
+    project_name: str = Field(..., description="项目名称")
     db_type: Literal['mysql', 'postgresql', 'sqlite'] = Field(..., description="数据库类型")
-    description: str = Field(..., max_length=1000, description="项目描述")
+    description: str = Field(..., description="项目描述")
     ai_model: Literal["gpt4", "deepseek", "chatgpt"] = Field("gpt4",description="用于生成Schema的AI模型")
+    
+    @validator('project_name')
+    def project_name_length(cls, v):
+        if not 1 <= len(v) <= 50:
+            raise ValueError('项目名称长度必须在1到50个字符之间')
+        return v
+    
+    @validator('description')
+    def description_length(cls, v):
+        if len(v) > 1000:
+            raise ValueError('项目描述长度不能超过1000个字符')
+        return v
 
 
 class ProjectUpdate(BaseModel):
@@ -58,8 +70,8 @@ class ProjectUpdate(BaseModel):
         description (Optional[str]): 项目描述。
         schema_definition (Optional[Dict[str, Any]]): 前端修改后的DDL和Schema结构。
     """
-    project_name: Optional[str] = Field(None, min_length=1, max_length=50)
-    description: Optional[str] = Field(None, max_length=500)
+    project_name: Optional[str] = Field(None, description="项目名称")
+    description: Optional[str] = Field(None, description="项目描述")
     # =========================================================
     # 允许前端回传修改后的 Schema/DDL 进行保存
     # =========================================================
@@ -68,6 +80,18 @@ class ProjectUpdate(BaseModel):
         description="前端修改后的DDL和Schema结构 {'ddl': '...', 'schema': '...'}"
     )
     ddl_statement: Optional[str] = None
+    
+    @validator('project_name')
+    def project_name_length(cls, v):
+        if v is not None and not 1 <= len(v) <= 50:
+            raise ValueError('项目名称长度必须在1到50个字符之间')
+        return v
+    
+    @validator('description')
+    def description_length(cls, v):
+        if v is not None and len(v) > 500:
+            raise ValueError('项目描述长度不能超过500个字符')
+        return v
 
 
 class GenerateDDLRequest(BaseModel):
@@ -100,7 +124,13 @@ class ProjectDeployRequest(BaseModel):
 
 class DeleteConfirmationRequest(BaseModel):
     """3.2.5 确认删除请求"""
-    confirmation_text: str = Field(..., pattern=r'^DELETE$', description="必须输入 DELETE")
+    confirmation_text: str = Field(..., description="必须输入 DELETE")
+    
+    @validator('confirmation_text')
+    def confirmation_text_must_be_delete(cls, v):
+        if v != 'DELETE':
+            raise ValueError('必须输入 DELETE 以确认删除')
+        return v
 
 
 # --- 3. 响应 DTOs ---
