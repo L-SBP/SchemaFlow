@@ -11,7 +11,7 @@ from schema.admin import (
     AdminUserListResponse, AdminUpdateUserStatusRequest, AdminUpdateUserStatusResponse,
     AdminUpdateUserQuotaRequest, AdminUpdateUserQuotaResponse,
     AnnouncementCreateRequest, AnnouncementUpdateRequest, AnnouncementResponse,
-    AdminListResponse, ViolationLogListResponse, AdminStatsResponse,
+    AdminListResponse, AdminListItem, ViolationLogListResponse, AdminStatsResponse,
     AdminUserDetailResponse
 )
 from schema.user import UserMe
@@ -205,7 +205,7 @@ async def delete_announcement(
 # 4.3. 管理员状态 / 4.4. 违规记录与统计
 # ----------------------------------------------------------------------
 
-@router.get("/admins", response_model=UnifiedResponse[PageData[List[UserMe]]], summary="4.3.1 获取管理员列表")
+@router.get("/admins", response_model=UnifiedResponse[PageData[List[AdminListItem]]], summary="4.3.1 获取管理员列表")
 async def get_admin_list(
     db: Session = Depends(get_db),
     admin_user: UserMe = AdminDependency,
@@ -220,7 +220,7 @@ async def get_admin_list(
         pagination (PaginationParams): 分页参数。
 
     Returns:
-        UnifiedResponse[PageData[List[UserMe]]]: 管理员列表响应。
+        UnifiedResponse[PageData[List[AdminListItem]]]: 管理员列表响应。
     """
     result = await service.get_admin_list_service(db, pagination.page, pagination.page_size)
     page_data = PageData(

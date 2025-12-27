@@ -55,8 +55,8 @@ class AdminUserListItem(BaseModel):
     username: str
     email: str
     status: Literal["normal", "suspended", "banned"]
-    project_count: int = Field(0, description="该用户拥有的项目数量")
-    max_databases: int = Field(10, description="该用户最大数据库额度")
+    project_count: int = Field(default=0, description="该用户拥有的项目数量")
+    max_databases: int = Field(default=10, description="该用户最大数据库额度")
     last_login_at: Optional[datetime] = None
 
     model_config = ConfigDict(from_attributes=True)
@@ -174,13 +174,15 @@ class AdminUserDetailResponse(BaseModel):
     username: str
     email: str
     status: Literal["normal", "suspended", "banned"]
-    max_databases: int
-    project_count: int
+    max_databases: int = Field(default=10, description="最大数据库额度")
+    project_count: int = Field(default=0, description="项目数量")
     last_login_at: Optional[datetime] = None
     created_at: Optional[datetime] = None
 
     projects: List[AdminUserProjectItem] = Field(default_factory=list)
     login_history: List[AdminUserLoginHistoryItem] = Field(default_factory=list)
+
+    model_config = ConfigDict(from_attributes=True)
 
 
 # ----------------------------------------------------------------------
@@ -229,19 +231,21 @@ class AnnouncementUpdateRequest(BaseModel):
 class AdminListItem(BaseModel):
     """
     管理员列表单项 Schema。
+    
+    与前端 AdminListItem 接口保持一致的字段结构。
 
     Attributes:
         user_id (int): 用户 ID。
         username (str): 用户名。
         email (str): 邮箱。
-        last_login_at (Optional[datetime]): 最后登录时间。
-        is_online (bool): 是否在线。
+        last_login_at (Optional[str]): 最后登录时间（ISO格式字符串）。
+        is_online (bool): 是否在线（基于数据库 is_active 字段）。
     """
     user_id: int
     username: str
     email: str
-    last_login_at: Optional[datetime]
-    is_online: bool = False
+    last_login_at: Optional[str] = None  # 前端期望字符串格式
+    is_online: bool = Field(default=False, description="是否在线状态（基于 is_active 字段）")
 
     model_config = ConfigDict(from_attributes=True)
 
