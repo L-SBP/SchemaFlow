@@ -6,6 +6,7 @@ export interface SessionItem {
   session_id: number;
   session_name: string;
   project_id: number;
+  current_model: string | null;
   created_at: string;
   last_activity: string | null;
 }

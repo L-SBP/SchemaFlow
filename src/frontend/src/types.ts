@@ -61,6 +61,7 @@ export interface ChatSession {
   name: string;
   messages: Message[];
   updated_at: number;
+  current_model?: string | null;
 }
 
 export interface Announcement {

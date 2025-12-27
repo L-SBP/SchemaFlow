@@ -343,7 +343,7 @@ export const Workspace: React.FC<WorkspaceProps> = ({ project, onBack }) => {
   const [inputValue, setInputValue] = useState('');
   const [isSending, setIsSending] = useState(false); // 发送中/思考中
   const [isTyping, setIsTyping] = useState(false);   // 打字机效果进行中
-  const [selectedModel, setSelectedModel] = useState<string>(''); // 模型选择
+  const [selectedModel, setSelectedModel] = useState<string>('');
   const [availableModels, setAvailableModels] = useState<AIModelOption[]>([]); // 可用模型列表
 
   const messagesContainerRef = useRef<HTMLDivElement>(null);
@@ -369,14 +369,18 @@ export const Workspace: React.FC<WorkspaceProps> = ({ project, onBack }) => {
         const res = await sessionApi.getAIModelOptions();
         if (res.items && res.items.length > 0) {
           setAvailableModels(res.items);
-          // 默认选择第一个模型
-          setSelectedModel(prev => prev || res.items[0].model_name);
+          // 如果当前没有选中模型，选择第一个作为默认
+          if (!selectedModel) {
+            setSelectedModel(res.items[0].model_name);
+          }
         }
       } catch (error) {
         console.error('Failed to load AI models:', error);
         // 如果加载失败，使用后备选项
         setAvailableModels([{ model_name: '默认模型', model_type: 'general_llm' }]);
-        setSelectedModel(prev => prev || '默认模型');
+        if (!selectedModel) {
+          setSelectedModel('默认模型');
+        }
       }
     };
     loadModels();
@@ -386,7 +390,15 @@ export const Workspace: React.FC<WorkspaceProps> = ({ project, onBack }) => {
     // 切换会话时，重置首次滚动标记
     initialAutoScrollDoneRef.current = false;
     isNearBottomRef.current = true;
-  }, [activeSessionId]);
+    
+    // 切换会话时，读取该会话保存的模型
+    if (activeSessionId) {
+      const session = sessions.find(s => s.id === activeSessionId);
+      if (session?.current_model && availableModels.some(m => m.model_name === session.current_model)) {
+        setSelectedModel(session.current_model);
+      }
+    }
+  }, [activeSessionId, sessions, availableModels]);
 
   useEffect(() => {
     if (!activeSessionId) return;
@@ -474,13 +486,18 @@ export const Workspace: React.FC<WorkspaceProps> = ({ project, onBack }) => {
             id: item.session_id.toString(),
             name: item.session_name,
             messages: [], // 列表接口不返回消息详情，需懒加载
-            updated_at: new Date(item.created_at).getTime()
+            updated_at: new Date(item.created_at).getTime(),
+            current_model: item.current_model
           }));
           setSessions(mappedSessions);
 
-          // 默认选中第一个会话
+          // 默认选中第一个会话，并设置其保存的模型
           if (mappedSessions.length > 0 && !activeSessionId) {
             setActiveSessionId(mappedSessions[0].id);
+            // 如果会话有保存的模型，使用它
+            if (mappedSessions[0].current_model) {
+              setSelectedModel(mappedSessions[0].current_model);
+            }
           }
         }
       } catch (error) {
@@ -647,7 +664,8 @@ export const Workspace: React.FC<WorkspaceProps> = ({ project, onBack }) => {
         return {
           ...s,
           name: newName,
-          messages: [...s.messages, aiMsg]
+          messages: [...s.messages, aiMsg],
+          current_model: selectedModel  // 更新会话的当前模型
         };
       }));
 

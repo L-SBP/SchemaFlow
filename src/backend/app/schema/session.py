@@ -56,11 +56,13 @@ class SessionResponse(SessionBase):
     Attributes:
         session_id (int): 会话 ID。
         project_id (int): 关联的项目 ID。
+        current_model (Optional[str]): 当前会话使用的模型。
         created_at (datetime): 创建时间。
         last_activity (Optional[datetime]): 最后活动时间。
     """
     session_id: int
     project_id: int
+    current_model: Optional[str] = None
     created_at: datetime
     last_activity: Optional[datetime]
 
