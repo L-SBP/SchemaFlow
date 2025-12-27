@@ -5,7 +5,7 @@ Redis 键前缀管理系统
 支持环境隔离、键分类和统一的键生成接口。
 """
 
-from typing import Optional
+from typing import Optional, Any
 from core.config import config
 
 
@@ -31,6 +31,18 @@ class RedisKeyManager:
     USER_PREFIX = "user"
     # 系统相关
     SYSTEM_PREFIX = "system"
+    # 项目相关
+    PROJECT_PREFIX = "project"
+    # 数据库实例相关
+    DATABASE_PREFIX = "db"
+    # SQL执行相关
+    SQL_PREFIX = "sql"
+    # 缓存相关
+    CACHE_PREFIX = "cache"
+    # API响应相关
+    API_PREFIX = "api"
+    # 配置相关
+    CONFIG_PREFIX = "config"
     
     @classmethod
     def _get_base_prefix(cls) -> str:
@@ -214,6 +226,203 @@ class RedisKeyManager:
             str: 密码重置验证码键
         """
         return cls.generate_key(cls.PASSWORD_RESET_PREFIX, "code", email.lower().strip())
+    
+    # 用户相关键生成方法
+    @classmethod
+    def get_user_info_key(cls, user_id: int) -> str:
+        """
+        生成用户信息键
+        
+        Args:
+            user_id: 用户ID
+            
+        Returns:
+            str: 用户信息键
+        """
+        return cls.generate_key(cls.USER_PREFIX, "info", str(user_id))
+    
+    @classmethod
+    def get_user_projects_key(cls, user_id: int) -> str:
+        """
+        生成用户项目列表键
+        
+        Args:
+            user_id: 用户ID
+            
+        Returns:
+            str: 用户项目列表键
+        """
+        return cls.generate_key(cls.USER_PREFIX, "projects", str(user_id))
+    
+    @classmethod
+    def get_user_databases_key(cls, user_id: int) -> str:
+        """
+        生成用户数据库列表键
+        
+        Args:
+            user_id: 用户ID
+            
+        Returns:
+            str: 用户数据库列表键
+        """
+        return cls.generate_key(cls.USER_PREFIX, "databases", str(user_id))
+    
+    @classmethod
+    def get_project_list_key(cls, user_id: int, search: Optional[str] = None, 
+                           page: int = 1, page_size: int = 10) -> str:
+        """
+        生成用户项目列表键（包含搜索条件和分页参数）
+        
+        Args:
+            user_id: 用户ID
+            search: 搜索条件
+            page: 页码
+            page_size: 页大小
+            
+        Returns:
+            str: 用户项目列表键
+        """
+        # 处理搜索条件，None时使用空字符串
+        search_str = search or ""
+        return cls.generate_key(cls.USER_PREFIX, "projects", str(user_id), 
+                              f"search:{search_str}", f"page:{page}", f"size:{page_size}")
+    
+    # 项目相关键生成方法
+    @classmethod
+    def get_project_info_key(cls, project_id: int) -> str:
+        """
+        生成项目信息键
+        
+        Args:
+            project_id: 项目ID
+            
+        Returns:
+            str: 项目信息键
+        """
+        return cls.generate_key(cls.PROJECT_PREFIX, "info", str(project_id))
+    
+    @classmethod
+    def get_project_members_key(cls, project_id: int) -> str:
+        """
+        生成项目成员列表键
+        
+        Args:
+            project_id: 项目ID
+            
+        Returns:
+            str: 项目成员列表键
+        """
+        return cls.generate_key(cls.PROJECT_PREFIX, "members", str(project_id))
+    
+    @classmethod
+    def get_project_databases_key(cls, project_id: int) -> str:
+        """
+        生成项目数据库列表键
+        
+        Args:
+            project_id: 项目ID
+            
+        Returns:
+            str: 项目数据库列表键
+        """
+        return cls.generate_key(cls.PROJECT_PREFIX, "databases", str(project_id))
+    
+    # 数据库实例相关键生成方法
+    @classmethod
+    def get_database_info_key(cls, db_id: int) -> str:
+        """
+        生成数据库实例信息键
+        
+        Args:
+            db_id: 数据库实例ID
+            
+        Returns:
+            str: 数据库实例信息键
+        """
+        return cls.generate_key(cls.DATABASE_PREFIX, "info", str(db_id))
+    
+    @classmethod
+    def get_database_schema_key(cls, db_id: int) -> str:
+        """
+        生成数据库模式键
+        
+        Args:
+            db_id: 数据库实例ID
+            
+        Returns:
+            str: 数据库模式键
+        """
+        return cls.generate_key(cls.DATABASE_PREFIX, "schema", str(db_id))
+    
+    # SQL执行相关键生成方法
+    @classmethod
+    def get_sql_result_key(cls, sql_hash: str) -> str:
+        """
+        生成SQL执行结果键
+        
+        Args:
+            sql_hash: SQL语句的哈希值
+            
+        Returns:
+            str: SQL执行结果键
+        """
+        return cls.generate_key(cls.SQL_PREFIX, "result", sql_hash)
+    
+    @classmethod
+    def get_sql_template_key(cls, template_id: int) -> str:
+        """
+        生成SQL模板键
+        
+        Args:
+            template_id: SQL模板ID
+            
+        Returns:
+            str: SQL模板键
+        """
+        return cls.generate_key(cls.SQL_PREFIX, "template", str(template_id))
+    
+    # 通用缓存键生成方法
+    @classmethod
+    def get_cache_key(cls, resource_type: str, resource_id: Any) -> str:
+        """
+        生成通用缓存键
+        
+        Args:
+            resource_type: 资源类型
+            resource_id: 资源ID
+            
+        Returns:
+            str: 通用缓存键
+        """
+        return cls.generate_key(cls.CACHE_PREFIX, resource_type, str(resource_id))
+    
+    @classmethod
+    def get_api_response_key(cls, endpoint: str, params_hash: str) -> str:
+        """
+        生成API响应缓存键
+        
+        Args:
+            endpoint: API端点
+            params_hash: 参数哈希值
+            
+        Returns:
+            str: API响应缓存键
+        """
+        return cls.generate_key(cls.API_PREFIX, endpoint, params_hash)
+    
+    # 系统配置相关键生成方法
+    @classmethod
+    def get_system_config_key(cls, config_name: str) -> str:
+        """
+        生成系统配置键
+        
+        Args:
+            config_name: 配置名称
+            
+        Returns:
+            str: 系统配置键
+        """
+        return cls.generate_key(cls.SYSTEM_PREFIX, cls.CONFIG_PREFIX, config_name)
 
 
 # 导出全局键管理器实例

@@ -20,12 +20,11 @@ import json
 import httpx
 import sqlparse
 from typing import List, Dict, Any, Optional, Tuple
-from fastapi import HTTPException
 from sqlalchemy.future import select
 from sqlalchemy.orm import selectinload
 from sqlalchemy.ext.asyncio import AsyncSession
 from fastapi.encoders import jsonable_encoder
-from core.exceptions import ForbiddenException, ItemNotFoundException, InvalidOperationException
+from core.exceptions import ForbiddenException, ItemNotFoundException, InvalidOperationException, BusinessException, AppException
 
 from core.config import settings
 from core.log import log
@@ -678,7 +677,9 @@ async def _handle_execution_error(
 ) -> ChatResponse:
     """处理执行错误并返回错误响应，不创建新消息。"""
     error_msg = str(error)
-    if isinstance(error, HTTPException):
+    if hasattr(error, 'message'):
+        error_msg = error.message
+    elif hasattr(error, 'detail'):
         error_msg = error.detail
     
     # 提供更友好的错误信息

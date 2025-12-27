@@ -66,7 +66,7 @@ async def send_verify_email(to_email: str, subject: str = "【auto_db_deployment
         bool: 发送成功返回 True，失败返回 False。
     """
     verify_code = _generate_code()
-    log.info("Generated verification code {} for {}", verify_code, to_email)
+    log.info(f"Generated verification code {verify_code} for {to_email}")
 
     email_content = make_email_content(verify_code)
     msg = MIMEText(email_content, "html", "utf-8")
@@ -74,7 +74,7 @@ async def send_verify_email(to_email: str, subject: str = "【auto_db_deployment
     msg["To"] = to_email
     msg["Subject"] = Header(subject, "utf-8")
 
-    log.info("Email From: {}, To: {}, Subject: {}", msg['From'], msg['To'], msg['Subject'])
+    log.info(f"Email From: {msg['From']}, To: {msg['To']}, Subject: {msg['Subject']}")
 
     try:
         redis = get_redis()
@@ -93,7 +93,7 @@ async def send_verify_email(to_email: str, subject: str = "【auto_db_deployment
                 sender=config.smtp.sender,
                 recipients=[to_email],
             )
-            log.info("Sent verification code {} to {}", verify_code, to_email)
+            log.info(f"Sent verification code {verify_code} to {to_email}")
 
         await redis.setex(
             redis_key_manager.get_verification_key(to_email),
@@ -102,10 +102,10 @@ async def send_verify_email(to_email: str, subject: str = "【auto_db_deployment
         )
         return True
     except ValueError as e:
-        log.error("Value error in send_verify_email: {}", e)
+        log.error(f"Value error in send_verify_email: {e}")
         return False
     except Exception as e:
-        log.error("Unexpected error in send_verify_email: {}", e)
+        log.error(f"Unexpected error in send_verify_email: {e}")
         return False
 
 async def verify_code(to_email: str, code: str) -> bool:
@@ -125,16 +125,15 @@ async def verify_code(to_email: str, code: str) -> bool:
         redis = get_redis()
         if redis is None:
             raise ValueError("Redis is not initialized")
-        from redis_client.redis_keys import redis_key_manager
         stored_code = await redis.get(redis_key_manager.get_verification_key(to_email))
         if stored_code is None:
             return False
         return stored_code == code
     except ValueError as e:
-        log.error("Value error in verify_code: {}", e)
+        log.error(f"Value error in verify_code: {e}")
         return False
     except Exception as e:
-        log.error("Unexpected error in verify_code: {}", e)
+        log.error(f"Unexpected error in verify_code: {e}")
         return False
 
 
@@ -183,10 +182,10 @@ async def send_password_reset_email(
                 sender=config.smtp.sender,
                 recipients=[to_email],
             )
-        log.info("Sent password reset email to {}", to_email)
+        log.info(f"Sent password reset email to {to_email}")
         return True
     except Exception as e:
-        log.error("Unexpected error in send_password_reset_email: {}", e)
+        log.error(f"Unexpected error in send_password_reset_email: {e}")
         return False
 
 
@@ -231,8 +230,8 @@ async def send_password_reset_code_email(
                 sender=config.smtp.sender,
                 recipients=[to_email],
             )
-        log.info("Sent password reset code email to {}", to_email)
+        log.info(f"Sent password reset code email to {to_email}")
         return True
     except Exception as e:
-        log.error("Unexpected error in send_password_reset_code_email: {}", e)
+        log.error(f"Unexpected error in send_password_reset_code_email: {e}")
         return False

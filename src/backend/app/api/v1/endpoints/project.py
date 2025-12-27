@@ -4,7 +4,7 @@
 管理项目的全生命周期，包括创建（生成Schema、DDL、部署）、查询、更新和删除。
 支持 Celery 异步任务状态查询。
 """
-from fastapi import APIRouter, Depends, HTTPException, status, Query, Header, BackgroundTasks
+from fastapi import APIRouter, Depends, Query, Header, BackgroundTasks
 from sqlalchemy.ext.asyncio import AsyncSession as Session
 from typing import Any, Optional, List
 

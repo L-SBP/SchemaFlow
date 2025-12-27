@@ -8,7 +8,7 @@
 
 from typing import List, Optional
 
-from fastapi import HTTPException, status
+from fastapi import status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from crud.crud_session import crud_session

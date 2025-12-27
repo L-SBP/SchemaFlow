@@ -92,6 +92,18 @@ class RedisConfig(BaseSettings):
     subscribe_channel: str
     # 键前缀（用于多环境隔离）
     key_prefix: str = ""
+    # 哨兵模式配置
+    sentinel_enabled: bool = False  # 是否启用哨兵模式
+    sentinels: List[str] = []        # 哨兵节点列表，格式: ["host1:port1", "host2:port2"]
+    master_name: str = "mymaster"    # 主节点名称
+    # SSL配置
+    ssl: bool = False                # 是否启用SSL
+    ssl_cert_reqs: str = "required"  # SSL证书验证要求
+    # 连接重试配置
+    max_retries: int = 3             # 连接重试次数
+    retry_interval: float = 0.5      # 重试间隔（秒）
+    # 健康检查配置
+    health_check_interval: int = 30  # 健康检查间隔（秒）
 
 class LogConfig(BaseSettings):
     """

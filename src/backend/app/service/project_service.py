@@ -47,6 +47,10 @@ from tasks.ai_generation_tasks import (
     get_task_status,
 )
 
+# 缓存相关
+from redis_client.redis_keys import redis_key_manager
+from redis_client.cache_service import cache_service
+
 
 # =========================================================
 # 配额与权限校验
@@ -444,16 +448,43 @@ async def get_projects_list_service(
     page_size: int
 ) -> schemas.PaginatedProjectList:
     """获取指定用户的项目列表，支持分页和搜索。"""
-    skip = (page - 1) * page_size
-    total = await crud_project.get_total_count_by_user(db, user_id, search)
-    items = await crud_project.get_by_user(db, user_id, skip, page_size, search)
+    # 生成缓存键，包含搜索条件和分页参数
+    cache_key = redis_key_manager.get_project_list_key(user_id, search, page, page_size)
 
-    return schemas.PaginatedProjectList(
-        total=total,
-        page=page,
-        page_size=page_size,
-        items=[schemas.ProjectListOne.model_validate(i) for i in items]
-    )
+    # 定义从数据库获取项目列表的函数
+    async def fetch_project_list():
+        log.info(f"Cache miss for project list (user: {user_id}, page: {page}), fetching from database")
+        skip = (page - 1) * page_size
+        total = await crud_project.get_total_count_by_user(db, user_id, search)
+        items = await crud_project.get_by_user(db, user_id, skip, page_size, search)
+
+        return schemas.PaginatedProjectList(
+            total=total,
+            page=page,
+            page_size=page_size,
+            items=[schemas.ProjectListOne.model_validate(i) for i in items]
+        )
+
+    # 使用缓存服务获取或设置数据，TTL设为300秒
+    cache_result = await cache_service.get_or_set(cache_key, fetch_project_list, ttl=300)
+
+    if cache_result.data is None:
+        # 如果缓存中没有数据，直接从数据库获取
+        return await fetch_project_list()
+
+    # 确保返回的是PaginatedProjectList对象
+    if isinstance(cache_result.data, dict):
+        # 转换items列表中的字典为ProjectListOne对象
+        items = []
+        for item in cache_result.data.get('items', []):
+            if isinstance(item, dict):
+                items.append(schemas.ProjectListOne(**item))
+            else:
+                items.append(item)
+        cache_result.data['items'] = items
+        return schemas.PaginatedProjectList(**cache_result.data)
+
+    return cache_result.data
 
 
 async def get_project_detail_service(
@@ -462,8 +493,26 @@ async def get_project_detail_service(
     user_id: int
 ) -> schemas.ProjectDetailOut:
     """获取项目详情，校验用户权限。"""
-    db_obj = await _verify_project_ownership(db, project_id, user_id)
-    return schemas.ProjectDetailOut.model_validate(db_obj)
+    # 生成缓存键
+    cache_key = redis_key_manager.get_project_info_key(project_id)
+
+    # 定义从数据库获取项目信息的函数
+    async def fetch_project_data():
+        log.info(f"Cache miss for project {project_id}, fetching from database")
+        db_obj = await _verify_project_ownership(db, project_id, user_id)
+        return schemas.ProjectDetailOut.model_validate(db_obj)
+
+    # 使用缓存服务获取或设置数据，TTL设为300秒
+    cache_result = await cache_service.get_or_set(cache_key, fetch_project_data, ttl=300)
+
+    if cache_result.data is None:
+        raise ItemNotFoundException("项目未找到或访问被拒绝")
+
+    # 确保返回的是ProjectDetailOut对象
+    if isinstance(cache_result.data, dict):
+        return schemas.ProjectDetailOut(**cache_result.data)
+
+    return cache_result.data
 
 
 # =========================================================
@@ -483,6 +532,16 @@ async def update_project_info_service(
         raise OperationNotPermittedException("无法更新已删除的项目")
 
     updated_obj = await crud_project.update(db, project_id, **update_data)
+
+    # 清除相关缓存，确保数据一致性
+    # 1. 清除项目详情缓存
+    project_info_key = redis_key_manager.get_project_info_key(project_id)
+    await cache_service.delete(project_info_key)
+
+    # 2. 清除用户的所有项目列表缓存（包含不同分页和搜索条件的所有列表）
+    project_list_pattern = redis_key_manager.generate_key(redis_key_manager.USER_PREFIX, "projects", str(user_id), "*")
+    await cache_service.delete_pattern(project_list_pattern)
+
     return schemas.ProjectDetailOut.model_validate(updated_obj)
 
 
@@ -570,6 +629,15 @@ async def delete_project_service(
     await crud_project.change_status(db, project_id, 'deleted')
     await _release_user_quota(db, user_id)
     
+    # 清除相关缓存，确保数据一致性
+    # 1. 清除项目详情缓存
+    project_info_key = redis_key_manager.get_project_info_key(project_id)
+    await cache_service.delete(project_info_key)
+
+    # 2. 清除用户的所有项目列表缓存（包含不同分页和搜索条件的所有列表）
+    project_list_pattern = redis_key_manager.generate_key(redis_key_manager.USER_PREFIX, "projects", str(user_id), "*")
+    await cache_service.delete_pattern(project_list_pattern)
+
     return True
 
 
