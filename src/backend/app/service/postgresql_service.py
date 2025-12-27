@@ -7,13 +7,12 @@ PostgreSQL 用户配置服务。
 from sqlalchemy import text
 from typing import Optional
 from sqlalchemy.exc import IntegrityError, ProgrammingError, OperationalError, SQLAlchemyError
-from fastapi import HTTPException
 
 from sqlalchemy import URL
 
 from core.config import config
 from core.log import log
-from core.exceptions import DatabaseOperationFailedException
+from core.exceptions import DatabaseOperationFailedException, InvalidOperationException, ValidationException, SQLOperationFailedException
 from postgresql.postgres_database import PostgresHelper
 from postgresql.postgres_execute import execute_sql_root, execute_dql_user
 from postgresql.postgres_secure import validate_safe_sql
@@ -365,38 +364,36 @@ async def execute_postgres_sql_with_user_check(
             log.info(f"[PostgreSQL] DML executed successfully for instance {instance_obj.instance_id}")
             return result
 
-    except HTTPException as he:
-        raise he
-    except IntegrityError as e:
-        error_msg = str(e.orig) if hasattr(e, 'orig') and e.orig else str(e)
-        if "foreign key constraint fails" in error_msg.lower():
-            detail = f"执行失败：违反外键约束。请检查关联数据是否存在。\n详细信息: {error_msg}"
-        elif "duplicate entry" in error_msg.lower():
-            detail = f"执行失败：数据重复（违反唯一约束）。\n详细信息: {error_msg}"
-        else:
-            detail = f"执行失败：数据库完整性错误。\n详细信息: {error_msg}"
-        raise HTTPException(status_code=400, detail=detail)
-        
-    except ProgrammingError as e:
-        error_msg = str(e.orig) if hasattr(e, 'orig') and e.orig else str(e)
-        if "doesn't exist" in error_msg.lower():
-            detail = f"执行失败：表或字段不存在。请检查 Schema 是否最新。\n详细信息: {error_msg}"
-        elif "syntax error" in error_msg.lower():
-            detail = f"执行失败：SQL 语法错误。\n详细信息: {error_msg}"
-        else:
-            detail = f"执行失败：SQL 执行错误。\n详细信息: {error_msg}"
-        raise HTTPException(status_code=400, detail=detail)
-
-    except OperationalError as e:
-        error_msg = str(e.orig) if hasattr(e, 'orig') and e.orig else str(e)
-        detail = f"执行失败：数据库连接或操作错误。\n详细信息: {error_msg}"
-        raise HTTPException(status_code=500, detail=detail)
-
-    except SQLAlchemyError as e:
-        detail = f"执行失败：数据库错误。\n详细信息: {str(e)}"
-        raise HTTPException(status_code=500, detail=detail)
-
     except Exception as e:
-        log.error(f"[PostgreSQL] Error executing SQL for instance {instance_obj.instance_id}: {str(e)}", exc_info=True)
-        raise HTTPException(status_code=500, detail=f"执行失败：未知错误。\n详细信息: {str(e)}")
+        if isinstance(e, (InvalidOperationException, ValidationException)):
+            raise
+        elif isinstance(e, IntegrityError):
+            error_msg = str(e.orig) if hasattr(e, 'orig') and e.orig else str(e)
+            if "foreign key constraint fails" in error_msg.lower():
+                detail = f"执行失败：违反外键约束。请检查关联数据是否存在。\n详细信息: {error_msg}"
+            elif "duplicate entry" in error_msg.lower():
+                detail = f"执行失败：数据重复（违反唯一约束）。\n详细信息: {error_msg}"
+            else:
+                detail = f"执行失败：数据库完整性错误。\n详细信息: {error_msg}"
+            raise InvalidOperationException(message=detail)
+        elif isinstance(e, ProgrammingError):
+            error_msg = str(e.orig) if hasattr(e, 'orig') and e.orig else str(e)
+            if "doesn't exist" in error_msg.lower():
+                detail = f"执行失败：表或字段不存在。请检查 Schema 是否最新。\n详细信息: {error_msg}"
+            elif "syntax error" in error_msg.lower():
+                detail = f"执行失败：SQL 语法错误。\n详细信息: {error_msg}"
+            else:
+                detail = f"执行失败：SQL 执行错误。\n详细信息: {error_msg}"
+            raise InvalidOperationException(message=detail)
+        elif isinstance(e, OperationalError):
+            error_msg = str(e.orig) if hasattr(e, 'orig') and e.orig else str(e)
+            detail = f"执行失败：数据库连接或操作错误。\n详细信息: {error_msg}"
+            raise SQLOperationFailedException(operation="执行", detail=detail)
+        elif isinstance(e, SQLAlchemyError):
+            detail = f"执行失败：数据库错误。\n详细信息: {str(e)}"
+            raise SQLOperationFailedException(operation="执行", detail=detail)
+        else:
+            log.error(f"[PostgreSQL] Error executing SQL for instance {instance_obj.instance_id}: {str(e)}", exc_info=True)
+            detail = f"执行失败：未知错误。\n详细信息: {str(e)}"
+            raise SQLOperationFailedException(operation="执行", detail=detail)
 

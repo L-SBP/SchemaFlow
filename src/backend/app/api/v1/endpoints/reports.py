@@ -3,7 +3,7 @@
 
 提供报表的增删改查、导出及历史查询记录获取功能。
 """
-from fastapi import APIRouter, Depends, Query, Path, HTTPException
+from fastapi import APIRouter, Depends, Query, Path
 from sqlalchemy.ext.asyncio import AsyncSession
 from typing import List
 

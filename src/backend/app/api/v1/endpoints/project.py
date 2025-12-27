@@ -3,7 +3,7 @@
 
 管理项目的全生命周期，包括创建（生成Schema、DDL、部署）、查询、更新和删除。
 """
-from fastapi import APIRouter, Depends, HTTPException, status, Query, Header,BackgroundTasks
+from fastapi import APIRouter, Depends, status, Query, Header,BackgroundTasks
 from sqlalchemy.ext.asyncio import AsyncSession as Session
 from typing import Any, Optional, List
 

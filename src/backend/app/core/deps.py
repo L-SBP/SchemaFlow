@@ -7,7 +7,7 @@
 # backend/app/core/deps.py
 
 from typing import AsyncGenerator
-from fastapi import Request, Depends, HTTPException, status
+from fastapi import Request, Depends, status
 from fastapi.security import OAuth2PasswordBearer
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession
 from sqlalchemy import select
@@ -144,8 +144,6 @@ async def get_current_user(
                 is_banned, reason = await BlacklistManager.auto_ban_if_needed(db, user_id)
                 if is_banned:
                     raise ForbiddenException(message="Account is banned due to excessive API usage.")
-            except HTTPException:
-                raise
             except Exception as e:
                 log.error("记录违规日志失败: {}", e)
                 # 即使记录失败，仍然限制请求
@@ -153,8 +151,6 @@ async def get_current_user(
 
         return user
 
-    except HTTPException:
-        raise
     except Exception as e:
         log.error("获取当前用户失败: {}", e)
         raise ForbiddenException(message="Could not validate credentials")
