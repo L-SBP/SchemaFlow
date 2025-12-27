@@ -61,7 +61,7 @@ async def redis_expire_listener():
         encoding="utf-8",
         decode_responses=True,
         socket_connect_timeout=config.redis.connect_timeout,
-        socket_timeout=config.redis.read_timeout
+        socket_timeout=config.redis.read_timeout  # For aioredis 2.x
     )
     
     try:

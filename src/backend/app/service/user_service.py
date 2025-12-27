@@ -25,6 +25,7 @@ from core.config import config
 from service import email_service  # 导入 email_service 模块本身
 from schema import user as schemas  # 导入 User Schemas
 from redis_client.redis_keys import redis_key_manager
+from redis_client.cache_service import cache_service
 
 
 # ----------------------------------------------------------------------
@@ -362,7 +363,7 @@ async def get_current_user(
 
 async def get_user_me_service(db: AsyncSession, user_id: int) -> schemas.UserMe:
     """
-    获取当前登录用户的详细信息。
+    获取当前登录用户的详细信息，带缓存。
 
     Args:
         db (AsyncSession): 数据库会话。
@@ -376,16 +377,29 @@ async def get_user_me_service(db: AsyncSession, user_id: int) -> schemas.UserMe:
         exceptions.DatabaseOperationFailedException: 查询失败。
     """
     log.info(f"Fetching profile for user {user_id}")
-    try:
+    
+    # 生成缓存键
+    cache_key = redis_key_manager.get_user_info_key(user_id)
+    
+    # 定义从数据库获取用户信息的函数
+    async def fetch_user_data():
+        log.info(f"Cache miss for user {user_id}, fetching from database")
         user_orm = await crud_user_account.get(db, user_id)
-
         if not user_orm:
             raise exceptions.UserNotFoundException()
-
         return schemas.UserMe.model_validate(user_orm)
-
-    except SQLAlchemyError:
-        raise exceptions.DatabaseOperationFailedException("fetch user profile")
+    
+    # 使用缓存服务获取或设置数据，TTL设为300秒
+    cache_result = await cache_service.get_or_set(cache_key, fetch_user_data, ttl=300)
+    
+    if cache_result.data is None:
+        raise exceptions.UserNotFoundException()
+    
+    # 确保返回的是UserMe模型对象
+    if isinstance(cache_result.data, dict):
+        return schemas.UserMe(**cache_result.data)
+    
+    return cache_result.data
 
 
 async def update_password_service(
@@ -426,6 +440,10 @@ async def update_password_service(
             db_user,
             password_hash=new_hashed_password
         )
+        
+        # 清除用户信息缓存
+        cache_key = redis_key_manager.get_user_info_key(user_id)
+        await cache_service.delete(cache_key)
 
         return schemas.UserMe.model_validate(updated_orm)
 
@@ -469,6 +487,10 @@ async def update_username_service(
             db_user,
             username=username_data.username
         )
+        
+        # 清除用户信息缓存
+        cache_key = redis_key_manager.get_user_info_key(user_id)
+        await cache_service.delete(cache_key)
 
         return schemas.UserMe.model_validate(updated_orm)
 
@@ -507,6 +529,11 @@ async def update_avatar_service(
             db_user,
             avatar_url=avatar_data.avatar_url
         )
+        
+        # 清除用户信息缓存
+        cache_key = redis_key_manager.get_user_info_key(user_id)
+        await cache_service.delete(cache_key)
+        
         return schemas.UserMe.model_validate(updated_orm)
     except SQLAlchemyError:
         raise exceptions.DatabaseOperationFailedException("update avatar")
@@ -585,6 +612,10 @@ async def confirm_update_email_service(
             db_user,
             email=confirm_data.new_email
         )
+        
+        # 清除用户信息缓存
+        cache_key = redis_key_manager.get_user_info_key(user_id)
+        await cache_service.delete(cache_key)
 
         return schemas.UserMe.model_validate(updated_orm)
     except SQLAlchemyError:

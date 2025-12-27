@@ -119,45 +119,52 @@ async def lifespan(app: FastAPI):
     log.info("app shutdown")
     await close_services(app)
 
-my_app = FastAPI(
-    title=config.app.name,
-    description=config.app.description,
-    version=config.app.version,
-    lifespan=lifespan,
-)
+def create_app() -> FastAPI:
+    """
+    创建FastAPI应用实例
+    
+    Returns:
+        FastAPI: 配置好的FastAPI应用实例
+    """
+    app = FastAPI(
+        title=config.app.name,
+        description=config.app.description,
+        version=config.app.version,
+        lifespan=lifespan,
+    )
+    
+    # 注册异常处理器
+    app.add_exception_handler(BusinessException, business_exception_handler)
+    app.add_exception_handler(AppException, app_exception_handler)
+    app.add_exception_handler(RequestValidationError, validation_exception_handler)
+    app.add_exception_handler(ValidationError, pydantic_validation_exception_handler)
+    app.add_exception_handler(SQLAlchemyError, sqlalchemy_exception_handler)
+    
+    # 注册Python内置异常处理器
+    app.add_exception_handler(IOError, io_exception_handler)
+    app.add_exception_handler(FileNotFoundError, io_exception_handler)
+    app.add_exception_handler(TimeoutError, timeout_exception_handler)
+    app.add_exception_handler(TypeError, type_exception_handler)
+    app.add_exception_handler(ValueError, value_exception_handler)
+    app.add_exception_handler(KeyError, key_exception_handler)
+    app.add_exception_handler(AttributeError, key_exception_handler)
+    
+    # 注册第三方库异常处理器
+    app.add_exception_handler(JWTError, jwt_exception_handler)
+    
+    # 兜底异常处理器
+    app.add_exception_handler(Exception, general_exception_handler)
+    
+    # 挂载静态目录
+    static_dir = "static"
+    if not os.path.exists(static_dir):
+        os.makedirs(static_dir)
+    app.mount("/static", StaticFiles(directory=static_dir), name="static")
+    
+    # 注册API路由
+    app.include_router(api_router, prefix=config.app.api)
+    
+    return app
 
-# 注册异常处理器
-my_app.add_exception_handler(BusinessException, business_exception_handler)
-my_app.add_exception_handler(AppException, app_exception_handler)
-my_app.add_exception_handler(RequestValidationError, validation_exception_handler)
-my_app.add_exception_handler(ValidationError, pydantic_validation_exception_handler)
-my_app.add_exception_handler(SQLAlchemyError, sqlalchemy_exception_handler)
-
-# 注册Python内置异常处理器
-my_app.add_exception_handler(IOError, io_exception_handler)
-my_app.add_exception_handler(FileNotFoundError, io_exception_handler)
-my_app.add_exception_handler(TimeoutError, timeout_exception_handler)
-my_app.add_exception_handler(TypeError, type_exception_handler)
-my_app.add_exception_handler(ValueError, value_exception_handler)
-my_app.add_exception_handler(KeyError, key_exception_handler)
-my_app.add_exception_handler(AttributeError, key_exception_handler)
-
-# 注册第三方库异常处理器
-my_app.add_exception_handler(JWTError, jwt_exception_handler)
-
-# 兜底异常处理器
-my_app.add_exception_handler(Exception, general_exception_handler)
-
-# ============================================================
-# 挂载静态目录 (为了支持文件导出下载)
-# ============================================================
-# 1. 确保目录存在
-static_dir = "static"
-if not os.path.exists(static_dir):
-    os.makedirs(static_dir)
-
-# 2. 挂载到 /static 路径
-# 这意味着：访问 http://host:port/static/xxx 就会去读取项目根目录 static/xxx 文件
-my_app.mount("/static", StaticFiles(directory=static_dir), name="static")
-
-my_app.include_router(api_router, prefix=config.app.api)
+# 创建应用实例
+my_app = create_app()
