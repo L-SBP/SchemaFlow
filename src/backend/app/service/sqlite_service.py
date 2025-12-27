@@ -10,13 +10,13 @@ SQLite是文件型数据库，所以这里主要是管理数据库文件的创�
 import os
 from pathlib import Path
 from typing import Optional, Union
+import aiosqlite
 
-from config.base import SQLiteConfig
 from core.config import config
 from models.database_instance import DatabaseInstance
 from sqlite.sqlite_database import SQLiteHelper
 from sqlite.sqlite_execute import deploy_sqlite_ddl
-from sqlite.sqlite_execute import execute_dql_user
+from core.exceptions import DatabaseOperationFailedException, ItemNotFoundException
 
 
 async def create_sqlite_database(db_name: str, user_id: Optional[int] = None) -> bool:
@@ -44,7 +44,6 @@ async def create_sqlite_database(db_name: str, user_id: Optional[int] = None) ->
     
     # 创建空的数据库文件
     try:
-        import aiosqlite
         async with aiosqlite.connect(db_file_path) as db:
             await db.execute("CREATE TABLE IF NOT EXISTS dummy_table (id INTEGER PRIMARY KEY);")
             await db.commit()
@@ -56,8 +55,7 @@ async def create_sqlite_database(db_name: str, user_id: Optional[int] = None) ->
         
         return True
     except Exception as e:
-        print(f"创建SQLite数据库失败: {e}")
-        return False
+        raise DatabaseOperationFailedException(operation=f"创建SQLite数据库 {db_file_path}，错误：{str(e)}")
 
 
 async def ensure_sqlite_engine(db_name: str, instance_id: int, user_id: Optional[int] = None) -> bool:
@@ -80,8 +78,7 @@ async def ensure_sqlite_engine(db_name: str, instance_id: int, user_id: Optional
         await SQLiteHelper.init_user_engine(sqlite_config, instance_id, db_name, user_id)
         return True
     except Exception as e:
-        print(f"初始化SQLite引擎失败: {e}")
-        return False
+        raise DatabaseOperationFailedException(operation=f"初始化SQLite引擎，错误：{str(e)}")
 
 
 async def ensure_sqlite_user_and_engine(db_name: str, db_username: str, db_password: str, instance_id: int, user_id: Optional[int] = None) -> bool:
@@ -99,12 +96,11 @@ async def ensure_sqlite_user_and_engine(db_name: str, db_username: str, db_passw
         bool: 成功返回True，否则返回False
     """
     # 创建数据库文件（如果不存在）
-    success = await create_sqlite_database(db_name, user_id=user_id)
-    if not success:
-        return False
+    await create_sqlite_database(db_name, user_id=user_id)
     
     # 确保引擎存在
-    return await ensure_sqlite_engine(db_name, instance_id, user_id)
+    await ensure_sqlite_engine(db_name, instance_id, user_id)
+    return True
 
 
 async def deploy_sqlite_database(db_name: str, statements: list[str], instance_id: int) -> bool:
@@ -121,17 +117,14 @@ async def deploy_sqlite_database(db_name: str, statements: list[str], instance_i
     """
     try:
         # 确保引擎存在
-        success = await ensure_sqlite_engine(db_name, instance_id)
-        if not success:
-            return False
+        await ensure_sqlite_engine(db_name, instance_id)
         
         # 执行DDL语句
         sqlite_config = config.sqlite
         await deploy_sqlite_ddl(db_name, statements, sqlite_config)
         return True
     except Exception as e:
-        print(f"部署SQLite数据库失败: {e}")
-        return False
+        raise DatabaseOperationFailedException(operation=f"部署SQLite数据库，错误：{str(e)}")
 
 
 async def delete_sqlite_database(db_name: str, db_path: Optional[str] = None) -> bool:
@@ -156,11 +149,9 @@ async def delete_sqlite_database(db_name: str, db_path: Optional[str] = None) ->
             os.remove(db_file_path)
             return True
         except Exception as e:
-            print(f"删除SQLite数据库文件失败: {e}")
-            return False
+            raise DatabaseOperationFailedException(operation=f"删除SQLite数据库文件 {db_file_path}，错误：{str(e)}")
     else:
-        print(f"SQLite数据库文件不存在: {db_file_path}")
-        return True  # 文件不存在也可以认为是删除成功
+        raise ItemNotFoundException(message=f"SQLite数据库文件不存在: {db_file_path}")
 
 async def execute_sqlite_sql_with_user_check(
     sql: str,
@@ -172,15 +163,16 @@ async def execute_sqlite_sql_with_user_check(
     执行 SQL 前先确保 SQLite 引擎已初始化且路径正确（基于 user_id）。
     """
     # 1. 确保引擎已初始化（内部会处理文件路径隔离）
-    success = await ensure_sqlite_user_and_engine(
-        db_name=instance_obj.db_name,
-        db_username=instance_obj.db_username,
-        db_password=instance_obj.db_password,
-        instance_id=instance_obj.instance_id,
-        user_id=user_id
-    )
-    if not success:
-        raise Exception(f"无法确保实例 {instance_obj.instance_id} 的SQLite引擎")
+    try:
+        await ensure_sqlite_user_and_engine(
+            db_name=instance_obj.db_name,
+            db_username=instance_obj.db_username,
+            db_password=instance_obj.db_password,
+            instance_id=instance_obj.instance_id,
+            user_id=user_id
+        )
+    except Exception as e:
+        raise DatabaseOperationFailedException(operation=f"确保实例 {instance_obj.instance_id} 的SQLite引擎，错误：{str(e)}")
 
     # 2. 调用执行器
     from sqlite.sqlite_execute import execute_dql_user, execute_dml_user

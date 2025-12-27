@@ -27,7 +27,8 @@ from schema import project as schemas
 from core.exceptions import (
     ItemNotFoundException,
     OperationNotPermittedException,
-    ValidationException
+    ValidationException,
+    InvalidOperationException
 )
 from core.auth import create_access_token
 from core.config import config
@@ -185,7 +186,7 @@ async def _generate_and_save_er(project_id: int, schema_text: str, ai_model: str
             None, AIService.generate_mermaid_code, schema_text, ai_model
         )
         if not er_code:
-            raise Exception("生成的ER代码为空")
+            raise InvalidOperationException(message="生成的ER图代码为空")
 
         temp_engine = PsqlHelper._get_async_engine(config.db)
         async with PsqlHelper.get_session(temp_engine) as session:

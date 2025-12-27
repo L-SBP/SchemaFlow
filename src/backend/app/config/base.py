@@ -78,8 +78,20 @@ class RedisConfig(BaseSettings):
     port: int
     # Redis数据库索引
     db: int
+    # Redis密码
+    password: Optional[str] = None
+    # 连接超时时间（秒）
+    connect_timeout: float = 5.0
+    # 读取超时时间（秒）
+    read_timeout: float = 3.0
+    # 写入超时时间（秒）
+    write_timeout: float = 3.0
+    # 连接池最大连接数（建议根据实际并发量调整，生产环境通常设置为50-200）
+    max_connections: int = 50
     # 订阅频道
     subscribe_channel: str
+    # 键前缀（用于多环境隔离）
+    key_prefix: str = ""
 
 class LogConfig(BaseSettings):
     """

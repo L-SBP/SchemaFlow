@@ -16,6 +16,7 @@ from crud.crud_project import crud_project
 from schema.session import SessionCreate, SessionUpdate, SessionResponse
 from schema.user import UserMe
 from core.log import log
+from core.exceptions import ForbiddenException, ItemNotFoundException
 
 
 class SessionService:
@@ -44,17 +45,14 @@ class SessionService:
             user (UserMe): 当前用户对象。
 
         Raises:
-            HTTPException: 权限不足时抛出 403。
+            ForbiddenException: 权限不足时抛出 403。
         """
         log.info("检查项目")
         project = await crud_project.get(db=db, project_id=project_id)
         log.info("检查项目2")
         if not project or project.user_id != user.user_id:
             log.info("检查项目3")
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="Project access forbidden"
-            )
+            raise ForbiddenException(message="Project access forbidden")
 
     @staticmethod
     async def _check_session_owner(
@@ -76,14 +74,11 @@ class SessionService:
             Session: 会话对象。
 
         Raises:
-            HTTPException: 会话不存在或权限不足时抛出。
+            ItemNotFoundException: 会话不存在或权限不足时抛出。
         """
         session = await crud_session.get(db=db, session_id=session_id)
         if not session:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="Session not found"
-            )
+            raise ItemNotFoundException(message="Session not found")
 
         await SessionService._check_project_owner(
             db=db,

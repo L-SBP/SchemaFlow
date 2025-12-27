@@ -12,7 +12,7 @@ import re
 from datetime import datetime
 from sqlalchemy.ext.asyncio import AsyncSession as Session
 from sqlalchemy import select
-from fastapi import HTTPException
+from core.exceptions import ItemNotFoundException, ForbiddenException, InvalidOperationException
 
 from schema import report as schemas
 # 导入核心模型
@@ -106,10 +106,10 @@ async def _verify_project_ownership(
 ):
     project = await db.get(Project, project_id)
     if not project:
-        raise HTTPException(status_code=404, detail="项目未找到")
+        raise ItemNotFoundException(message="项目未找到")
 
     if project.user_id != user_id:
-        raise HTTPException(status_code=403, detail="权限拒绝")
+        raise ForbiddenException(message="权限拒绝")
 
     return project
 
@@ -120,11 +120,11 @@ async def _verify_report_ownership(
 ) -> AnalysisReport:
     report = await db.get(AnalysisReport, report_id)
     if not report:
-        raise HTTPException(status_code=404, detail="报表未找到")
+        raise ItemNotFoundException(message="报表未找到")
 
     project = await db.get(Project, report.project_id)
     if not project or project.user_id != user_id:
-        raise HTTPException(status_code=403, detail="权限被拒绝")
+        raise ForbiddenException(message="权限被拒绝")
 
     return report
 
@@ -155,7 +155,7 @@ async def get_report_list(
     # [修复问题1]：先检查项目是否存在
     project = await db.get(Project, project_id)
     if not project:
-        raise HTTPException(status_code=404, detail=f"ID 为 {project_id} 的项目未找到")
+        raise ItemNotFoundException(message=f"ID 为 {project_id} 的项目未找到")
 
     stmt = (
         select(AnalysisReport, QueryResult, AIGeneratedStatement)
@@ -221,7 +221,7 @@ async def get_history_queries_service(
     # [修复问题1]：先检查项目是否存在
     project = await db.get(Project, project_id)
     if not project:
-        raise HTTPException(status_code=404, detail=f"ID 为 {project_id} 的项目未找到")
+        raise ItemNotFoundException(message=f"ID 为 {project_id} 的项目未找到")
 
     # [修复问题2]：局部导入以避免 UnboundLocalError 和循环依赖
     from models.message import Message
@@ -310,12 +310,12 @@ async def create_report_service(
     # 1. 校验项目
     project = await _verify_project_ownership(db, project_id, user_id)
     if not project:
-        raise HTTPException(status_code=404, detail="项目未找到")
+        raise ItemNotFoundException(message="项目未找到")
     
     # 2. 校验数据源 (Query Result) 是否存在
     result_exists = await db.get(QueryResult, payload.query_id)
     if not result_exists:
-        raise HTTPException(status_code=404, detail="查询结果（数据源）未找到")
+        raise ItemNotFoundException(message="查询结果（数据源）未找到")
 
     data = result_exists.result_data if isinstance(result_exists.result_data, list) else []
     normalized = [r for r in data if isinstance(r, dict)]
@@ -323,7 +323,7 @@ async def create_report_service(
     fields = _infer_fields(normalized, columns)
     reportable, reason = _reportability_from_fields(columns, fields)
     if not reportable:
-        raise HTTPException(status_code=400, detail=reason or '该查询结果不适合生成报表。')
+        raise InvalidOperationException(message=reason or '该查询结果不适合生成报表。')
 
     # 3. 创建 AnalysisReport 对象
     new_report = AnalysisReport(
@@ -404,7 +404,7 @@ async def update_report_service(
     report_obj = await _verify_report_ownership(db, report_id, user_id)
 
     if not report_obj:
-        raise HTTPException(status_code=404, detail="报表未找到")
+        raise ItemNotFoundException(message="报表未找到")
 
     # 2. 更新字段
     if payload.report_name is not None:

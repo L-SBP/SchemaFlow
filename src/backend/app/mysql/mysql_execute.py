@@ -39,14 +39,14 @@ async def execute_sql_root(sql: str):
         mysql_sql = generic_converter.convert(sql, "sqlite", "mysql")
         mysql_sql = mysql_converter.convert_statement(mysql_sql)
     except Exception as e:
-        log.warning(f"SQL转换失败，使用原始SQL: {e}")
+        log.warning("SQL转换失败，使用原始SQL: {}", e)
         mysql_sql = sql
         
     validate_safe_sql(mysql_sql, is_root=True)
     engine = await MysqlHelper.get_root_engine()
     async with engine.connect() as conn:
         await conn.execute(text(mysql_sql))
-        log.info(f"root: successfully execute {mysql_sql}")
+        log.info("root: successfully execute {}", mysql_sql)
 
 async def execute_dql_root(dql: str):
     """
@@ -66,7 +66,7 @@ async def execute_dql_root(dql: str):
         mysql_dql = generic_converter.convert(dql, "sqlite", "mysql")
         mysql_dql = mysql_converter.convert_statement(mysql_dql)
     except Exception as e:
-        log.warning(f"SQL转换失败，使用原始SQL: {e}")
+        log.warning("SQL转换失败，使用原始SQL: {}", e)
 
     engine = await MysqlHelper.get_root_engine()
     async with engine.connect() as conn:
@@ -92,7 +92,7 @@ async def execute_dql_user(dql: str, database_instance: DatabaseInstance):
         mysql_dql = generic_converter.convert(dql, "sqlite", "mysql")
         mysql_dql = mysql_converter.convert_statement(mysql_dql)
     except Exception as e:
-        log.warning(f"SQL转换失败，使用原始SQL: {e}")
+        log.warning("SQL转换失败，使用原始SQL: {}", e)
         mysql_dql = dql
     
     validate_safe_sql(mysql_dql, is_root=False)
@@ -122,7 +122,7 @@ async def execute_dml_user(dml: str, database_instance: DatabaseInstance):
         mysql_dml = generic_converter.convert(dml, "sqlite", "mysql")
         mysql_dml = mysql_converter.convert_statement(mysql_dml)
     except Exception as e:
-        log.warning(f"SQL转换失败，使用原始SQL: {e}")
+        log.warning("SQL转换失败，使用原始SQL: {}", e)
         mysql_dml = dml
         
     validate_safe_sql(mysql_dml, is_root=False)
@@ -144,7 +144,7 @@ async def deploy_mysql_ddl(db_name: str, statements: list[str]):
         engine = await MysqlHelper.get_root_engine()
         async with engine.connect() as conn:
             # 1. 物理环境重置
-            log.info(f"[MySQL-Physical] Resetting database: {db_name}")
+            log.info("[MySQL-Physical] Resetting database: {}", db_name)
             await conn.execute(text(f"DROP DATABASE IF EXISTS `{db_name}`;"))
             await conn.execute(text(f"CREATE DATABASE `{db_name}`;"))
             await conn.execute(text(f"USE `{db_name}`;"))
@@ -155,11 +155,11 @@ async def deploy_mysql_ddl(db_name: str, statements: list[str]):
                 if not stmt or any(x in stmt.upper() for x in ["CREATE DATABASE", "USE "]):
                     continue
 
-                log.debug(f"[MySQL-Physical] Executing: {stmt[:50]}...")
+                log.debug("[MySQL-Physical] Executing: {}...", stmt[:50])
                 await conn.execute(text(stmt))
 
             await conn.commit()
-            log.info(f"[MySQL-Physical] Deployment for {db_name} completed.")
+            log.info("[MySQL-Physical] Deployment for {} completed.", db_name)
     except Exception as e:
-        log.error(f"[MySQL-Physical] Critical Error: {e}")
-        raise DatabaseOperationFailedException(f"MySQL physical execution failed: {str(e)}")
+        log.error("[MySQL-Physical] Critical Error: {}", e)
+        raise DatabaseOperationFailedException("MySQL physical execution failed: {}".format(str(e)))

@@ -48,7 +48,7 @@ class CRUDLoginHistory:
             result = await db.execute(query)
 
             latest_record = result.scalars().first()
-            log.debug(f"get latest unlogout record: {latest_record}")
+            log.debug("get latest unlogout record: {}", latest_record)
 
             return latest_record
         except SQLAlchemyError as e:

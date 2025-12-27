@@ -7,6 +7,12 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.exceptions import RequestValidationError
 from pydantic import ValidationError
 from sqlalchemy.exc import SQLAlchemyError
+# 导入第三方库异常类
+import redis.exceptions as redis_exceptions
+from jose import JWTError
+import httpx
+import aiohttp
+import celery.exceptions as celery_exceptions
 
 from core.config import config
 from core.log import log
@@ -18,7 +24,13 @@ from core.exception_handlers import (
     validation_exception_handler,
     pydantic_validation_exception_handler,
     sqlalchemy_exception_handler,
-    general_exception_handler
+    general_exception_handler,
+    io_exception_handler,
+    timeout_exception_handler,
+    type_exception_handler,
+    value_exception_handler,
+    key_exception_handler,
+    jwt_exception_handler,
 )
 
 import models
@@ -120,6 +132,20 @@ my_app.add_exception_handler(AppException, app_exception_handler)
 my_app.add_exception_handler(RequestValidationError, validation_exception_handler)
 my_app.add_exception_handler(ValidationError, pydantic_validation_exception_handler)
 my_app.add_exception_handler(SQLAlchemyError, sqlalchemy_exception_handler)
+
+# 注册Python内置异常处理器
+my_app.add_exception_handler(IOError, io_exception_handler)
+my_app.add_exception_handler(FileNotFoundError, io_exception_handler)
+my_app.add_exception_handler(TimeoutError, timeout_exception_handler)
+my_app.add_exception_handler(TypeError, type_exception_handler)
+my_app.add_exception_handler(ValueError, value_exception_handler)
+my_app.add_exception_handler(KeyError, key_exception_handler)
+my_app.add_exception_handler(AttributeError, key_exception_handler)
+
+# 注册第三方库异常处理器
+my_app.add_exception_handler(JWTError, jwt_exception_handler)
+
+# 兜底异常处理器
 my_app.add_exception_handler(Exception, general_exception_handler)
 
 # ============================================================

@@ -20,15 +20,21 @@ async def init_redis():
     初始化 Redis 连接池。
 
     创建一个全局的 Redis 连接池实例，用于常规的数据读写操作。
-    配置参数（Host, Port, DB）从全局配置中读取。
+    配置参数从全局配置中读取，支持密码、超时和连接池设置。
     """
     global redis
-    # Use the newer connection method for aioredis
+    # 构建 Redis URL
+    url = f"redis://{config.redis.host}:{config.redis.port}/{config.redis.db}"
+    
+    # 使用新的连接方法，支持所有配置项
     redis = aioredis.from_url(
-        f"redis://{config.redis.host}:{config.redis.port}",
-        db=config.redis.db,
+        url,
+        password=config.redis.password,
         encoding="utf-8",
-        decode_responses=True
+        decode_responses=True,
+        socket_connect_timeout=config.redis.connect_timeout,
+        socket_timeout=config.redis.read_timeout,
+        max_connections=config.redis.max_connections
     )
     try:
         await redis.ping()
@@ -44,12 +50,18 @@ async def init_redis_listener():
     因此单独创建一个连接实例用于监听键过期等事件。
     """
     global redis_listener
+    # 构建 Redis URL
+    url = f"redis://{config.redis.host}:{config.redis.port}/{config.redis.db}"
+    
     # Create a separate connection for listening to events
     redis_listener = aioredis.from_url(
-        f"redis://{config.redis.host}:{config.redis.port}",
-        db=config.redis.db,
+        url,
+        password=config.redis.password,
         encoding="utf-8",
-        decode_responses=True
+        decode_responses=True,
+        socket_connect_timeout=config.redis.connect_timeout,
+        socket_timeout=config.redis.read_timeout,
+        max_connections=1  # 监听器只需要一个连接
     )
     
     try:
@@ -97,7 +109,7 @@ async def close_redis():
     global redis
     if redis:
         try:
-            await redis.aclose()
+            await redis.close()
             log.info("Closed Redis connection")
         except Exception as e:
             log.error(f"无法关闭Redis连接: {e}")
@@ -113,7 +125,7 @@ async def close_redis_listener():
     global redis_listener
     if redis_listener:
         try:
-            await redis_listener.aclose()
+            await redis_listener.close()
             log.info("Closed Redis listener connection")
         except Exception as e:
             log.error(f"无法关闭Redis监听器连接: {e}")

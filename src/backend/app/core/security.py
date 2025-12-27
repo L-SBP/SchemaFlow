@@ -31,29 +31,12 @@ class RedisFrequencyLimiter:
     - 如果在指定时间窗口内请求次数超过阈值，标记为风险状态
     """
     
-    def __init__(self, redis_host: str = settings.redis.host, 
-                 redis_port: int = settings.redis.port,
-                 redis_db: int = 0):
+    def __init__(self):
         """
-        初始化 Redis 连接。
-        
-        Args:
-            redis_host: Redis 服务器地址
-            redis_port: Redis 服务器端口
-            redis_db: Redis 数据库号
+        初始化 Redis 连接（使用全局 Redis 客户端）。
         """
-        try:
-            self.redis_client = redis_client.Redis(
-                host=redis_host,
-                port=redis_port,
-                db=redis_db,
-                decode_responses=True
-            )
-            self.redis_client.ping()
-            log.info("Redis 连接成功")
-        except Exception as e:
-            log.error(f"Redis 连接失败: {e}")
-            self.redis_client = None
+        from redis_client.redis import get_redis
+        self.redis_client = get_redis()
     
     def check_frequency(self, user_id: int, 
                        time_window: int = 10,  # 时间窗口（秒）
@@ -77,7 +60,8 @@ class RedisFrequencyLimiter:
             return False, 0
         
         try:
-            key = f"user:freq:{user_id}"
+            from redis_client.redis_keys import redis_key_manager
+            key = redis_key_manager.get_frequency_limit_key(user_id)
             
             # INCR 操作：增加请求计数
             current_count = self.redis_client.incr(key)
@@ -90,12 +74,12 @@ class RedisFrequencyLimiter:
             is_exceeded = current_count > threshold
             
             if is_exceeded:
-                log.warning(f"用户 {user_id} 请求频率超限: {current_count}/{threshold}")
+                log.warning("用户 {} 请求频率超限: {}/{}", user_id, current_count, threshold)
             
             return is_exceeded, current_count
         
         except Exception as e:
-            log.error(f"Redis 频率限制检查失败: {e}")
+            log.error("Redis 频率限制检查失败: {}", e)
             return False, 0
     
     def get_frequency(self, user_id: int) -> int:
@@ -112,11 +96,12 @@ class RedisFrequencyLimiter:
             return 0
         
         try:
-            key = f"user:freq:{user_id}"
+            from redis_client.redis_keys import redis_key_manager
+            key = redis_key_manager.get_frequency_limit_key(user_id)
             count = self.redis_client.get(key)
             return int(count) if count else 0
         except Exception as e:
-            log.error(f"获取用户频率失败: {e}")
+            log.error("获取用户频率失败: {}", e)
             return 0
     
     def reset_frequency(self, user_id: int) -> bool:
@@ -133,12 +118,13 @@ class RedisFrequencyLimiter:
             return False
         
         try:
-            key = f"user:freq:{user_id}"
+            from redis_client.redis_keys import redis_key_manager
+            key = redis_key_manager.get_frequency_limit_key(user_id)
             self.redis_client.delete(key)
-            log.info(f"已重置用户 {user_id} 的请求频率")
+            log.info("已重置用户 {} 的请求频率", user_id)
             return True
         except Exception as e:
-            log.error(f"重置用户频率失败: {e}")
+            log.error("重置用户频率失败: {}", e)
             return False
 
 
@@ -218,7 +204,7 @@ class ViolationLogger:
             return violation
         
         except Exception as e:
-            log.error(f"记录违规日志失败: {e}")
+            log.error("记录违规日志失败: {}", e)
             raise
     
     @staticmethod
@@ -265,7 +251,7 @@ class ViolationLogger:
             return len(violations)
         
         except Exception as e:
-            log.error(f"查询违规记录失败: {e}")
+            log.error("查询违规记录失败: {}", e)
             return 0
 
 
@@ -318,13 +304,13 @@ class BlacklistManager:
                 )
                 
                 if success:
-                    log.warning(f"自动封禁用户 {user_id}: {reason}")
+                    log.warning("自动封禁用户 {}: {}", user_id, reason)
                     return True, reason
             
             return False, None
         
         except Exception as e:
-            log.error(f"自动封禁检查失败: {e}")
+            log.error("自动封禁检查失败: {}", e)
             return False, None
     
     @staticmethod
@@ -354,7 +340,7 @@ class BlacklistManager:
             user = result.scalar_one_or_none()
             
             if not user:
-                log.error(f"用户 {user_id} 不存在")
+                log.error("用户 {} 不存在", user_id)
                 return False
             
             # 更新用户状态
@@ -364,11 +350,11 @@ class BlacklistManager:
             
             await db.commit()
             
-            log.warning(f"用户 {user_id} 已被封禁: {reason}")
+            log.warning("用户 {} 已被封禁: {}", user_id, reason)
             return True
         
         except Exception as e:
-            log.error(f"封禁用户失败: {e}")
+            log.error("封禁用户失败: {}", e)
             await db.rollback()
             return False
     
@@ -395,7 +381,7 @@ class BlacklistManager:
             user = result.scalar_one_or_none()
             
             if not user:
-                log.error(f"用户 {user_id} 不存在")
+                log.error("用户 {} 不存在", user_id)
                 return False
             
             # 更新用户状态
@@ -405,11 +391,11 @@ class BlacklistManager:
             
             await db.commit()
             
-            log.info(f"用户 {user_id} 已被解封")
+            log.info("用户 {} 已被解封", user_id)
             return True
         
         except Exception as e:
-            log.error(f"解封用户失败: {e}")
+            log.error("解封用户失败: {}", e)
             await db.rollback()
             return False
     
@@ -435,7 +421,7 @@ class BlacklistManager:
             return users
         
         except Exception as e:
-            log.error(f"获取被封禁用户列表失败: {e}")
+            log.error("获取被封禁用户列表失败: {}", e)
             return []
 
 

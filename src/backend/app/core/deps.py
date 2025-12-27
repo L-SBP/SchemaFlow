@@ -13,7 +13,7 @@ from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession
 from sqlalchemy import select
 
 from core.database import PsqlHelper, SQLAlchemyError
-from core.exceptions import DatabaseOperationFailedException, ForbiddenException
+from core.exceptions import DatabaseOperationFailedException, ForbiddenException, ItemNotFoundException
 from core.config import settings
 from core.auth import decode_jwt_token
 from models.user_account import UserAccount
@@ -88,18 +88,15 @@ async def get_current_user(
         UserAccount: 当前用户对象。
 
     Raises:
-        HTTPException: Token 无效、用户不存在或被封禁时抛出。
+        ForbiddenException: Token 无效或用户被封禁时抛出。
+        ItemNotFoundException: 用户不存在时抛出。
     """
     try:
         # 1. 解析 Token
         user_id = decode_jwt_token(token)
     except Exception as e:
-        log.warning(f"Token 解析失败: {e}")
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="无效的认证凭据",
-            headers={"WWW-Authenticate": "Bearer"},
-        )
+        log.warning("Token 解析失败: {}", e)
+        raise ForbiddenException(message="无效的认证凭据")
 
     try:
         # 2. 查询用户
@@ -109,20 +106,13 @@ async def get_current_user(
         user = result.scalar_one_or_none()
 
         if not user:
-            log.warning(f"用户 {user_id} 不存在")
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="User not found",
-                headers={"WWW-Authenticate": "Bearer"},
-            )
+            log.warning("用户 {} 不存在", user_id)
+            raise ItemNotFoundException(message="User not found")
 
         # 3. 检查用户是否被封禁（黑名单检查）
         if not user.is_active:
-            log.warning(f"用户 {user_id} 已被封禁: {user.ban_reason}")
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail=f"Account is banned. Reason: {user.ban_reason}",
-            )
+            log.warning("用户 {} 已被封禁: {}", user_id, user.ban_reason)
+            raise ForbiddenException(message=f"Account is banned. Reason: {user.ban_reason}")
 
         # 4. 检查请求频率（可选的额外防护）
         from core.security import freq_limiter
@@ -133,7 +123,7 @@ async def get_current_user(
         )
 
         if is_exceeded:
-            log.warning(f"用户 {user_id} 请求频率超限: {count} 请求/10秒")
+            log.warning("用户 {} 请求频率超限: {} 请求/10秒", user_id, count)
             # 记录违规行为
             try:
                 from core.security import ViolationLogger
@@ -153,31 +143,21 @@ async def get_current_user(
                 from core.security import BlacklistManager
                 is_banned, reason = await BlacklistManager.auto_ban_if_needed(db, user_id)
                 if is_banned:
-                    raise HTTPException(
-                        status_code=status.HTTP_403_FORBIDDEN,
-                        detail=f"Account is banned due to excessive API usage.",
-                    )
+                    raise ForbiddenException(message="Account is banned due to excessive API usage.")
             except HTTPException:
                 raise
             except Exception as e:
-                log.error(f"记录违规日志失败: {e}")
+                log.error("记录违规日志失败: {}", e)
                 # 即使记录失败，仍然限制请求
-                raise HTTPException(
-                    status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-                    detail="Too many requests",
-                )
+                raise ForbiddenException(message="Too many requests")
 
         return user
 
     except HTTPException:
         raise
     except Exception as e:
-        log.error(f"获取当前用户失败: {e}")
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Could not validate credentials",
-            headers={"WWW-Authenticate": "Bearer"},
-        )
+        log.error("获取当前用户失败: {}", e)
+        raise ForbiddenException(message="Could not validate credentials")
 
 
 # 4. 获取当前管理员用户（需要 admin 权限）
@@ -194,13 +174,10 @@ async def get_current_admin(
         UserAccount: 当前用户（已验证为管理员）。
 
     Raises:
-        HTTPException: 用户不是管理员时抛出。
+        ForbiddenException: 用户不是管理员时抛出。
     """
     if not current_user.is_admin:
-        log.warning(f"非管理员用户 {current_user.user_id} 尝试访问管理员功能")
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Admin privileges required",
-        )
+        log.warning("非管理员用户 {} 尝试访问管理员功能", current_user.user_id)
+        raise ForbiddenException(message="Admin privileges required")
 
     return current_user

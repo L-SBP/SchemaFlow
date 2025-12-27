@@ -24,6 +24,7 @@ from redis_client.redis import get_redis
 from core.config import config
 from service import email_service  # 导入 email_service 模块本身
 from schema import user as schemas  # 导入 User Schemas
+from redis_client.redis_keys import redis_key_manager
 
 
 # ----------------------------------------------------------------------
@@ -213,11 +214,19 @@ async def service_save_token_in_redis(token: str) -> bool:
         bool: 是否缓存成功。
     """
     redis = get_redis()
-    if redis:
-        await redis.set(f"token:{token}", "1", ex=config.jwt.token_expire_time_seconds)
-        log.info(f"Save token {token} to redis_client")
+    if not redis:
+        log.warning("Redis connection not available for token storage")
+        return False
+    
+    try:
+        key = redis_key_manager.get_token_key(token)
+        await redis.set(key, "1", ex=config.jwt.token_expire_time_seconds)
+        log.info(f"Save token to redis_client")
         return True
-    return False
+    except Exception as e:
+        log.error(f"Error saving token to Redis: {e}")
+        # Redis失败时不影响主流程，返回False表示缓存失败但业务可继续
+        return False
 
 
 async def service_set_user_online_status(user_id: int, is_online: bool = True) -> bool:
@@ -274,11 +283,19 @@ async def service_abolish_token_in_redis(token: str) -> bool:
         bool: 是否删除成功。
     """
     redis = get_redis()
-    if redis:
-        await redis.delete(f"token:{token}")
-        log.info(f"Abolish token {token} in redis_client")
+    if not redis:
+        log.warning("Redis connection not available for token abolition")
+        return False
+    
+    try:
+        key = redis_key_manager.get_token_key(token)
+        await redis.delete(key)
+        log.info(f"Abolish token in redis_client")
         return True
-    return False
+    except Exception as e:
+        log.error(f"Error abolishing token in Redis: {e}")
+        # Redis失败时不影响主流程，返回False表示删除失败但业务可继续
+        return False
 
 
 async def create_login_record(

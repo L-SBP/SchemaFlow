@@ -13,6 +13,7 @@ import aioredis
 from aioredis.client import PubSub
 
 from service.redis_expire_handle_service import service_handle_expire_token
+from redis_client.redis_keys import redis_key_manager
 from core.log import log
 from core.config import config
 
@@ -20,16 +21,27 @@ async def redis_expire_handler(expire_key: str):
     """
     Redis 过期键事件分发处理器。
 
-    根据过期键的前缀（如 `verification:`, `token:`）将事件分发给对应的业务逻辑处理。
+    根据过期键的前缀将事件分发给对应的业务逻辑处理。
 
     Args:
         expire_key (str): 已过期的 Redis 键名。
     """
     log.info(f"Expired key received: {expire_key}")
-    if expire_key.startswith("verification:"):
+    
+    # 获取基础前缀（用于环境隔离）
+    base_prefix = redis_key_manager._get_base_prefix()
+    prefix_len = len(base_prefix) + 1 if base_prefix else 0
+    
+    # 提取实际键名（去除基础前缀）
+    actual_key = expire_key[prefix_len:] if base_prefix else expire_key
+    
+    verification_prefix = redis_key_manager.VERIFICATION_PREFIX
+    token_prefix = redis_key_manager.TOKEN_PREFIX
+    
+    if actual_key.startswith(f"{verification_prefix}:"):
         log.info(f"Verification code expired: {expire_key}")
-    elif expire_key.startswith("token:"):
-        token = expire_key[len("token:"):]  # Fixed extraction
+    elif actual_key.startswith(f"{token_prefix}:"):
+        token = actual_key[len(f"{token_prefix}:"):]
         log.info(f"Token expired: {token}")
         await service_handle_expire_token(token)  # Added await
 
@@ -44,10 +56,12 @@ async def redis_expire_listener():
     """
     # Create a separate Redis connection for listening
     redis_conn = aioredis.from_url(
-        f"redis://{config.redis.host}:{config.redis.port}",
-        db=config.redis.db,
+        f"redis://{config.redis.host}:{config.redis.port}/{config.redis.db}",
+        password=config.redis.password,
         encoding="utf-8",
-        decode_responses=True
+        decode_responses=True,
+        socket_connect_timeout=config.redis.connect_timeout,
+        socket_timeout=config.redis.read_timeout
     )
     
     try:
@@ -76,6 +90,6 @@ async def redis_expire_listener():
         log.error(f"无法启动Redis过期监听器: {e}")
     finally:
         try:
-            await redis_conn.aclose()
+            await redis_conn.close()
         except:
             pass
