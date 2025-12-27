@@ -71,6 +71,22 @@ services:
     networks:
       - app-network
 
+  # ChromaDB (向量数据库，用于 RAG 检索)
+  chromadb:
+    image: chromadb/chroma:0.5.23
+    container_name: chromadb
+    restart: always
+    ports:
+      - "8100:8000"
+    environment:
+      - IS_PERSISTENT=TRUE
+      - PERSIST_DIRECTORY=/chroma/chroma
+      - ANONYMIZED_TELEMETRY=FALSE
+    volumes:
+      - chroma_data:/chroma/chroma
+    networks:
+      - app-network
+
   # -----------------------------------------------------------------------------
   # 2. 应用服务 (后端 & 任务队列 & 前端)
   # -----------------------------------------------------------------------------
@@ -98,6 +114,10 @@ services:
       - REDIS__HOST=redis
       - REDIS__PORT=6379
 
+      # ChromaDB 配置
+      - CHROMA__HOST=chromadb
+      - CHROMA__PORT=8000
+
       # 覆盖 config.yaml 中的 app 部分
       - APP__HOST=0.0.0.0
 
@@ -110,6 +130,7 @@ services:
     depends_on:
       - postgres-meta
       - redis
+      - chromadb
     networks:
       - app-network
 
@@ -131,6 +152,9 @@ services:
       # 显式覆盖 Celery Broker URL (以防代码没读配置)
       - CELERY_BROKER_URL=redis://redis:6379/0
       - CELERY_RESULT_BACKEND=redis://redis:6379/0
+      # ChromaDB 配置
+      - CHROMA__HOST=chromadb
+      - CHROMA__PORT=8000
     # 启动命令
     command: celery -A app.celery_app worker --loglevel=info
     depends_on:
@@ -170,6 +194,7 @@ volumes:
   mysql_data:
   postgres_user_data:
   redis_data:
+  chroma_data:
 
 
 networks:

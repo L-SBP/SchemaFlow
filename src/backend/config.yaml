@@ -72,6 +72,24 @@ dev:
     # 订阅频道
     subscribe_channel: "__keyevent@*:expired"
 
+  # ChromaDB 向量数据库配置
+  chroma:
+    # ChromaDB 服务主机（Docker 模式下为服务名）
+    host: localhost
+    # ChromaDB 服务端口
+    port: 8100
+    # 是否使用 HTTP 客户端模式（false: 内嵌模式，true: 连接远程服务）
+    use_http_client: true
+    # 内嵌模式下的持久化目录
+    persist_directory: "data/chroma_db"
+
+  # Embedding 服务配置（阿里云百炼）
+  embedding:
+    api_key: "sk-4cad797f97824bc792db8bb189d770bc"
+    base_url: "https://dashscope.aliyuncs.com/compatible-mode/v1"
+    model: "text-embedding-v4"
+    dimensions: 1024
+
   log:
     # 文件日志级别
     file_level: DEBUG
@@ -247,6 +265,21 @@ prod:
     db: 0
     password: "secure_redis_2025"
     subscribe_channel: "__keyevent@*:expired"
+
+  # ChromaDB 向量数据库配置（生产环境使用 Docker）
+  chroma:
+    host: chromadb
+    port: 8000
+    # 生产环境使用 HTTP 客户端连接 Docker 中的 ChromaDB
+    use_http_client: true
+    persist_directory: "/chroma/chroma"
+
+  # Embedding 服务配置
+  embedding:
+    api_key: "sk-4cad797f97824bc792db8bb189d770bc"
+    base_url: "https://dashscope.aliyuncs.com/compatible-mode/v1"
+    model: "text-embedding-v4"
+    dimensions: 1024
 
   log:
     file_level: DEBUG
