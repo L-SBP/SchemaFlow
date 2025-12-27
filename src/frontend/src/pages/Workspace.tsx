@@ -1047,7 +1047,7 @@ export const Workspace: React.FC<WorkspaceProps> = ({ project, onBack }) => {
                   <Bot size={is.mobile ? 12 : 14} className="text-gray-400 shrink-0" />
                   <span className="model-label text-gray-400 mx-1 select-none hidden sm:inline whitespace-nowrap" style={{
                     fontSize: is.mobile ? '9px' : '10px'
-                  }}>模型</span>
+                  }}></span>
                   <select
                     value={selectedModel}
                     onChange={(e) => setSelectedModel(e.target.value)}
