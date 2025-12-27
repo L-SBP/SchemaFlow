@@ -27,8 +27,8 @@ api_router.include_router(project.router, prefix="/projects", tags=["II. 项目�
 api_router.include_router(reports.router, tags=["III. 报表与查询"])
 api_router.include_router(knowledge.router, tags=["IV. 业务术语表"])
 api_router.include_router(user.router, prefix="/user", tags=["V. 用户设置"])
+api_router.include_router(chat.router, tags=["VII. 对话与消息管理"])  # chat 在 admin 之前，避免 /ai-models/options 被 admin 的 /ai-models/{config_id} 捕获
 api_router.include_router(admin.router, tags=["VI. 管理员功能"])
-api_router.include_router(chat.router, tags=["VII. 对话与消息管理"])
 api_router.include_router(session.router, prefix="/sessions", tags=["VIII. 会话管理"])
 
 # 2. 注册公告模块

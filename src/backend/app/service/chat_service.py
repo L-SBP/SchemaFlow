@@ -12,6 +12,7 @@
 1. 将长 AI 调用移出数据库事务，确保连接池不会被耗尽
 2. 拆分 process_chat 为多个小函数，每个函数控制在 50 行以内
 3. Prompt 模板移至 core/prompts.py
+4. 模型配置支持从数据库动态读取，硬编码配置作为后备
 """
 
 # backend/app/service/chat_service.py
@@ -20,6 +21,7 @@ import json
 import httpx
 import sqlparse
 from typing import List, Dict, Any, Optional, Tuple
+from fastapi import HTTPException
 from sqlalchemy.future import select
 from sqlalchemy.orm import selectinload
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -33,6 +35,7 @@ from crud.crud_database_instance import crud_database_instance
 from crud.crud_message import crud_message
 from crud.crud_project import crud_project
 from crud.crud_knowledge import crud_knowledge
+from crud.crud_ai_model_config import crud_ai_model_config
 from models.session import Session as SessionModel
 from schema.chat import ChatResponse, MessageType
 from service.mysql_service import execute_mysql_sql_with_user_check
@@ -46,10 +49,10 @@ from models.domain_knowledge import DomainKnowledge
 
 
 # =========================================================
-# 1. 模型配置注册表
+# 1. 模型配置注册表（后备配置，当数据库无配置时使用）
 # =========================================================
 
-MODEL_REGISTRY = {
+FALLBACK_MODEL_REGISTRY = {
     "my-finetuned-sql": {
         "name": "My Fine-Tuned SQL Model",
         "api_url": "http://1.92.127.206:8080/v1/chat/completions",
@@ -80,7 +83,59 @@ MODEL_REGISTRY = {
     }
 }
 
+# 保留旧变量名以兼容可能的外部引用
+MODEL_REGISTRY = FALLBACK_MODEL_REGISTRY
+
 DEFAULT_MODEL = "my-finetuned-sql"
+
+
+# =========================================================
+# 1.1 动态模型配置获取
+# =========================================================
+
+async def get_model_registry(db: AsyncSession) -> Dict[str, Dict[str, Any]]:
+    """
+    获取模型配置注册表。
+
+    优先从数据库读取，如果数据库无配置则使用后备配置。
+
+    Args:
+        db (AsyncSession): 数据库会话。
+
+    Returns:
+        Dict[str, Dict[str, Any]]: 模型配置字典。
+    """
+    try:
+        db_registry = await crud_ai_model_config.get_model_registry(db)
+        if db_registry:
+            return db_registry
+    except Exception as e:
+        log.warning(f"Failed to load model config from database: {e}, using fallback")
+
+    return FALLBACK_MODEL_REGISTRY
+
+
+async def get_default_model_key(db: AsyncSession) -> str:
+    """
+    获取默认模型名称。
+
+    由于移除了 is_default 字段，这里返回第一个配置的模型名称。
+    如果数据库无配置则使用后备默认值。
+
+    Args:
+        db (AsyncSession): 数据库会话。
+
+    Returns:
+        str: 默认模型名称。
+    """
+    try:
+        configs = await crud_ai_model_config.get_all(db, limit=1)
+        if configs:
+            return configs[0].model_name
+    except Exception as e:
+        log.warning(f"Failed to load default model from database: {e}, using fallback")
+
+    return DEFAULT_MODEL
 
 
 # =========================================================
@@ -124,19 +179,30 @@ async def _get_session_obj(db: AsyncSession, session_id: int) -> SessionModel:
 # 3. 模型选择策略
 # =========================================================
 
-def _resolve_model_key(
+async def _resolve_model_key(
+    db: AsyncSession,
     selected_model: Optional[str],
     session_current_model: Optional[str]
-) -> str:
+) -> Tuple[str, Dict[str, Dict[str, Any]]]:
     """
     解析最终使用的模型 key。
     优先级：用户本次指定 > 会话记忆 > 默认模型
+
+    同时返回模型注册表，避免重复查询数据库。
+
+    Returns:
+        Tuple[str, Dict]: (模型 key, 模型配置注册表)
     """
-    if selected_model and selected_model in MODEL_REGISTRY:
-        return selected_model
-    if session_current_model and session_current_model in MODEL_REGISTRY:
-        return session_current_model
-    return DEFAULT_MODEL
+    # 获取模型注册表
+    registry = await get_model_registry(db)
+    default_key = await get_default_model_key(db)
+
+    if selected_model and selected_model in registry:
+        return selected_model, registry
+    if session_current_model and session_current_model in registry:
+        return session_current_model, registry
+
+    return default_key, registry
 
 
 async def _update_session_model(
@@ -200,21 +266,33 @@ async def call_ai_agent(
     question: str,
     history: List[MessageModel] = None,
     knowledge: List[DomainKnowledge] = None,
-    model_key: str = None
+    model_key: str = None,
+    model_registry: Dict[str, Dict[str, Any]] = None
 ) -> str:
     """
     调用 AI 接口生成 SQL。
     
     【重要】此函数不应在数据库事务内调用，因为 AI 调用可能耗时很长（最长 300s）。
+
+    Args:
+        ddl_text: 数据库 DDL 语句
+        question: 用户问题
+        history: 历史消息列表
+        knowledge: 领域知识列表
+        model_key: 模型标识符
+        model_registry: 模型配置注册表（从数据库或后备配置获取）
     """
     history = history or []
     knowledge = knowledge or []
     
-    if not model_key or model_key not in MODEL_REGISTRY:
-        model_key = DEFAULT_MODEL
+    # 使用传入的注册表或后备配置
+    registry = model_registry or FALLBACK_MODEL_REGISTRY
     
-    config = MODEL_REGISTRY[model_key]
-    log.info("Using AI Model: {} ({})", config['name'], config['model_id'])
+    if not model_key or model_key not in registry:
+        model_key = DEFAULT_MODEL if DEFAULT_MODEL in registry else list(registry.keys())[0]
+
+    config = registry[model_key]
+    log.info(f"Using AI Model: {config['name']} ({config['model_id']})")
 
     messages = build_ai_messages(
         model_type=config["type"],
@@ -450,8 +528,8 @@ async def process_chat(
     project_id = await _verify_session_ownership(db, session_id, user_id)
     session_obj = await _get_session_obj(db, session_id)
     
-    # 解析模型
-    final_model_key = _resolve_model_key(selected_model, session_obj.current_model)
+    # 解析模型（异步，从数据库获取配置）
+    final_model_key, model_registry = await _resolve_model_key(db, selected_model, session_obj.current_model)
     await _update_session_model(db, session_obj, final_model_key)
     log.info("Session {} using model: {}", session_id, final_model_key)
     
@@ -514,7 +592,8 @@ async def process_chat(
         user_input,
         history=history_context,
         knowledge=knowledge_context,
-        model_key=final_model_key
+        model_key=final_model_key,
+        model_registry=model_registry
     )
     
     # 检查元数据 SQL

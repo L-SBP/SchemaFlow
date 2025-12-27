@@ -1,5 +1,5 @@
 import client from './client.ts';
-import { ChatResponse, PageData } from '../types';
+import { ChatResponse, PageData, AIModelOptionsResponse } from '../types';
 
 // 对应文档: SessionResponse (会话信息)
 export interface SessionItem {
@@ -88,5 +88,13 @@ export const sessionApi = {
    */
   confirmMessage: (messageId: number) => {
     return client.post<any, ChatResponse>(`/v1/messages/${messageId}/confirm`);
+  },
+
+  /**
+   * 2.4 获取可用的 AI 模型列表
+   * GET /api/v1/ai-models/options
+   */
+  getAIModelOptions: () => {
+    return client.get<any, AIModelOptionsResponse>('/v1/ai-models/options');
   }
 };

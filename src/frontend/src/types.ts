@@ -386,3 +386,51 @@ export interface LoginHistoryItem {
   user_agent: string | null;
   login_status: 'success' | 'failed' | 'expired' | 'forced_logout';
 }
+
+// ========================================
+// AI 模型配置相关类型（精简版）
+// ========================================
+
+export interface AIModelConfigResponse {
+  config_id: number;
+  model_name: string;
+  api_url: string;
+  model_id: string;
+  model_type: 'local_finetune' | 'general_llm';
+  created_at: string;
+  updated_at: string;
+}
+
+export interface AIModelConfigDetailResponse extends AIModelConfigResponse {
+  api_key_masked: string;
+}
+
+export interface AIModelConfigListResponse {
+  total: number;
+  items: AIModelConfigResponse[];
+}
+
+export interface AIModelConfigCreate {
+  model_name: string;
+  api_url: string;
+  model_id: string;
+  api_key: string;
+  model_type: 'local_finetune' | 'general_llm';
+}
+
+export interface AIModelConfigUpdate {
+  model_name?: string;
+  api_url?: string;
+  model_id?: string;
+  api_key?: string;
+  model_type?: 'local_finetune' | 'general_llm';
+}
+
+export interface AIModelOption {
+  model_name: string;
+  model_type: string;
+}
+
+export interface AIModelOptionsResponse {
+  items: AIModelOption[];
+}

@@ -5,7 +5,12 @@ import {
   PageData,
   ViolationLogListItem,
   AdminUserListItem,
-  AdminListItem
+  AdminListItem,
+  AIModelConfigResponse,
+  AIModelConfigListResponse,
+  AIModelConfigDetailResponse,
+  AIModelConfigCreate,
+  AIModelConfigUpdate
 } from '../types.ts';
 
 // 2.2 更新用户状态请求体
@@ -104,5 +109,55 @@ export const adminApi = {
         resolution_status: resolutionStatus
       }
     });
+  },
+
+  // ========================================
+  // 5. AI 模型配置管理
+  // ========================================
+
+  /**
+   * 5.1 获取 AI 模型配置列表
+   * GET /api/v1/ai-models
+   */
+  getAIModels: (page: number = 1, pageSize: number = 20, activeOnly: boolean = false) => {
+    return client.get<any, AIModelConfigListResponse>('/v1/ai-models', {
+      params: {
+        page,
+        page_size: pageSize,
+        active_only: activeOnly
+      }
+    });
+  },
+
+  /**
+   * 5.2 获取 AI 模型配置详情
+   * GET /api/v1/ai-models/{config_id}
+   */
+  getAIModelDetail: (configId: number) => {
+    return client.get<any, AIModelConfigDetailResponse>(`/v1/ai-models/${configId}`);
+  },
+
+  /**
+   * 5.3 创建 AI 模型配置
+   * POST /api/v1/ai-models
+   */
+  createAIModel: (data: AIModelConfigCreate) => {
+    return client.post<any, AIModelConfigResponse>('/v1/ai-models', data);
+  },
+
+  /**
+   * 5.4 更新 AI 模型配置
+   * PUT /api/v1/ai-models/{config_id}
+   */
+  updateAIModel: (configId: number, data: AIModelConfigUpdate) => {
+    return client.put<any, AIModelConfigResponse>(`/v1/ai-models/${configId}`, data);
+  },
+
+  /**
+   * 5.5 删除 AI 模型配置
+   * DELETE /api/v1/ai-models/{config_id}
+   */
+  deleteAIModel: (configId: number) => {
+    return client.delete<any, null>(`/v1/ai-models/${configId}`);
   }
 };
