@@ -72,14 +72,17 @@ async def validation_exception_handler(request: Request, exc: RequestValidationE
     Returns:
         JSONResponse: 标准化的错误响应
     """
-    error_info = str(exc.errors())
-    log.warning(f"ValidationError: {error_info}", extra={"path": request.url.path, "method": request.method})
+    error_info = exc.errors()
+    # 避免直接使用f-string格式化包含特殊字符的内容
+    log.warning("ValidationError: {}", error_info, extra={"path": request.url.path, "method": request.method})
     
     # 提取验证错误信息
     error_details = []
     for error in exc.errors():
-        field = "".join([f"[{k}]" if isinstance(k, int) else f".{k}" for k in error["loc"]]).lstrip(".")
-        error_details.append(f"{field}: {error['msg']}")
+        msg = error['msg']
+        if ', ' in msg:
+            msg = msg.split(', ', 1)[1]
+        error_details.append(f"{msg}")
     
     response = UnifiedResponse.error(
         code=10001,  # 参数错误业务代码
@@ -103,14 +106,18 @@ async def pydantic_validation_exception_handler(request: Request, exc: Validatio
     Returns:
         JSONResponse: 标准化的错误响应
     """
-    error_info = str(exc.errors())
-    log.warning(f"PydanticValidationError: {error_info}", extra={"path": request.url.path, "method": request.method})
+    error_info = exc.errors()
+    # 避免直接使用f-string格式化包含特殊字符的内容
+    log.warning("PydanticValidationError: {}", error_info, extra={"path": request.url.path, "method": request.method})
     
     # 提取验证错误信息
     error_details = []
     for error in exc.errors():
-        field = "".join([f"[{k}]" if isinstance(k, int) else f".{k}" for k in error["loc"]]).lstrip(".")
-        error_details.append(f"{field}: {error['msg']}")
+        # 移除错误信息中的英文前缀，保留中文部分
+        msg = error['msg']
+        if ', ' in msg:
+            msg = msg.split(', ', 1)[1]
+        error_details.append(f"{msg}")
     
     response = UnifiedResponse.error(
         code=10002,  # 数据验证错误业务代码

@@ -6,7 +6,7 @@
 
 # backend/app/schema/query.py
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, validator
 from typing import Literal
 from datetime import datetime
 
@@ -18,7 +18,13 @@ class SessionCreate(BaseModel):
     Attributes:
         session_name (str): 会话名称 (默认 "New Session")。
     """
-    session_name: str = Field("New Session", max_length=50, description="会话名称")
+    session_name: str = Field("New Session", description="会话名称")
+    
+    @validator('session_name')
+    def session_name_length(cls, v):
+        if len(v) > 50:
+            raise ValueError('会话名称长度不能超过50个字符')
+        return v
 
 # 会话信息
 class SessionListOne(BaseModel):
