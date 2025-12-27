@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Card, Button, Input, Tag, Modal, message } from '../components/UI.tsx';
-import { Save, User as UserIcon, Loader2, Edit2, Camera, Shield, Mail, History, Globe, MapPin, X, Check, UploadCloud, Image as ImageIcon } from 'lucide-react';
+import { Save, User as UserIcon, Loader2, Edit2, Camera, Shield, Mail, History, Globe, X, Check, UploadCloud } from 'lucide-react';
 import {
   getUserProfile,
   updateUsername,
@@ -89,7 +89,7 @@ export const Profile: React.FC<ProfileProps> = ({ onLogout }) => {
   const fetchLoginHistory = async (page: number) => {
     setLoadingHistory(true);
     try {
-      const res = await getLoginHistory(page, 10) as any;
+      const res = await getLoginHistory(page, 5) as any;
       // 修正：后端直接返回分页对象 { total, page, items: [] }
       if (res && Array.isArray(res.items)) {
         setHistoryData(res.items);
@@ -366,7 +366,7 @@ export const Profile: React.FC<ProfileProps> = ({ onLogout }) => {
 
         {/* Right: Tabs & Content (8 cols) */}
         <div className="lg:col-span-8">
-          <Card className="min-h-[500px]">
+          <Card className="h-full">
             {/* Tabs Header */}
             <div className="flex border-b border-gray-100 mb-6">
               {[
@@ -387,184 +387,187 @@ export const Profile: React.FC<ProfileProps> = ({ onLogout }) => {
               ))}
             </div>
 
-            {/* Tab: Security */}
-            {activeTab === 'security' && (
-              <div className="max-w-md mx-auto py-4 animate-in fade-in slide-in-from-right-4 duration-300">
-                <div className="space-y-5">
-                  <Input
-                    label="当前密码"
-                    type="password"
-                    value={currentPassword}
-                    onChange={e => setCurrentPassword(e.target.value)}
-                    placeholder="请输入旧密码"
-                  />
-                  <Input
-                    label="新密码"
-                    type="password"
-                    value={newPassword}
-                    onChange={e => setNewPassword(e.target.value)}
-                    placeholder="6-50位字符"
-                  />
-                  <Input
-                    label="确认新密码"
-                    type="password"
-                    value={confirmPasswordInput}
-                    onChange={e => setConfirmPasswordInput(e.target.value)}
-                    placeholder="再次输入新密码"
-                  />
-                  <div className="pt-4 flex justify-end">
-                    <Button
-                      variant="primary"
-                      icon={loadingForm ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />}
-                      onClick={handleUpdatePassword}
-                      disabled={loadingForm}
-                    >
-                      {loadingForm ? '更新中...' : '保存更改'}
-                    </Button>
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {/* Tab: Email */}
-            {activeTab === 'email' && (
-              <div className="max-w-md mx-auto py-4 animate-in fade-in slide-in-from-right-4 duration-300">
-                {emailStep === 1 ? (
+            {/* Tab Content Container - Fixed Height */}
+            <div className="h-[400px]">
+              {/* Tab: Security */}
+              {activeTab === 'security' && (
+                <div className="max-w-md mx-auto py-4 animate-in fade-in slide-in-from-right-4 duration-300 h-full flex flex-col justify-center">
                   <div className="space-y-5">
-                    <div className="bg-blue-50 p-4 rounded-lg text-sm text-blue-800 mb-4">
-                      当前绑定邮箱：<span className="font-bold">{userProfile?.email}</span>
-                      <p className="mt-1 opacity-80 text-xs">更换邮箱后，您需要使用新邮箱进行登录。</p>
-                    </div>
                     <Input
-                      label="新邮箱地址"
-                      placeholder="example@email.com"
-                      value={newEmail}
-                      onChange={e => setNewEmail(e.target.value)}
+                      label="当前密码"
+                      type="password"
+                      value={currentPassword}
+                      onChange={e => setCurrentPassword(e.target.value)}
+                      placeholder="请输入旧密码"
+                    />
+                    <Input
+                      label="新密码"
+                      type="password"
+                      value={newPassword}
+                      onChange={e => setNewPassword(e.target.value)}
+                      placeholder="6-50位字符"
+                    />
+                    <Input
+                      label="确认新密码"
+                      type="password"
+                      value={confirmPasswordInput}
+                      onChange={e => setConfirmPasswordInput(e.target.value)}
+                      placeholder="再次输入新密码"
                     />
                     <div className="pt-4 flex justify-end">
                       <Button
                         variant="primary"
-                        onClick={handleSendCode}
+                        icon={loadingForm ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />}
+                        onClick={handleUpdatePassword}
                         disabled={loadingForm}
-                        icon={loadingForm ? <Loader2 size={16} className="animate-spin" /> : <Mail size={16} />}
                       >
-                        {loadingForm ? '发送中...' : '发送验证码'}
+                        {loadingForm ? '更新中...' : '保存更改'}
                       </Button>
                     </div>
                   </div>
-                ) : (
-                  <div className="space-y-5">
-                    <div className="text-center mb-6">
-                      <div className="w-12 h-12 bg-green-100 rounded-full flex items-center justify-center text-green-600 mx-auto mb-2">
-                        <Mail size={24} />
-                      </div>
-                      <h4 className="font-bold text-gray-800">验证您的邮箱</h4>
-                      <p className="text-sm text-gray-500 mt-1">验证码已发送至 {newEmail}</p>
-                    </div>
-                    <Input
-                      label="6位验证码"
-                      placeholder="请输入验证码"
-                      value={verificationCode}
-                      onChange={e => setVerificationCode(e.target.value)}
-                      className="text-center tracking-widest text-lg"
-                      maxLength={6}
-                    />
-                    <div className="pt-4 flex justify-between items-center">
-                      <button
-                        onClick={() => setEmailStep(1)}
-                        className="text-sm text-gray-500 hover:text-gray-800"
-                        disabled={loadingForm}
-                      >
-                        返回修改邮箱
-                      </button>
-                      <Button
-                        variant="primary"
-                        onClick={handleBindEmail}
-                        disabled={loadingForm}
-                        icon={loadingForm ? <Loader2 size={16} className="animate-spin" /> : <Check size={16} />}
-                      >
-                        {loadingForm ? '验证并绑定...' : '确认绑定'}
-                      </Button>
-                    </div>
-                  </div>
-                )}
-              </div>
-            )}
+                </div>
+              )}
 
-            {/* Tab: History */}
-            {activeTab === 'history' && (
-              <div className="animate-in fade-in slide-in-from-right-4 duration-300">
-                {loadingHistory ? (
-                  <div className="flex justify-center py-12"><Loader2 className="animate-spin text-gray-400" size={32} /></div>
-                ) : (
-                  <>
-                    <div className="overflow-x-auto">
-                      <table className="w-full text-left text-sm">
-                        <thead className="bg-gray-50 border-b border-gray-100">
-                          <tr>
-                            <th className="px-4 py-3 font-medium text-gray-600">时间</th>
-                            <th className="px-4 py-3 font-medium text-gray-600">IP 地址</th>
-                            <th className="px-4 py-3 font-medium text-gray-600">设备信息</th>
-                            <th className="px-4 py-3 font-medium text-gray-600 text-right">状态</th>
-                          </tr>
-                        </thead>
-                        <tbody className="divide-y divide-gray-100">
-                          {historyData.map((log) => (
-                            <tr key={log.login_id} className="hover:bg-gray-50/50">
-                              <td className="px-4 py-3 text-gray-700 whitespace-nowrap">
-                                {new Date(log.login_time).toLocaleString()}
-                              </td>
-                              <td className="px-4 py-3 font-mono text-gray-600 text-xs">
-                                {log.ip_address}
-                              </td>
-                              <td className="px-4 py-3 text-gray-500 max-w-xs truncate" title={log.user_agent || ''}>
-                                {log.user_agent ? (
-                                  <span className="flex items-center gap-1"><Globe size={12} /> {log.user_agent.split('(')[0]}</span>
-                                ) : '-'}
-                              </td>
-                              <td className="px-4 py-3 text-right">
-                                <Tag color={log.login_status === 'success' ? 'green' : 'red'}>
-                                  {log.login_status === 'success' ? '成功' : '失败'}
-                                </Tag>
-                              </td>
-                            </tr>
-                          ))}
-                          {historyData.length === 0 && (
-                            <tr><td colSpan={4} className="text-center py-8 text-gray-400">暂无登录记录</td></tr>
-                          )}
-                        </tbody>
-                      </table>
-                    </div>
-                    {/* Pagination */}
-                    {historyTotal > 10 && (
-                      <div className="flex justify-between items-center mt-4 border-t border-gray-100 pt-4 px-1">
-                        <span className="text-xs text-gray-500">
-                          显示 {(historyPage - 1) * 10 + 1} - {Math.min(historyPage * 10, historyTotal)} 共 {historyTotal} 条
-                        </span>
-                        <div className="flex gap-2">
-                          <Button
-                            variant="default"
-                            className="h-8 px-3 text-xs"
-                            disabled={historyPage <= 1}
-                            onClick={() => fetchLoginHistory(historyPage - 1)}
-                          >
-                            上一页
-                          </Button>
-                          <Button
-                            variant="default"
-                            className="h-8 px-3 text-xs"
-                            disabled={historyPage * 10 >= historyTotal}
-                            onClick={() => fetchLoginHistory(historyPage + 1)}
-                          >
-                            下一页
-                          </Button>
-                        </div>
+              {/* Tab: Email */}
+              {activeTab === 'email' && (
+                <div className="max-w-md mx-auto py-4 animate-in fade-in slide-in-from-right-4 duration-300 h-full flex flex-col justify-center">
+                  {emailStep === 1 ? (
+                    <div className="space-y-5">
+                      <div className="bg-blue-50 p-4 rounded-lg text-sm text-blue-800 mb-4">
+                        当前绑定邮箱：<span className="font-bold">{userProfile?.email}</span>
+                        <p className="mt-1 opacity-80 text-xs">更换邮箱后，您需要使用新邮箱进行登录。</p>
                       </div>
-                    )}
-                  </>
-                )}
-              </div>
-            )}
+                      <Input
+                        label="新邮箱地址"
+                        placeholder="example@email.com"
+                        value={newEmail}
+                        onChange={e => setNewEmail(e.target.value)}
+                      />
+                      <div className="pt-4 flex justify-end">
+                        <Button
+                          variant="primary"
+                          onClick={handleSendCode}
+                          disabled={loadingForm}
+                          icon={loadingForm ? <Loader2 size={16} className="animate-spin" /> : <Mail size={16} />}
+                        >
+                          {loadingForm ? '发送中...' : '发送验证码'}
+                        </Button>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="space-y-5">
+                      <div className="text-center mb-6">
+                        <div className="w-12 h-12 bg-green-100 rounded-full flex items-center justify-center text-green-600 mx-auto mb-2">
+                          <Mail size={24} />
+                        </div>
+                        <h4 className="font-bold text-gray-800">验证您的邮箱</h4>
+                        <p className="text-sm text-gray-500 mt-1">验证码已发送至 {newEmail}</p>
+                      </div>
+                      <Input
+                        label="6位验证码"
+                        placeholder="请输入验证码"
+                        value={verificationCode}
+                        onChange={e => setVerificationCode(e.target.value)}
+                        className="text-center tracking-widest text-lg"
+                        maxLength={6}
+                      />
+                      <div className="pt-4 flex justify-between items-center">
+                        <button
+                          onClick={() => setEmailStep(1)}
+                          className="text-sm text-gray-500 hover:text-gray-800"
+                          disabled={loadingForm}
+                        >
+                          返回修改邮箱
+                        </button>
+                        <Button
+                          variant="primary"
+                          onClick={handleBindEmail}
+                          disabled={loadingForm}
+                          icon={loadingForm ? <Loader2 size={16} className="animate-spin" /> : <Check size={16} />}
+                        >
+                          {loadingForm ? '验证并绑定...' : '确认绑定'}
+                        </Button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Tab: History */}
+              {activeTab === 'history' && (
+                <div className="animate-in fade-in slide-in-from-right-4 duration-300 h-full">
+                  {loadingHistory ? (
+                    <div className="flex justify-center py-12"><Loader2 className="animate-spin text-gray-400" size={32} /></div>
+                  ) : (
+                    <>
+                      <div className="overflow-x-auto">
+                        <table className="w-full text-left text-sm">
+                          <thead className="bg-gray-50 border-b border-gray-100">
+                            <tr>
+                              <th className="px-4 py-3 font-medium text-gray-600">时间</th>
+                              <th className="px-4 py-3 font-medium text-gray-600">IP 地址</th>
+                              <th className="px-4 py-3 font-medium text-gray-600">设备信息</th>
+                              <th className="px-4 py-3 font-medium text-gray-600 text-right">状态</th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-gray-100">
+                            {historyData.map((log) => (
+                              <tr key={log.login_id} className="hover:bg-gray-50/50">
+                                <td className="px-4 py-3 text-gray-700 whitespace-nowrap">
+                                  {new Date(log.login_time).toLocaleString()}
+                                </td>
+                                <td className="px-4 py-3 font-mono text-gray-600 text-xs">
+                                  {log.ip_address}
+                                </td>
+                                <td className="px-4 py-3 text-gray-500 max-w-xs truncate" title={log.user_agent || ''}>
+                                  {log.user_agent ? (
+                                    <span className="flex items-center gap-1"><Globe size={12} /> {log.user_agent.split('(')[0]}</span>
+                                  ) : '-'}
+                                </td>
+                                <td className="px-4 py-3 text-right">
+                                  <Tag color={log.login_status === 'success' ? 'green' : 'red'}>
+                                    {log.login_status === 'success' ? '成功' : '失败'}
+                                  </Tag>
+                                </td>
+                              </tr>
+                            ))}
+                            {historyData.length === 0 && (
+                              <tr><td colSpan={4} className="text-center py-8 text-gray-400">暂无登录记录</td></tr>
+                            )}
+                          </tbody>
+                        </table>
+                      </div>
+                      {/* Pagination */}
+                      {historyTotal > 5 && (
+                        <div className="flex justify-between items-center mt-4 border-t border-gray-100 pt-4 px-1">
+                          <span className="text-xs text-gray-500">
+                            显示 {(historyPage - 1) * 5 + 1} - {Math.min(historyPage * 5, historyTotal)} 共 {historyTotal} 条
+                          </span>
+                          <div className="flex gap-2">
+                            <Button
+                              variant="default"
+                              className="h-8 px-3 text-xs"
+                              disabled={historyPage <= 1}
+                              onClick={() => fetchLoginHistory(historyPage - 1)}
+                            >
+                              上一页
+                            </Button>
+                            <Button
+                              variant="default"
+                              className="h-8 px-3 text-xs"
+                              disabled={historyPage * 5 >= historyTotal}
+                              onClick={() => fetchLoginHistory(historyPage + 1)}
+                            >
+                              下一页
+                            </Button>
+                          </div>
+                        </div>
+                      )}
+                    </>
+                  )}
+                </div>
+              )}
+            </div>
 
           </Card>
         </div>
