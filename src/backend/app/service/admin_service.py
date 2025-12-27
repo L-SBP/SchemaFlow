@@ -289,7 +289,7 @@ async def get_admin_list_service(db: AsyncSession, page: int, page_size: int) ->
     """
     admin_orms, total = await crud_admin_data.get_admin_list(db, page, page_size)
     
-    # 手动构建 AdminListItem 对象，使用 is_active 字段判断在线状态
+    # 手动构建 AdminListItem 对象，使用 Redis 中的在线状态
     items_dto = []
     for orm in admin_orms:
         # 将 datetime 转换为 ISO 格式字符串
@@ -297,12 +297,16 @@ async def get_admin_list_service(db: AsyncSession, page: int, page_size: int) ->
         if orm.last_login_at:
             last_login_str = orm.last_login_at.isoformat()
         
+        # 从 Redis 获取实时在线状态
+        from service.user_service import service_get_user_online_status
+        is_online = await service_get_user_online_status(orm.user_id)
+        
         item = AdminListItem(
             user_id=orm.user_id,
             username=orm.username,
             email=orm.email,
             last_login_at=last_login_str,
-            is_online=orm.is_active,  # 使用 is_active 字段判断在线状态
+            is_online=is_online,  # 使用 Redis 中的实时在线状态
         )
         items_dto.append(item)
     

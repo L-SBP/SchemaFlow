@@ -239,13 +239,13 @@ class AdminListItem(BaseModel):
         username (str): 用户名。
         email (str): 邮箱。
         last_login_at (Optional[str]): 最后登录时间（ISO格式字符串）。
-        is_online (bool): 是否在线（基于数据库 is_active 字段）。
+        is_online (bool): 是否在线（基于 Redis 实时状态）。
     """
     user_id: int
     username: str
     email: str
     last_login_at: Optional[str] = None  # 前端期望字符串格式
-    is_online: bool = Field(default=False, description="是否在线状态（基于 is_active 字段）")
+    is_online: bool = Field(default=False, description="是否在线状态（基于 Redis 实时状态）")
 
     model_config = ConfigDict(from_attributes=True)
 

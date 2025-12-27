@@ -65,7 +65,11 @@ async def swagger_login(
     if not await service_save_token_in_redis(access_token):
         raise exceptions.RedisOperationFailedException()
     
-    # 4. 返回 Token
+    # 4. 设置用户在线状态
+    from service.user_service import service_set_user_online_status
+    await service_set_user_online_status(user.user_id, is_online=True)
+    
+    # 5. 返回 Token
     return {
         "access_token": access_token,
         "token_type": "bearer"
@@ -179,6 +183,10 @@ async def login(
     if not await service_save_token_in_redis(access_token):
         log.error("无法在Redis中保存令牌")
         raise exceptions.RedisOperationFailedException()
+
+    # 设置用户在线状态
+    from service.user_service import service_set_user_online_status
+    await service_set_user_online_status(exist_user.user_id, is_online=True)
 
     # 获取完整的用户信息
     from service import user_service
