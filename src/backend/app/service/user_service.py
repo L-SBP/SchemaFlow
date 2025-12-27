@@ -119,9 +119,8 @@ async def service_register_user(
     log.info(f"Registering user {username}")
 
     # 验证码验证
-    # 假设 email_service.service_verify_code(email, code) 存在
-    # if not await email_service.service_verify_code(email, code):
-    #     raise exceptions.CodeInvalidException()
+    if not await email_service.service_verify_code(email, code):
+        raise exceptions.CodeInvalidException()
 
     # 验证用户名是否存在
     if await check_username_exists(db, username):
