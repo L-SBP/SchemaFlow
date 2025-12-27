@@ -97,7 +97,7 @@ async def get_current_user(
         log.warning(f"Token 解析失败: {e}")
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid authentication credentials",
+            detail="无效的认证凭据",
             headers={"WWW-Authenticate": "Bearer"},
         )
 

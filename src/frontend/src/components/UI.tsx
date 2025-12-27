@@ -28,6 +28,7 @@ interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
 /**
  * 通用按钮组件
  * * 封装了不同状态（hover, focus, disabled）下的 Tailwind 样式。
+ * * 符合 WCAG 2.1 AA 最小可点击区域要求 (44x44px)
  *
  * @param children
  * @param variant
@@ -38,20 +39,21 @@ interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
  */
 export const Button: React.FC<ButtonProps> = ({ children, variant = 'default', className = '', icon, ...props }) => {
     // 基础样式：布局、内边距、字体、圆角、阴影及过渡效果
-    const baseStyles = "inline-flex items-center justify-center px-4 py-1.5 text-sm font-medium transition-all duration-200 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-offset-1 disabled:opacity-50 disabled:cursor-not-allowed";
+    // 确保最小高度 44px 符合 WCAG 2.1 AA 标准
+    const baseStyles = "inline-flex items-center justify-center px-3 sm:px-4 py-2 sm:py-2.5 min-h-[44px] text-sm font-medium transition-all duration-200 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-offset-1 disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap";
 
     // 不同变体的样式映射
     const variants = {
         primary: "bg-primary text-white hover:bg-primary-hover border border-transparent focus:ring-blue-500",
         default: "bg-white text-gray-700 border border-gray-300 hover:text-primary hover:border-primary focus:ring-gray-200",
         dashed: "bg-white text-gray-700 border border-dashed border-gray-300 hover:text-primary hover:border-primary",
-        text: "bg-transparent text-gray-700 shadow-none hover:bg-gray-100 border-none",
+        text: "bg-transparent text-gray-700 shadow-none hover:bg-gray-100 border-none min-h-0",
         danger: "bg-white text-error border border-error hover:bg-red-50 focus:ring-red-200"
     };
 
     return (
         <button className={`${baseStyles} ${variants[variant]} ${className}`} {...props}>
-            {icon && <span className="mr-2">{icon}</span>}
+            {icon && <span className={children ? "mr-1.5 sm:mr-2" : ""}>{icon}</span>}
             {children}
         </button>
     );
@@ -74,6 +76,7 @@ interface InputProps extends React.InputHTMLAttributes<HTMLInputElement> {
 /**
  * 通用输入框组件
  * * 包含可选的 Label 显示，并统一了 focus 状态的样式。
+ * * 使用 16px 字体防止 iOS 自动缩放
  *
  * @param label
  * @param className
@@ -84,7 +87,7 @@ export const Input: React.FC<InputProps> = ({ label, className = '', ...props })
     <div className="flex flex-col gap-1.5">
         {label && <label className="text-sm font-medium text-gray-700">{label}</label>}
         <input
-            className={`px-3 py-2.5 bg-white border border-gray-300 rounded-lg text-sm focus:outline-none focus:border-primary focus:ring-2 focus:ring-blue-100 transition-all shadow-sm ${className}`}
+            className={`px-3 py-2.5 min-h-[44px] bg-white border border-gray-300 rounded-lg text-base sm:text-sm focus:outline-none focus:border-primary focus:ring-2 focus:ring-blue-100 transition-all shadow-sm ${className}`}
             {...props}
         />
     </div>
@@ -109,18 +112,19 @@ interface CardProps {
 /**
  * 通用卡片容器组件
  * * 用于展示分组内容，支持标题栏和主体内容的分离。
+ * * 支持响应式布局
  * * @param {CardProps} props - 组件属性
  * @returns {JSX.Element} 渲染后的卡片
  */
 export const Card: React.FC<CardProps> = ({ children, title, extra, className = '' }: CardProps): JSX.Element => (
     <div className={`bg-white rounded-xl border border-gray-200 shadow-sm transition-all hover:shadow-md ${className}`}>
         {(title || extra) && (
-            <div className="px-6 py-4 border-b border-gray-100 flex justify-between items-center bg-gray-50/30 rounded-t-xl">
-                <div className="font-semibold text-gray-800 text-base">{title}</div>
-                <div>{extra}</div>
+            <div className="px-4 sm:px-6 py-3 sm:py-4 border-b border-gray-100 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 bg-gray-50/30 rounded-t-xl">
+                <div className="font-semibold text-gray-800 text-sm sm:text-base min-w-0 truncate max-w-full">{title}</div>
+                <div className="shrink-0">{extra}</div>
             </div>
         )}
-        <div className="p-6">{children}</div>
+        <div className="p-4 sm:p-6">{children}</div>
     </div>
 );
 
@@ -266,6 +270,7 @@ interface ModalProps {
 /**
  * 通用模态框组件
  * * 包含遮罩层、动画效果以及标准化的头部和底部布局。
+ * * 支持响应式布局和高缩放级别
  *
  * @param {ModalProps} props - 组件属性
  * @returns {JSX.Element | null} 如果 isOpen 为 false 则返回 null
@@ -273,23 +278,26 @@ interface ModalProps {
 export const Modal: React.FC<ModalProps> = ({ isOpen, onClose, title, children, footer, maxWidth = 'max-w-md' }) => {
     if (!isOpen) return null;
     return (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-gray-900/60 backdrop-blur-sm p-4 transition-opacity duration-300">
-            <div className={`bg-white rounded-xl shadow-2xl w-full ${maxWidth} animate-in fade-in zoom-in-95 duration-200 flex flex-col max-h-[90vh] overflow-hidden`}>
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-gray-900/60 backdrop-blur-sm p-2 sm:p-4 transition-opacity duration-300 overflow-y-auto">
+            <div className={`bg-white rounded-xl shadow-2xl w-full ${maxWidth} animate-in fade-in zoom-in-95 duration-200 flex flex-col max-h-[95vh] max-h-[95dvh] overflow-hidden my-auto`}>
                 {/* Header */}
-                <div className="px-8 py-5 border-b border-gray-100 flex justify-between items-center shrink-0 bg-white">
-                    <h3 className="text-lg font-bold text-gray-800 tracking-tight">{title}</h3>
-                    <button onClick={onClose} className="text-gray-400 hover:text-gray-600 transition-colors bg-gray-50 hover:bg-gray-100 p-1 rounded-full">
-                        <span className="sr-only">Close</span>
-                        <X size={20} />
+                <div className="px-4 sm:px-8 py-4 sm:py-5 border-b border-gray-100 flex justify-between items-center shrink-0 bg-white gap-2 min-h-[64px]">
+                    <h3 className="text-base sm:text-lg font-bold text-gray-800 tracking-tight truncate flex-1 min-w-0 flex items-center">{title}</h3>
+                    <button
+                        onClick={onClose}
+                        className="text-gray-400 hover:text-gray-600 transition-colors hover:bg-gray-100 rounded-full shrink-0 w-7 h-7 flex items-center justify-center ml-2"
+                        aria-label="关闭弹窗"
+                    >
+                        <X size={14} />
                     </button>
                 </div>
                 {/* Content - 可滚动区域 */}
-                <div className="p-8 overflow-y-auto bg-white">
+                <div className="p-4 sm:p-8 overflow-y-auto bg-white flex-1 min-h-0">
                     {children}
                 </div>
                 {/* Footer */}
                 {footer && (
-                    <div className="px-8 py-5 bg-gray-50 border-t border-gray-100 flex justify-end gap-3 shrink-0">
+                    <div className="px-4 sm:px-8 py-4 sm:py-5 bg-gray-50 border-t border-gray-100 flex flex-wrap justify-end gap-2 sm:gap-3 shrink-0">
                         {footer}
                     </div>
                 )}
@@ -347,6 +355,7 @@ export const message = {
 /**
  * 全局消息容器组件
  * 需挂载在 App 根节点
+ * 支持响应式布局，在画面中心显示
  */
 export const ToastContainer: React.FC = () => {
     const [toasts, setToasts] = useState<ToastData[]>([]);
@@ -367,32 +376,40 @@ export const ToastContainer: React.FC = () => {
     };
 
     return (
-        <div className="fixed top-6 right-6 z-[100] flex flex-col gap-3 pointer-events-none">
-            {toasts.map(toast => (
-                <div
-                    key={toast.id}
-                    className={`pointer-events-auto min-w-[320px] max-w-md p-4 rounded-lg shadow-lg border-l-4 transform transition-all duration-300 animate-in slide-in-from-right-full fade-in bg-white flex items-start gap-3
-            ${toast.type === 'success' ? 'border-green-500 bg-green-50/50' :
-                            toast.type === 'error' ? 'border-red-500 bg-red-50/50' :
-                                toast.type === 'warning' ? 'border-orange-500 bg-orange-50/50' : 'border-blue-500 bg-blue-50/50'}`}
-                >
-                    {/* Icon */}
-                    <div className="shrink-0 mt-0.5">
-                        {toast.type === 'success' && <CheckCircle size={18} className="text-green-500" />}
-                        {toast.type === 'error' && <AlertCircle size={18} className="text-red-500" />}
-                        {toast.type === 'warning' && <AlertTriangle size={18} className="text-orange-500" />}
-                        {toast.type === 'info' && <Info size={18} className="text-blue-500" />}
+        <div className="fixed inset-0 z-[100] pointer-events-none flex items-center justify-center">
+            <div className="flex flex-col gap-3 max-w-md w-full mx-4">
+                {toasts.map(toast => (
+                    <div
+                        key={toast.id}
+                        className={`pointer-events-auto w-full p-4 rounded-lg shadow-xl border transform transition-all duration-300 animate-in zoom-in-95 fade-in bg-white flex items-center gap-3 min-h-[56px]
+                ${toast.type === 'success' ? 'border-green-200 bg-green-50/90 backdrop-blur-sm' :
+                                toast.type === 'error' ? 'border-red-200 bg-red-50/90 backdrop-blur-sm' :
+                                    toast.type === 'warning' ? 'border-orange-200 bg-orange-50/90 backdrop-blur-sm' : 'border-blue-200 bg-blue-50/90 backdrop-blur-sm'}`}
+                    >
+                        {/* Icon */}
+                        <div className="shrink-0 flex items-center justify-center">
+                            {toast.type === 'success' && <CheckCircle size={20} className="text-green-600" />}
+                            {toast.type === 'error' && <AlertCircle size={20} className="text-red-600" />}
+                            {toast.type === 'warning' && <AlertTriangle size={20} className="text-orange-600" />}
+                            {toast.type === 'info' && <Info size={20} className="text-blue-600" />}
+                        </div>
+                        {/* Content */}
+                        <div className="flex-1 text-sm text-gray-800 font-medium break-words leading-relaxed min-w-0 flex items-center">
+                            {toast.content}
+                        </div>
+                        {/* Close */}
+                        <button
+                            onClick={() => removeToast(toast.id)}
+                            className="text-gray-400 hover:text-gray-600 transition-colors shrink-0 rounded-full hover:bg-gray-100 w-6 h-6 flex items-center justify-center ml-2"
+                            aria-label="关闭消息"
+                        >
+                            <X size={12} />
+                        </button>
                     </div>
-                    {/* Content */}
-                    <div className="flex-1 text-sm text-gray-800 font-medium break-words leading-relaxed">
-                        {toast.content}
-                    </div>
-                    {/* Close */}
-                    <button onClick={() => removeToast(toast.id)} className="text-gray-400 hover:text-gray-600 transition-colors">
-                        <X size={16} />
-                    </button>
-                </div>
-            ))}
+                ))}
+            </div>
         </div>
     );
 };
+// 导出 ConfirmDialog 组件
+export { ConfirmDialog } from './ConfirmDialog';

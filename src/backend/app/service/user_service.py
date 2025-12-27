@@ -119,9 +119,8 @@ async def service_register_user(
     log.info(f"Registering user {username}")
 
     # 验证码验证
-    # 假设 email_service.service_verify_code(email, code) 存在
-    # if not await email_service.service_verify_code(email, code):
-    #     raise exceptions.CodeInvalidException()
+    if not await email_service.service_verify_code(email, code):
+        raise exceptions.CodeInvalidException()
 
     # 验证用户名是否存在
     if await check_username_exists(db, username):
@@ -180,6 +179,25 @@ async def service_login(
         log.error(f"User {user.user_id} status is {user.status}")
         raise exceptions.UserStatusForbiddenException(status=user.status, user_id=user.user_id)
 
+    # 检查用户是否被封禁
+    if not user.is_active:
+        log.error(f"User {user.user_id} is banned: {user.ban_reason}")
+        raise exceptions.UserStatusForbiddenException(status="banned", user_id=user.user_id)
+
+    # 更新最后登录时间
+    try:
+        from datetime import datetime, timezone
+        updated_user = await crud_user_account.update(
+            db,
+            user,
+            last_login_at=datetime.now(timezone.utc)
+        )
+        log.info(f"Updated last_login_at for user {user.user_id}")
+        user = updated_user
+    except SQLAlchemyError as e:
+        log.warning(f"Failed to update last_login_at for user {user.user_id}: {e}")
+        # 不抛出异常，允许登录继续进行
+
     log.info(f"User {user.user_id} login successfully")
     return user
 
@@ -197,8 +215,51 @@ async def service_save_token_in_redis(token: str) -> bool:
     redis = get_redis()
     if redis:
         await redis.set(f"token:{token}", "1", ex=config.jwt.token_expire_time_seconds)
-        log.info(f"Save token {token} to redis")
+        log.info(f"Save token {token} to redis_client")
         return True
+    return False
+
+
+async def service_set_user_online_status(user_id: int, is_online: bool = True) -> bool:
+    """
+    设置用户在线状态到 Redis。
+
+    Args:
+        user_id (int): 用户 ID。
+        is_online (bool): 是否在线。
+
+    Returns:
+        bool: 是否设置成功。
+    """
+    redis = get_redis()
+    if redis:
+        if is_online:
+            # 设置用户在线，过期时间为 token 过期时间的 1.5 倍
+            expire_time = int(config.jwt.token_expire_time_seconds * 1.5)
+            await redis.set(f"user_online:{user_id}", "1", ex=expire_time)
+            log.info(f"Set user {user_id} online status to {is_online}")
+        else:
+            # 删除在线状态
+            await redis.delete(f"user_online:{user_id}")
+            log.info(f"Set user {user_id} online status to {is_online}")
+        return True
+    return False
+
+
+async def service_get_user_online_status(user_id: int) -> bool:
+    """
+    获取用户在线状态。
+
+    Args:
+        user_id (int): 用户 ID。
+
+    Returns:
+        bool: 是否在线。
+    """
+    redis = get_redis()
+    if redis:
+        result = await redis.get(f"user_online:{user_id}")
+        return result is not None
     return False
 
 
@@ -215,7 +276,7 @@ async def service_abolish_token_in_redis(token: str) -> bool:
     redis = get_redis()
     if redis:
         await redis.delete(f"token:{token}")
-        log.info(f"Abolish token {token} in redis")
+        log.info(f"Abolish token {token} in redis_client")
         return True
     return False
 
@@ -278,7 +339,7 @@ async def service_logout(
     """
     # 从Redis中删除token，使其失效
     if not await service_abolish_token_in_redis(token):
-        log.error(f"Failed to abolish token {token} in redis")
+        log.error(f"无法废除Redis中的令牌 {token}")
         # 注意：即使 Redis 删除失败，通常也应该继续记录登出日志
 
     # 获取用户ID
@@ -288,6 +349,9 @@ async def service_logout(
     except Exception as e:
         log.error(f"Error decoding token during logout: {e}")
         return False
+
+    # 设置用户离线状态
+    await service_set_user_online_status(user_id, is_online=False)
 
     # 查找用户最新的未登出登录记录
     latest_record = await crud_login_history.get_latest_unlogout_record(db, user_id)
@@ -401,7 +465,7 @@ async def update_password_service(
             raise exceptions.UserNotFoundException()
 
         if not verify_password(password_data.old_password, db_user.password_hash):
-            raise exceptions.PasswordInvalidException("Old password is incorrect.")
+            raise exceptions.PasswordInvalidException("旧密码不正确")
 
         new_hashed_password = get_password_hash(password_data.new_password)
 

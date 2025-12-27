@@ -56,7 +56,7 @@ docker compose up
 你也可以只启动部分服务，例如：
 
 ```bash
-docker compose up backend postgres-meta mysql-user redis
+docker compose up backend postgres-meta mysql-user redis_client
 ```
 
 ### 4. 修改代码后的体验

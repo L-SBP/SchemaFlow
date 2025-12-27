@@ -58,7 +58,8 @@ export const Login: React.FC<LoginProps> = ({ onLogin }) => {
         });
       }, 1000);
     } catch (err: any) {
-      setError(err.message || '发送验证码失败');
+      // 错误已由响应拦截器自动处理并显示，这里只需记录日志
+      console.error('Send register code failed:', err);
     }
   };
 
@@ -88,7 +89,8 @@ export const Login: React.FC<LoginProps> = ({ onLogin }) => {
         });
       }, 1000);
     } catch (err: any) {
-      setError(err.message || '发送验证码失败');
+      // 错误已由响应拦截器自动处理并显示，这里只需记录日志
+      console.error('Send reset code failed:', err);
     }
   };
 
@@ -123,7 +125,8 @@ export const Login: React.FC<LoginProps> = ({ onLogin }) => {
         setConfirmPassword('');
         setVerificationCode('');
       } catch (err: any) {
-        setError(err.message || '注册失败');
+        // 错误已由响应拦截器自动处理并显示，这里只需记录日志
+        console.error('Register failed:', err);
       } finally {
         setIsLoading(false);
       }
@@ -137,20 +140,17 @@ export const Login: React.FC<LoginProps> = ({ onLogin }) => {
 
       setIsLoading(true);
       try {
-        const response = await authApi.login({ username, password });
+        const loginData = await authApi.login({ username, password });
 
-        if (response.code !== 200) {
-          throw new Error(response.message || '登录失败');
-        }
+        localStorage.setItem('access_token', loginData.access_token);
 
-        localStorage.setItem('access_token', response.data.access_token);
-
-        const userData = response.data.user;
+        const userData = loginData.user;
         const role = userData.is_admin ? UserRole.ADMIN : UserRole.USER;
 
-        onLogin(role, userData.username, userData.avatar_url);
+        onLogin(role, userData.username, userData.avatar_url || undefined);
       } catch (err: any) {
-        setError(err.message || '登录失败，请检查用户名或密码');
+        // 错误已由响应拦截器自动处理并显示，这里只需记录日志
+        console.error('Login failed:', err);
       } finally {
         setIsLoading(false);
       }
@@ -192,7 +192,8 @@ export const Login: React.FC<LoginProps> = ({ onLogin }) => {
         setResetConfirmNewPassword('');
         setAuthView('login');
       } catch (err: any) {
-        setError(err.message || '重置失败，请稍后重试');
+        // 错误已由响应拦截器自动处理并显示，这里只需记录日志
+        console.error('Reset password failed:', err);
       } finally {
         setIsLoading(false);
       }
@@ -224,17 +225,17 @@ export const Login: React.FC<LoginProps> = ({ onLogin }) => {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-[#f0f2f5] bg-[url('https://gw.alipayobjects.com/zos/rmsportal/TVYTbAXWheQpRcWDaDMu.svg')] bg-center bg-no-repeat bg-contain">
-      <div className="w-full max-w-sm bg-white p-8 rounded-xl shadow-lg animate-in fade-in zoom-in duration-300">
-        <div className="text-center mb-8">
-          {/* 修改: 增大Logo尺寸 (w-16 -> w-24) */}
+    <div className="min-h-screen min-h-[100dvh] flex items-center justify-center bg-[#f0f2f5] bg-[url('https://gw.alipayobjects.com/zos/rmsportal/TVYTbAXWheQpRcWDaDMu.svg')] bg-center bg-no-repeat bg-contain p-4">
+      <div className="w-full max-w-sm bg-white p-6 sm:p-8 rounded-xl shadow-lg animate-in fade-in zoom-in duration-300">
+        <div className="text-center mb-6 sm:mb-8">
+          {/* 响应式Logo尺寸 */}
           <img
             src="public/database-logo.svg"
             alt="AutoDB Logo"
-            className="w-24 h-24 mx-auto mb-4 object-contain hover:scale-105 transition-transform duration-300"
+            className="w-16 h-16 sm:w-24 sm:h-24 mx-auto mb-3 sm:mb-4 object-contain hover:scale-105 transition-transform duration-300"
           />
-          <h1 className="text-2xl font-bold text-gray-800">AutoDB</h1>
-          <p className="text-gray-500 mt-2 text-sm">基于大模型多智能体的数据库自动部署平台</p>
+          <h1 className="text-xl sm:text-2xl font-bold text-gray-800">AutoDB</h1>
+          <p className="text-gray-500 mt-2 text-xs sm:text-sm">基于大模型多智能体的数据库自动部署平台</p>
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-4">
@@ -415,7 +416,7 @@ export const Login: React.FC<LoginProps> = ({ onLogin }) => {
           </div>
         </form>
 
-        <div className="mt-8 text-center text-xs text-gray-400">
+        <div className="mt-6 sm:mt-8 text-center text-xs text-gray-400">
           Copyright © 2025 AutoDB
         </div>
       </div>

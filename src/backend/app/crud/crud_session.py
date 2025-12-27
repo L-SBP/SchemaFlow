@@ -91,6 +91,88 @@ class CRUDSession:
             raise DatabaseOperationFailedException("get sessions by project") from e
 
     @staticmethod
+    async def get_by_user(db: AsyncSession, user_id: int, skip: int = 0, limit: int = 100) -> List[Session]:
+        """
+        根据用户ID获取会话列表（通过项目关联）。
+
+        Args:
+            db (AsyncSession): 数据库会话。
+            user_id (int): 用户ID。
+            skip (int): 跳过的记录数。
+            limit (int): 最大返回记录数。
+
+        Returns:
+            List[Session]: 会话对象列表。
+
+        Raises:
+            DatabaseOperationFailedException: 查询失败时抛出。
+        """
+        try:
+            from models.project import Project
+            query = (
+                select(Session)
+                .join(Project, Session.project_id == Project.project_id)
+                .where(Project.user_id == user_id)
+                .offset(skip)
+                .limit(limit)
+            )
+            result = await db.execute(query)
+            return result.scalars().all()
+        except SQLAlchemyError as e:
+            raise DatabaseOperationFailedException("get sessions by user") from e
+
+    @staticmethod
+    async def count_by_project(db: AsyncSession, project_id: int) -> int:
+        """
+        根据项目ID获取会话总数。
+
+        Args:
+            db (AsyncSession): 数据库会话。
+            project_id (int): 项目ID。
+
+        Returns:
+            int: 会话总数。
+
+        Raises:
+            DatabaseOperationFailedException: 查询失败时抛出。
+        """
+        try:
+            from sqlalchemy import func
+            query = select(func.count(Session.session_id)).where(Session.project_id == project_id)
+            result = await db.execute(query)
+            return result.scalar() or 0
+        except SQLAlchemyError as e:
+            raise DatabaseOperationFailedException("count sessions by project") from e
+
+    @staticmethod
+    async def count_by_user(db: AsyncSession, user_id: int) -> int:
+        """
+        根据用户ID获取会话总数（通过项目关联）。
+
+        Args:
+            db (AsyncSession): 数据库会话。
+            user_id (int): 用户ID。
+
+        Returns:
+            int: 会话总数。
+
+        Raises:
+            DatabaseOperationFailedException: 查询失败时抛出。
+        """
+        try:
+            from sqlalchemy import func
+            from models.project import Project
+            query = (
+                select(func.count(Session.session_id))
+                .join(Project, Session.project_id == Project.project_id)
+                .where(Project.user_id == user_id)
+            )
+            result = await db.execute(query)
+            return result.scalar() or 0
+        except SQLAlchemyError as e:
+            raise DatabaseOperationFailedException("count sessions by user") from e
+
+    @staticmethod
     async def get_multi(db: AsyncSession, skip: int = 0, limit: int = 100) -> List[Session]:
         """
         分页获取多个会话。

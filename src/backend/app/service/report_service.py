@@ -106,10 +106,10 @@ async def _verify_project_ownership(
 ):
     project = await db.get(Project, project_id)
     if not project:
-        raise HTTPException(status_code=404, detail="Project not found")
+        raise HTTPException(status_code=404, detail="项目未找到")
 
     if project.user_id != user_id:
-        raise HTTPException(status_code=403, detail="Permission denied")
+        raise HTTPException(status_code=403, detail="权限拒绝")
 
     return project
 
@@ -120,11 +120,11 @@ async def _verify_report_ownership(
 ) -> AnalysisReport:
     report = await db.get(AnalysisReport, report_id)
     if not report:
-        raise HTTPException(status_code=404, detail="Report not found")
+        raise HTTPException(status_code=404, detail="报表未找到")
 
     project = await db.get(Project, report.project_id)
     if not project or project.user_id != user_id:
-        raise HTTPException(status_code=403, detail="Permission denied")
+        raise HTTPException(status_code=403, detail="权限被拒绝")
 
     return report
 
@@ -155,7 +155,7 @@ async def get_report_list(
     # [修复问题1]：先检查项目是否存在
     project = await db.get(Project, project_id)
     if not project:
-        raise HTTPException(status_code=404, detail=f"Project with ID {project_id} not found")
+        raise HTTPException(status_code=404, detail=f"ID 为 {project_id} 的项目未找到")
 
     stmt = (
         select(AnalysisReport, QueryResult, AIGeneratedStatement)
@@ -176,20 +176,20 @@ async def get_report_list(
             # 兼容处理：确保 chart_config 是字典
             config_dict = report_obj.chart_config if isinstance(report_obj.chart_config, dict) else {}
             # 只有当字典不为空且包含必要的键时才转换
-            if config_dict.get('xAxisKey') and config_dict.get('yAxisKey'):
+            if config_dict.get('x_axis_key') and config_dict.get('y_axis_key'):
                 c_config = schemas.ChartConfig(**config_dict)
 
         reports.append(schemas.Report(
             id=str(report_obj.report_id),
-            projectId=str(project_id),
+            project_id=str(project_id),
             name=report_obj.name,
             type=report_obj.chart_type,
             description=report_obj.description,
             data=result_obj.result_data if isinstance(result_obj.result_data, list) else [],
-            chartConfig=c_config,
-            sourceQueryId=str(report_obj.result_id),
-            sourceQueryText=stmt_obj.sql_text,
-            updatedAt=report_obj.updated_at.isoformat() if report_obj.updated_at else report_obj.created_at.isoformat()
+            chart_config=c_config,
+            source_query_id=str(report_obj.result_id),
+            source_query_text=stmt_obj.sql_text,
+            updated_at=report_obj.updated_at.isoformat() if report_obj.updated_at else report_obj.created_at.isoformat()
         ))
 
     return reports
@@ -221,7 +221,7 @@ async def get_history_queries_service(
     # [修复问题1]：先检查项目是否存在
     project = await db.get(Project, project_id)
     if not project:
-        raise HTTPException(status_code=404, detail=f"Project with ID {project_id} not found")
+        raise HTTPException(status_code=404, detail=f"ID 为 {project_id} 的项目未找到")
 
     # [修复问题2]：局部导入以避免 UnboundLocalError 和循环依赖
     from models.message import Message
@@ -273,12 +273,12 @@ async def get_history_queries_service(
 
         history.append(schemas.HistoryQuery(
             id=str(query_res.result_id),
-            projectId=str(project_id),
-            queryText=query_text,
+            project_id=str(project_id),
+            query_text=query_text,
             timestamp=query_res.cached_at.isoformat() if query_res.cached_at else 'N/A',
             result=schemas.HistoryQueryResult(columns=columns, fields=fields, data=normalized),
             reportable=reportable,
-            unreportableReason=reason,
+            unreportable_reason=reason,
         ))
 
     return history
@@ -310,12 +310,12 @@ async def create_report_service(
     # 1. 校验项目
     project = await _verify_project_ownership(db, project_id, user_id)
     if not project:
-        raise HTTPException(status_code=404, detail="Project not found")
+        raise HTTPException(status_code=404, detail="项目未找到")
     
     # 2. 校验数据源 (Query Result) 是否存在
     result_exists = await db.get(QueryResult, payload.query_id)
     if not result_exists:
-        raise HTTPException(status_code=404, detail="Query result (Data Source) not found")
+        raise HTTPException(status_code=404, detail="查询结果（数据源）未找到")
 
     data = result_exists.result_data if isinstance(result_exists.result_data, list) else []
     normalized = [r for r in data if isinstance(r, dict)]
@@ -332,7 +332,7 @@ async def create_report_service(
         name=payload.report_name,
         chart_type=payload.chart_type,
         description=payload.description,
-        chart_config=payload.chartConfig.model_dump() if payload.chartConfig else None
+        chart_config=payload.chart_config.model_dump() if payload.chart_config else None
     )
 
     db.add(new_report)
@@ -344,15 +344,15 @@ async def create_report_service(
 
     return schemas.Report(
         id=str(new_report.report_id),
-        projectId=str(project_id),
+        project_id=str(project_id),
         name=new_report.name,
         type=new_report.chart_type,
         description=new_report.description,
         data=normalized,
-        chartConfig=payload.chartConfig,
-        sourceQueryId=str(new_report.result_id),
-        sourceQueryText=stmt_obj.sql_text if stmt_obj else "",
-        updatedAt=new_report.created_at.isoformat()
+        chart_config=payload.chart_config,
+        source_query_id=str(new_report.result_id),
+        source_query_text=stmt_obj.sql_text if stmt_obj else "",
+        updated_at=new_report.created_at.isoformat()
     )
 
 
@@ -404,7 +404,7 @@ async def update_report_service(
     report_obj = await _verify_report_ownership(db, report_id, user_id)
 
     if not report_obj:
-        raise HTTPException(status_code=404, detail="Report not found")
+        raise HTTPException(status_code=404, detail="报表未找到")
 
     # 2. 更新字段
     if payload.report_name is not None:
@@ -413,8 +413,8 @@ async def update_report_service(
         report_obj.chart_type = payload.chart_type
     if payload.description is not None:
         report_obj.description = payload.description
-    if payload.chartConfig is not None:
-        report_obj.chart_config = payload.chartConfig.model_dump()
+    if payload.chart_config is not None:
+        report_obj.chart_config = payload.chart_config.model_dump()
 
     await db.commit()
     await db.refresh(report_obj)
@@ -426,7 +426,7 @@ async def update_report_service(
     c_config = None
     if report_obj.chart_config:
         config_dict = report_obj.chart_config if isinstance(report_obj.chart_config, dict) else {}
-        if config_dict.get('xAxisKey') and config_dict.get('yAxisKey'):
+        if config_dict.get('x_axis_key') and config_dict.get('y_axis_key'):
             c_config = schemas.ChartConfig(**config_dict)
 
     data = result_obj.result_data if isinstance(result_obj.result_data, list) else []
@@ -434,15 +434,15 @@ async def update_report_service(
 
     return schemas.Report(
         id=str(report_obj.report_id),
-        projectId=str(report_obj.project_id),
+        project_id=str(report_obj.project_id),
         name=report_obj.name,
         type=report_obj.chart_type,
         description=report_obj.description,
         data=normalized,
-        chartConfig=c_config,
-        sourceQueryId=str(report_obj.result_id),
-        sourceQueryText=stmt_obj.sql_text,
-        updatedAt=report_obj.updated_at.isoformat() if report_obj.updated_at else ""
+        chart_config=c_config,
+        source_query_id=str(report_obj.result_id),
+        source_query_text=stmt_obj.sql_text,
+        updated_at=report_obj.updated_at.isoformat() if report_obj.updated_at else ""
     )
 
 

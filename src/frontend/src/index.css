@@ -1,0 +1,2461 @@
+/**
+ * 全局样式 - 响应式与高缩放适配
+ * 支持浏览�?500% 缩放级别
+ */
+
+/* ========================================
+   1. 基础重置与缩放适配
+   ======================================== */
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html {
+  font-size: 16px;
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+}
+
+body {
+  margin: 0;
+  padding: 0;
+  min-height: 100vh;
+  min-height: 100dvh;
+  overflow-x: hidden;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+#root {
+  min-height: 100vh;
+  min-height: 100dvh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+/* ========================================
+   2. 响应式容器与布局
+   ======================================== */
+
+/* 布局相关 CSS 变量 */
+:root {
+  /* ========================================
+     工作区布局变量
+     ======================================== */
+
+  --workspace-left-panel-width: 800px;
+  --workspace-right-panel-width: 256px;
+  --workspace-min-chat-width: 320px;
+  --workspace-left-panel-max-width-percent: 40%;
+
+  /* ========================================
+     间距变量
+     ======================================== */
+
+  --workspace-gap: 0px;
+  --input-bar-padding: 1.5rem;
+  --header-bar-padding: 1.5rem;
+
+  /* ========================================
+     控件尺寸
+     ======================================== */
+
+  /* 按钮最小尺�?- 保持可访问�?*/
+  --button-min-size: 44px;
+  --button-min-size-compact: 36px;
+
+  /* 按钮内部尺寸 */
+  --button-padding: 0.5rem;
+  --button-padding-sm: 0.375rem;
+  --button-padding-lg: 0.75rem;
+
+  /* 输入框尺�?*/
+  --input-height: 56px;
+  --input-padding: 0.75rem;
+
+  /* ========================================
+     字体大小
+     ======================================== */
+
+  --font-size-xs: 0.75rem;
+  --font-size-sm: 0.875rem;
+  --font-size-base: 1rem;
+  --font-size-lg: 1.125rem;
+  --font-size-xl: 1.25rem;
+  --font-size-2xl: 1.5rem;
+  --font-size-3xl: 1.875rem;
+
+  /* 最小字体大�?- 确保可读�?*/
+  --font-size-min: 12px;
+
+  /* ========================================
+     图标尺寸
+     ======================================== */
+
+  --icon-size-xs: 12px;
+  --icon-size-sm: 16px;
+  --icon-size-base: 20px;
+  --icon-size-lg: 24px;
+  --icon-size-xl: 32px;
+
+  /* ========================================
+     边距和内边距
+     ======================================== */
+
+  --spacing-1: 0.25rem;
+  --spacing-2: 0.5rem;
+  --spacing-3: 0.75rem;
+  --spacing-4: 1rem;
+  --spacing-5: 1.25rem;
+  --spacing-6: 1.5rem;
+  --spacing-8: 2rem;
+  --spacing-10: 2.5rem;
+  --spacing-12: 3rem;
+
+  /* ========================================
+     响应式调�?
+     ======================================== */
+
+  --compact-padding: 0.75rem;
+  --compact-button-size: 36px;
+}
+
+/* 主容器自适应 */
+.app-container {
+  display: flex;
+  min-height: 100vh;
+  min-height: 100dvh;
+  width: 100%;
+  overflow: hidden;
+}
+
+/* 内容区域弹性布局 */
+.main-content {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  /* 防止 flex 子元素溢�?*/
+  overflow: hidden;
+}
+
+/* 可滚动内容区 */
+.scrollable-content {
+  flex: 1;
+  overflow-y: auto;
+  overflow-x: hidden;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* ========================================
+   3. 高缩放级别适配
+   ======================================== */
+
+/* 小屏幕适配 */
+@media screen and (max-width: 400px) {
+  html {
+    font-size: 14px;
+  }
+
+  button,
+  .btn,
+  [role="button"] {
+    min-width: var(--button-min-size-compact);
+    min-height: var(--button-min-size-compact);
+    padding: clamp(0.25rem, 0.5vw, 0.5rem);
+    font-size: max(clamp(0.75rem, 2vw, 0.875rem), var(--font-size-min));
+  }
+
+  input,
+  textarea,
+  select {
+    padding: clamp(0.375rem, 1vw, 0.75rem);
+    font-size: max(clamp(0.75rem, 2vw, 0.875rem), var(--font-size-min));
+    min-height: clamp(2rem, 6vw, 3rem);
+  }
+
+  .input-bar-container {
+    padding: clamp(0.375rem, 1vw, 0.75rem);
+  }
+
+  .model-selector-compact {
+    max-width: clamp(50px, 10vw, 80px);
+    min-width: clamp(40px, 8vw, 60px);
+  }
+
+  .send-button {
+    min-width: var(--button-min-size-compact);
+    min-height: var(--button-min-size-compact);
+  }
+}
+
+@media screen and (max-width: 300px) {
+  html {
+    font-size: 12px;
+  }
+
+  button,
+  .btn,
+  [role="button"] {
+    min-width: var(--button-min-size-compact);
+    min-height: var(--button-min-size-compact);
+    padding: clamp(0.25rem, 0.4vw, 0.375rem);
+    font-size: max(clamp(0.625rem, 1.8vw, 0.75rem), var(--font-size-min));
+  }
+
+  input,
+  textarea,
+  select {
+    padding: clamp(0.25rem, 0.8vw, 0.5rem);
+    font-size: max(clamp(0.625rem, 1.8vw, 0.75rem), var(--font-size-min));
+    min-height: clamp(1.75rem, 5vw, 2.5rem);
+  }
+
+  .input-bar-container {
+    padding: clamp(0.25rem, 0.8vw, 0.5rem);
+  }
+
+  .model-selector-compact {
+    max-width: clamp(40px, 8vw, 60px);
+    min-width: clamp(30px, 6vw, 45px);
+    padding: clamp(0.125rem, 0.3vw, 0.25rem);
+  }
+
+  .model-selector-compact .model-select {
+    font-size: max(clamp(0.625rem, 1.5vw, 0.75rem), var(--font-size-min));
+  }
+
+  table {
+    font-size: max(clamp(0.625rem, 1.5vw, 0.75rem), var(--font-size-min));
+  }
+
+  table th,
+  table td {
+    padding: clamp(0.25rem, 0.5vw, 0.375rem);
+  }
+}
+
+@media screen and (max-width: 200px) {
+  html {
+    font-size: 10px;
+  }
+
+  button,
+  .btn,
+  [role="button"] {
+    min-width: var(--button-min-size-compact);
+    min-height: var(--button-min-size-compact);
+    padding: clamp(0.125rem, 0.3vw, 0.25rem);
+    font-size: max(clamp(0.5rem, 1.5vw, 0.625rem), var(--font-size-min));
+  }
+
+  input,
+  textarea,
+  select {
+    padding: clamp(0.125rem, 0.6vw, 0.375rem);
+    font-size: max(clamp(0.5rem, 1.5vw, 0.625rem), var(--font-size-min));
+    min-height: clamp(1.5rem, 4vw, 2rem);
+  }
+
+  .input-bar-container {
+    padding: clamp(0.125rem, 0.5vw, 0.375rem);
+  }
+
+  .model-selector-compact {
+    max-width: clamp(30px, 6vw, 45px);
+    min-width: clamp(24px, 5vw, 35px);
+    padding: clamp(0.0625rem, 0.2vw, 0.125rem);
+  }
+
+  .model-selector-compact .model-select {
+    font-size: max(clamp(0.5rem, 1.2vw, 0.625rem), var(--font-size-min));
+  }
+
+  .send-button,
+  .panel-toggle-button,
+  .header-button-icon-only {
+    min-width: var(--button-min-size-compact);
+    min-height: var(--button-min-size-compact);
+    padding: clamp(0.125rem, 0.3vw, 0.25rem);
+  }
+}
+
+/* 极小屏幕适配 */
+@media screen and (max-width: 150px) {
+  html {
+    font-size: 9px;
+  }
+
+  :root {
+    --button-min-size-compact: 28px;
+    --input-height: 32px;
+    --spacing-1: 0.125rem;
+    --spacing-2: 0.25rem;
+  }
+
+  button,
+  .btn,
+  [role="button"] {
+    min-width: var(--button-min-size-compact);
+    min-height: var(--button-min-size-compact);
+    padding: clamp(0.0625rem, 0.25vw, 0.125rem);
+    font-size: max(clamp(0.5rem, 1.2vw, 0.625rem), var(--font-size-min));
+  }
+
+  input,
+  textarea,
+  select {
+    padding: clamp(0.0625rem, 0.4vw, 0.25rem);
+    font-size: max(clamp(0.5rem, 1.2vw, 0.625rem), var(--font-size-min));
+    min-height: clamp(1.25rem, 3.5vw, 1.75rem);
+  }
+
+  .input-bar-container {
+    padding: clamp(0.0625rem, 0.3vw, 0.25rem);
+  }
+
+  .model-selector-compact {
+    max-width: clamp(24px, 5vw, 35px);
+    min-width: clamp(20px, 4vw, 28px);
+    padding: clamp(0.03125rem, 0.15vw, 0.0625rem);
+  }
+
+  .model-selector-compact .model-select {
+    font-size: max(clamp(0.4375rem, 1vw, 0.5rem), var(--font-size-min));
+  }
+
+  .send-button,
+  .panel-toggle-button,
+  .header-button-icon-only {
+    min-width: var(--button-min-size-compact);
+    min-height: var(--button-min-size-compact);
+    padding: clamp(0.0625rem, 0.25vw, 0.125rem);
+  }
+
+  table {
+    font-size: max(clamp(0.4375rem, 1vw, 0.5rem), var(--font-size-min));
+  }
+
+  table th,
+  table td {
+    padding: clamp(0.0625rem, 0.25vw, 0.125rem);
+  }
+}
+
+/* 超小屏幕适配 */
+@media screen and (max-width: 120px) {
+  html {
+    font-size: 8px;
+  }
+
+  :root {
+    --button-min-size-compact: 24px;
+    --input-height: 28px;
+  }
+
+  button,
+  .btn,
+  [role="button"] {
+    min-width: var(--button-min-size-compact);
+    min-height: var(--button-min-size-compact);
+    padding: clamp(0.03125rem, 0.2vw, 0.0625rem);
+    font-size: max(clamp(0.4375rem, 0.9vw, 0.5rem), var(--font-size-min));
+  }
+
+  input,
+  textarea,
+  select {
+    padding: clamp(0.03125rem, 0.3vw, 0.125rem);
+    font-size: max(clamp(0.4375rem, 0.9vw, 0.5rem), var(--font-size-min));
+    min-height: clamp(1rem, 3vw, 1.5rem);
+  }
+
+  .input-bar-container {
+    padding: clamp(0.03125rem, 0.2vw, 0.125rem);
+  }
+
+  .model-selector-compact {
+    max-width: clamp(20px, 4vw, 28px);
+    min-width: clamp(16px, 3.5vw, 22px);
+    padding: clamp(0.015625rem, 0.1vw, 0.03125rem);
+  }
+
+  .model-selector-compact .model-select {
+    font-size: max(clamp(0.375rem, 0.8vw, 0.4375rem), var(--font-size-min));
+  }
+
+  .send-button,
+  .panel-toggle-button,
+  .header-button-icon-only {
+    min-width: var(--button-min-size-compact);
+    min-height: var(--button-min-size-compact);
+    padding: clamp(0.03125rem, 0.2vw, 0.0625rem);
+  }
+
+  table {
+    font-size: max(clamp(0.375rem, 0.8vw, 0.4375rem), var(--font-size-min));
+  }
+
+  table th,
+  table td {
+    padding: clamp(0.03125rem, 0.2vw, 0.0625rem);
+  }
+
+  svg,
+  .icon {
+    width: clamp(8px, 2vw, 12px);
+    height: clamp(8px, 2vw, 12px);
+  }
+}
+
+/* 响应式断点布局变量覆盖 */
+@media screen and (max-width: 1024px) {
+  :root {
+    --workspace-left-panel-max-width-percent: 35%;
+    --input-bar-padding: var(--compact-padding);
+    --header-bar-padding: var(--compact-padding);
+  }
+}
+
+@media screen and (max-width: 768px) {
+  :root {
+    --workspace-left-panel-max-width-percent: 30%;
+    --button-min-size: var(--button-min-size-compact);
+    --input-bar-padding: 1rem;
+    --header-bar-padding: 1rem;
+  }
+}
+
+@media screen and (max-width: 480px) {
+  :root {
+    --workspace-left-panel-max-width-percent: 25%;
+    --input-bar-padding: 0.75rem;
+    --header-bar-padding: 0.75rem;
+    --compact-button-size: 32px;
+  }
+}
+
+@media screen and (max-width: 320px) {
+  :root {
+    --workspace-left-panel-max-width-percent: 20%;
+    --input-bar-padding: 0.5rem;
+    --header-bar-padding: 0.5rem;
+  }
+}
+
+/* ========================================
+   优雅降级逻辑
+   ======================================== */
+
+/* 极端缩放下隐藏装饰性元素，保留核心功能控件 */
+
+/* 在高缩放级别下隐藏装饰性元�?*/
+@media screen and (max-width: 300px) {
+
+  /* 隐藏装饰性图标和标签 */
+  .decorative-icon,
+  .optional-label,
+  .status-indicator,
+  .badge,
+  .tooltip-trigger {
+    display: none !important;
+  }
+
+  /* 简化导航元�?*/
+  .nav-text,
+  .breadcrumb-separator,
+  .dropdown-arrow {
+    display: none !important;
+  }
+
+  /* 保留核心功能按钮但简化样�?*/
+  .core-button {
+    padding: 0.25rem !important;
+    border-radius: 0.125rem !important;
+  }
+
+  /* 简化表单标�?*/
+  label .optional-text,
+  label .help-text {
+    display: none !important;
+  }
+}
+
+/* 在极端缩放下进一步简�?*/
+@media screen and (max-width: 200px) {
+
+  /* 隐藏更多装饰性元�?*/
+  .secondary-text,
+  .metadata,
+  .timestamp,
+  .author-info,
+  .description-text {
+    display: none !important;
+  }
+
+  /* 隐藏非必要的边框和阴�?*/
+  .card,
+  .panel,
+  .modal-content {
+    border: none !important;
+    box-shadow: none !important;
+    border-radius: 0 !important;
+  }
+
+  /* 简化分页控�?*/
+  .pagination-info,
+  .pagination-total-text {
+    display: none !important;
+  }
+
+  /* 保留核心分页按钮 */
+  .pagination-btn {
+    min-width: 24px !important;
+    min-height: 24px !important;
+    padding: 0.125rem !important;
+  }
+}
+
+/* 在超极端缩放下最大程度简�?*/
+@media screen and (max-width: 150px) {
+
+  /* 隐藏所有非核心文本 */
+  .subtitle,
+  .caption,
+  .footnote,
+  .legal-text,
+  .version-info {
+    display: none !important;
+  }
+
+  /* 隐藏装饰性间�?*/
+  .spacer,
+  .divider,
+  .separator {
+    display: none !important;
+  }
+
+  /* 最小化表格显示 */
+  table th .sort-indicator,
+  table .column-resize-handle,
+  table .row-actions {
+    display: none !important;
+  }
+
+  /* 保留核心表格功能 */
+  table {
+    border-collapse: collapse !important;
+  }
+
+  table th,
+  table td {
+    padding: 0.125rem !important;
+    border: 1px solid #e5e7eb !important;
+  }
+}
+
+/* 核心功能控件保护 - 确保在任何缩放级别下都可�?*/
+.core-functionality {
+  display: flex !important;
+  min-width: var(--button-min-size-compact) !important;
+  min-height: var(--button-min-size-compact) !important;
+}
+
+/* 核心输入控件保护 */
+input[type="text"],
+input[type="email"],
+input[type="password"],
+textarea,
+select,
+button[type="submit"],
+.send-button,
+.save-button,
+.cancel-button {
+  display: block !important;
+  min-width: var(--button-min-size-compact) !important;
+  min-height: var(--button-min-size-compact) !important;
+  font-size: max(0.75rem, var(--font-size-min)) !important;
+}
+
+/* 核心导航控件保护 */
+.main-nav,
+.primary-menu,
+.back-button,
+.home-button,
+.close-button {
+  display: flex !important;
+}
+
+/* 在降级时平滑隐藏元素 */
+@media screen and (max-width: 300px) {
+  .graceful-degradation.decorative {
+    opacity: 0;
+    visibility: hidden;
+    transform: scale(0.8);
+  }
+}
+
+/* 降级模式下的可访问性增�?*/
+@media screen and (max-width: 200px) {
+
+  /* 增强焦点指示�?*/
+  :focus-visible {
+    outline-width: 3px !important;
+    outline-color: #1677ff !important;
+    outline-style: solid !important;
+  }
+
+  /* 增强按钮对比�?*/
+  button,
+  .btn,
+  [role="button"] {
+    background-color: #1677ff !important;
+    color: white !important;
+    border: 2px solid #1677ff !important;
+  }
+
+  button:hover,
+  .btn:hover,
+  [role="button"]:hover {
+    background-color: #0958d9 !important;
+    border-color: #0958d9 !important;
+  }
+}
+
+/* ========================================
+   4. 弹性文本与元素
+   ======================================== */
+
+/* 防止文本溢出 */
+.text-truncate {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.text-wrap-balance {
+  text-wrap: balance;
+}
+
+/* 响应式字体大�?*/
+.text-xs {
+  font-size: max(var(--font-size-xs), var(--font-size-min));
+}
+
+.text-sm {
+  font-size: max(var(--font-size-sm), var(--font-size-min));
+}
+
+.text-base {
+  font-size: max(var(--font-size-base), var(--font-size-min));
+}
+
+.text-lg {
+  font-size: max(var(--font-size-lg), var(--font-size-min));
+}
+
+.text-xl {
+  font-size: max(var(--font-size-xl), var(--font-size-min));
+}
+
+.text-2xl {
+  font-size: max(var(--font-size-2xl), var(--font-size-min));
+}
+
+.text-3xl {
+  font-size: max(var(--font-size-3xl), var(--font-size-min));
+}
+
+/* ========================================
+   高缩放级别工具类
+   ======================================== */
+
+/* 高缩放级别自适应�?*/
+.high-zoom-adaptive {
+  font-size: max(clamp(0.75rem, 2vw, 0.875rem), var(--font-size-min));
+}
+
+.high-zoom-adaptive button,
+.high-zoom-adaptive .btn,
+.high-zoom-adaptive [role="button"] {
+  min-width: var(--button-min-size-compact);
+  min-height: var(--button-min-size-compact);
+  padding: clamp(0.25rem, 0.5vw, 0.5rem);
+  font-size: max(clamp(0.75rem, 2vw, 0.875rem), var(--font-size-min));
+}
+
+.high-zoom-adaptive input,
+.high-zoom-adaptive textarea,
+.high-zoom-adaptive select {
+  padding: clamp(0.375rem, 1vw, 0.75rem);
+  font-size: max(clamp(0.75rem, 2vw, 0.875rem), var(--font-size-min));
+}
+
+/* 极高缩放级别自适应�?*/
+.extreme-zoom-adaptive {
+  font-size: max(clamp(0.625rem, 1.5vw, 0.75rem), var(--font-size-min));
+}
+
+.extreme-zoom-adaptive button,
+.extreme-zoom-adaptive .btn,
+.extreme-zoom-adaptive [role="button"] {
+  min-width: var(--button-min-size-compact);
+  min-height: var(--button-min-size-compact);
+  padding: clamp(0.125rem, 0.3vw, 0.25rem);
+  font-size: max(clamp(0.625rem, 1.5vw, 0.75rem), var(--font-size-min));
+}
+
+.extreme-zoom-adaptive input,
+.extreme-zoom-adaptive textarea,
+.extreme-zoom-adaptive select {
+  padding: clamp(0.125rem, 0.5vw, 0.375rem);
+  font-size: max(clamp(0.625rem, 1.5vw, 0.75rem), var(--font-size-min));
+}
+
+/* 工作区专用高缩放适配�?*/
+.workspace-zoom-adaptive .input-bar-container {
+  padding: clamp(0.25rem, 0.8vw, 0.75rem);
+}
+
+.workspace-zoom-adaptive .model-selector-compact {
+  max-width: clamp(40px, 8vw, 80px);
+  min-width: clamp(30px, 6vw, 50px);
+  padding: clamp(0.125rem, 0.4vw, 0.5rem);
+}
+
+.workspace-zoom-adaptive .send-button,
+.workspace-zoom-adaptive .panel-toggle-button,
+.workspace-zoom-adaptive .header-button-icon-only {
+  min-width: var(--button-min-size-compact);
+  min-height: var(--button-min-size-compact);
+  padding: clamp(0.25rem, 0.5vw, 0.5rem);
+}
+
+/* 响应式字体大小工具类 */
+.text-responsive-sm {
+  font-size: max(clamp(0.75rem, 2vw, 0.875rem), var(--font-size-min));
+}
+
+.text-responsive-base {
+  font-size: max(clamp(0.875rem, 2.5vw, 1rem), var(--font-size-min));
+}
+
+.text-responsive-lg {
+  font-size: max(clamp(1rem, 3vw, 1.25rem), var(--font-size-min));
+}
+
+.text-responsive-xl {
+  font-size: max(clamp(1.125rem, 3.5vw, 1.5rem), var(--font-size-min));
+}
+
+.text-responsive-2xl {
+  font-size: max(clamp(1.25rem, 4vw, 1.875rem), var(--font-size-min));
+}
+
+/* ========================================
+   高缩放级别样式适配
+   ======================================== */
+
+/* 高缩放级别下的响应式字体大小 */
+.text-high-zoom-xs {
+  font-size: max(clamp(0.625rem, 1.5vw, 0.75rem), var(--font-size-min));
+}
+
+.text-high-zoom-sm {
+  font-size: max(clamp(0.75rem, 2vw, 0.875rem), var(--font-size-min));
+}
+
+.text-high-zoom-base {
+  font-size: max(clamp(0.875rem, 2.5vw, 1rem), var(--font-size-min));
+}
+
+.text-high-zoom-lg {
+  font-size: max(clamp(1rem, 3vw, 1.125rem), var(--font-size-min));
+}
+
+.text-high-zoom-xl {
+  font-size: max(clamp(1.125rem, 3.5vw, 1.25rem), var(--font-size-min));
+}
+
+/* 高缩放级别下的控件尺寸适配 */
+.control-high-zoom {
+  padding: clamp(0.25rem, 1vw, 0.75rem);
+  font-size: max(clamp(0.75rem, 2vw, 0.875rem), var(--font-size-min));
+}
+
+/* 高缩放级别下的按钮适配 */
+.btn-high-zoom {
+  min-width: var(--button-min-size-compact);
+  min-height: var(--button-min-size-compact);
+  padding: clamp(0.375rem, 1vw, 0.5rem);
+  font-size: max(clamp(0.75rem, 2vw, 0.875rem), var(--font-size-min));
+}
+
+/* 高缩放级别下的输入框适配 */
+.input-high-zoom {
+  padding: clamp(0.5rem, 1.5vw, 0.75rem);
+  font-size: max(clamp(0.875rem, 2.5vw, 1rem), var(--font-size-min));
+  min-height: clamp(2rem, 8vw, 3.5rem);
+}
+
+/* 高缩放级别下的间距适配 */
+.spacing-high-zoom-sm {
+  gap: clamp(0.25rem, 0.5vw, 0.5rem);
+}
+
+.spacing-high-zoom-md {
+  gap: clamp(0.5rem, 1vw, 0.75rem);
+}
+
+.spacing-high-zoom-lg {
+  gap: clamp(0.75rem, 1.5vw, 1rem);
+}
+
+/* 高缩放级别下的工作区特定适配 */
+.workspace-high-zoom {
+  font-size: max(clamp(0.75rem, 2vw, 0.875rem), var(--font-size-min));
+}
+
+.workspace-high-zoom .input-bar-container {
+  padding: clamp(0.375rem, 1vw, 0.75rem);
+}
+
+.workspace-high-zoom .model-selector-compact {
+  max-width: clamp(40px, 8vw, 80px);
+  min-width: clamp(30px, 6vw, 50px);
+  padding: clamp(0.25rem, 0.5vw, 0.5rem);
+}
+
+.workspace-high-zoom .send-button,
+.workspace-high-zoom .header-button-icon-only,
+.workspace-high-zoom .panel-toggle-button {
+  min-width: var(--button-min-size-compact);
+  min-height: var(--button-min-size-compact);
+  padding: clamp(0.25rem, 0.5vw, 0.5rem);
+}
+
+/* 高缩放级别下的表格适配 */
+.table-high-zoom {
+  font-size: max(clamp(0.75rem, 1.8vw, 0.875rem), var(--font-size-min));
+}
+
+.table-high-zoom th,
+.table-high-zoom td {
+  padding: clamp(0.375rem, 0.8vw, 0.75rem);
+}
+
+/* 高缩放级别下的模态框适配 */
+.modal-high-zoom .modal-content {
+  max-width: clamp(280px, 90vw, 600px);
+  padding: clamp(1rem, 3vw, 2rem);
+}
+
+.modal-high-zoom .modal-title {
+  font-size: max(clamp(1rem,
+        3vw,
+        1.25rem),
+      var(--font-size-min));
+}
+
+/* 高缩放级别下的分页控件适配 */
+.pagination-high-zoom .pagination-btn {
+  min-width: var(--button-min-size-compact);
+  min-height: var(--button-min-size-compact);
+  padding: clamp(0.25rem,
+      0.5vw,
+      0.5rem);
+  font-size: max(clamp(0.75rem,
+        1.8vw,
+        0.875rem),
+      var(--font-size-min));
+}
+
+/* 高缩放级别下的卡片适配 */
+.card-high-zoom {
+  padding: clamp(0.75rem,
+      2vw,
+      1.5rem);
+}
+
+.card-high-zoom .card-title {
+  font-size: max(clamp(1rem,
+        2.5vw,
+        1.125rem),
+      var(--font-size-min));
+}
+
+.card-high-zoom .card-subtitle {
+  font-size: max(clamp(0.75rem,
+        1.8vw,
+        0.875rem),
+      var(--font-size-min));
+}
+
+/* ========================================
+   5. 按钮与交互元素适配
+   ======================================== */
+
+/* 确保按钮最小可点击区域 (WCAG 2.1 AA: 44x44px) */
+/* 最小可点击区域不受全局缩放影响，保持可访问�?*/
+button,
+[role="button"],
+.btn,
+a.btn {
+  min-height: var(--button-min-size);
+  min-width: var(--button-min-size);
+  touch-action: manipulation;
+  /* 内部内容使用缩放后的尺寸 */
+  padding: var(--button-padding);
+  font-size: var(--font-size-base);
+}
+
+/* 小型按钮例外，但保持可访问�?*/
+.btn-sm,
+button.btn-sm {
+  min-height: var(--button-min-size-compact);
+  min-width: var(--button-min-size-compact);
+  padding: var(--button-padding-sm);
+  font-size: var(--font-size-sm);
+}
+
+/* 大型按钮 */
+.btn-lg,
+button.btn-lg {
+  padding: var(--button-padding-lg);
+  font-size: var(--font-size-lg);
+}
+
+/* 图标按钮 */
+.btn-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--button-padding);
+}
+
+.btn-icon svg,
+.btn-icon .icon {
+  width: var(--icon-size-base);
+  height: var(--icon-size-base);
+}
+
+/* ========================================
+   6. 表单元素适配
+   ======================================== */
+
+input,
+textarea,
+select {
+  /* 防止 iOS 自动缩放 - 使用最小字体大�?*/
+  font-size: max(var(--font-size-base), var(--font-size-min));
+  max-width: 100%;
+  padding: var(--input-padding);
+}
+
+/* 响应式输入框 */
+.input-responsive {
+  width: 100%;
+  min-height: var(--input-height);
+  padding: var(--input-padding);
+  font-size: max(var(--font-size-base), var(--font-size-min));
+}
+
+/* 输入框标�?*/
+label {
+  font-size: var(--font-size-sm);
+  margin-bottom: var(--spacing-2);
+}
+
+/* 表单�?*/
+.form-group {
+  margin-bottom: var(--spacing-4);
+}
+
+.form-group label {
+  display: block;
+  margin-bottom: var(--spacing-2);
+}
+
+/* ========================================
+   7. 卡片与容器适配
+   ======================================== */
+
+/* 响应式卡片网�?*/
+.card-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 280px), 1fr));
+  gap: var(--spacing-4);
+}
+
+@media screen and (min-width: 640px) {
+  .card-grid {
+    gap: var(--spacing-6);
+  }
+}
+
+/* 卡片内容防溢�?*/
+.card-content {
+  min-width: 0;
+  overflow: hidden;
+  padding: var(--spacing-4);
+}
+
+.card-header {
+  padding: var(--spacing-4);
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.card-footer {
+  padding: var(--spacing-4);
+  border-top: 1px solid #e5e7eb;
+}
+
+/* 卡片标题 */
+.card-title {
+  font-size: var(--font-size-lg);
+  font-weight: 600;
+  margin-bottom: var(--spacing-2);
+}
+
+.card-subtitle {
+  font-size: var(--font-size-sm);
+  color: #6b7280;
+  margin-bottom: var(--spacing-3);
+}
+
+/* ========================================
+   8. 模态框适配
+   ======================================== */
+
+/* 模态框响应�?*/
+.modal-container {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--spacing-4);
+  overflow-y: auto;
+}
+
+.modal-content {
+  width: 100%;
+  max-width: min(90vw, 32rem);
+  max-height: calc(100vh - 2rem);
+  max-height: calc(100dvh - 2rem);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  border-radius: 0.5rem;
+  box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+}
+
+.modal-header {
+  padding: var(--spacing-6);
+  border-bottom: 1px solid #e5e7eb;
+  flex-shrink: 0;
+}
+
+.modal-title {
+  font-size: var(--font-size-xl);
+  font-weight: 600;
+  margin: 0;
+}
+
+.modal-body {
+  flex: 1;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  padding: var(--spacing-6);
+}
+
+.modal-footer {
+  padding: var(--spacing-6);
+  border-top: 1px solid #e5e7eb;
+  flex-shrink: 0;
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--spacing-3);
+}
+
+/* ========================================
+   9. 分页组件样式
+   ======================================== */
+
+.pagination {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--spacing-2);
+  flex-wrap: wrap;
+  padding: var(--spacing-3) 0;
+}
+
+.pagination-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 2.5rem;
+  min-height: 2.5rem;
+  padding: var(--spacing-2);
+  border-radius: 0.375rem;
+  font-size: var(--font-size-sm);
+  font-weight: 500;
+  transition: all 0.2s;
+  border: 1px solid transparent;
+  /* 保持最小可点击区域 */
+  min-width: var(--button-min-size-compact);
+  min-height: var(--button-min-size-compact);
+}
+
+.pagination-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.pagination-btn-active {
+  background-color: #1677ff;
+  color: white;
+  border-color: #1677ff;
+}
+
+.pagination-info {
+  font-size: var(--font-size-sm);
+  color: #6b7280;
+  white-space: nowrap;
+}
+
+/* 分页容器统一样式 */
+.pagination-container {
+  flex-shrink: 0;
+  border-top: 1px solid #e5e7eb;
+  /* border-gray-200 */
+  background-color: white;
+  border-radius: 0 0 0.75rem 0.75rem;
+  /* rounded-b-xl */
+  padding-top: var(--spacing-4);
+  /* pt-4 */
+  margin-top: var(--spacing-4);
+  /* mt-4 */
+  /* ??????????? */
+  box-shadow: 0 2px 4px -1px rgba(0, 0, 0, 0.06), 0 1px 2px -1px rgba(0, 0, 0, 0.04);
+}
+
+.pagination-wrapper {
+  padding-left: var(--spacing-4);
+  /* px-4 */
+  padding-right: var(--spacing-4);
+}
+
+/* 响应式分�?*/
+@media screen and (max-width: 480px) {
+  .pagination {
+    gap: var(--spacing-1);
+  }
+
+  .pagination-btn {
+    min-width: 2rem;
+    min-height: 2rem;
+    padding: var(--spacing-1);
+    font-size: var(--font-size-xs);
+    /* 仍保持最小可点击区域 */
+    min-width: 32px;
+    min-height: 32px;
+  }
+
+  .pagination-info {
+    font-size: var(--font-size-xs);
+    width: 100%;
+    text-align: center;
+    order: -1;
+    margin-bottom: var(--spacing-2);
+  }
+
+  .pagination-container {
+    padding-top: var(--spacing-3);
+    /* pt-3 */
+  }
+}
+
+/* 分页总数文字右对�?*/
+.pagination-total-text {
+  text-align: right;
+}
+
+@media screen and (min-width: 640px) {
+  .pagination-total-text {
+    text-align: left;
+  }
+}
+
+/* ========================================
+   10. 表格响应�?
+   ======================================== */
+
+.table-responsive {
+  width: 100%;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+.table-responsive table {
+  min-width: 100%;
+}
+
+/* ========================================
+   11. 侧边栏适配
+   ======================================== */
+
+.sidebar {
+  flex-shrink: 0;
+  transition: width 0.3s ease, transform 0.3s ease;
+  padding: var(--spacing-4);
+}
+
+.sidebar-header {
+  padding: var(--spacing-4);
+  border-bottom: 1px solid #e5e7eb;
+  margin-bottom: var(--spacing-4);
+}
+
+.sidebar-title {
+  font-size: var(--font-size-lg);
+  font-weight: 600;
+  margin: 0;
+}
+
+.sidebar-nav {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.sidebar-nav-item {
+  margin-bottom: var(--spacing-1);
+}
+
+.sidebar-nav-link {
+  display: flex;
+  align-items: center;
+  padding: var(--spacing-3);
+  border-radius: 0.375rem;
+  font-size: var(--font-size-sm);
+  text-decoration: none;
+  transition: all 0.2s;
+  gap: var(--spacing-3);
+}
+
+.sidebar-nav-link:hover {
+  background-color: #f3f4f6;
+}
+
+.sidebar-nav-link.active {
+  background-color: #1677ff;
+  color: white;
+}
+
+.sidebar-nav-icon {
+  width: var(--icon-size-base);
+  height: var(--icon-size-base);
+  flex-shrink: 0;
+}
+
+/* 移动端侧边栏 */
+@media screen and (max-width: 768px) {
+  .sidebar {
+    position: fixed;
+    z-index: 50;
+    height: 100%;
+    height: 100dvh;
+    padding: var(--spacing-3);
+  }
+
+  .sidebar-overlay {
+    position: fixed;
+    inset: 0;
+    background-color: rgba(0, 0, 0, 0.5);
+    z-index: 40;
+  }
+}
+
+/* ========================================
+   12. 滚动条美�?
+   ======================================== */
+
+/* Webkit 浏览器滚动条 */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: #f1f1f1;
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #c1c1c1;
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #a1a1a1;
+}
+
+/* Firefox 滚动�?*/
+* {
+  scrollbar-width: thin;
+  scrollbar-color: #c1c1c1 #f1f1f1;
+}
+
+/* ========================================
+   13. 动画与过�?
+   ======================================== */
+
+/* 减少动画（无障碍�?*/
+@media (prefers-reduced-motion: reduce) {
+
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* 淡入动画 */
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes slideInUp {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes slideInRight {
+  from {
+    opacity: 0;
+    transform: translateX(10px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@keyframes zoomIn {
+  from {
+    opacity: 0;
+    transform: scale(0.95);
+  }
+
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+.animate-fade-in {
+  animation: fadeIn 0.2s ease-out;
+}
+
+.animate-slide-up {
+  animation: slideInUp 0.2s ease-out;
+}
+
+.animate-slide-right {
+  animation: slideInRight 0.2s ease-out;
+}
+
+.animate-in {
+  animation-duration: 0.3s;
+  animation-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+  animation-fill-mode: both;
+}
+
+.zoom-in-95 {
+  animation-name: zoomIn;
+}
+
+.fade-in {
+  animation-name: fadeIn;
+}
+
+/* ========================================
+   14. 焦点样式（无障碍�?
+   ======================================== */
+
+:focus-visible {
+  outline: 2px solid #1677ff;
+  outline-offset: 2px;
+}
+
+/* 移除默认焦点样式，使用自定义 */
+:focus:not(:focus-visible) {
+  outline: none;
+}
+
+/* ========================================
+   15. 打印样式
+   ======================================== */
+
+@media print {
+  .no-print {
+    display: none !important;
+  }
+
+  .sidebar,
+  header,
+  .pagination {
+    display: none !important;
+  }
+
+  body {
+    font-size: 12pt;
+  }
+}
+
+
+/* ========================================
+   16. 工作区输入栏响应式布局
+   ======================================== */
+
+/* 模型选择器响应式 - 窄屏隐藏标签 */
+@media screen and (max-width: 640px) {
+  .model-label {
+    display: none !important;
+  }
+
+  .input-bar-controls {
+    max-width: 45%;
+    /* 在小屏幕上减少控件区�?*/
+  }
+
+  .model-selector-compact {
+    max-width: 80px;
+    min-width: 50px;
+  }
+}
+
+/* 极窄屏幕 (<400px) - 模型选择器仅显示图标 */
+@media screen and (max-width: 400px) {
+  .model-selector-compact .model-select {
+    max-width: 50px !important;
+    min-width: 40px !important;
+    font-size: 10px;
+  }
+
+  .model-selector-compact .model-label {
+    display: none !important;
+  }
+
+  .model-selector-compact {
+    padding-left: 0.375rem;
+    padding-right: 0.375rem;
+    max-width: 60px;
+    min-width: 50px;
+  }
+
+  .input-bar-controls {
+    gap: 0.25rem;
+    /* 减少间距 */
+    max-width: 40%;
+  }
+}
+
+/* 超窄屏幕 (<320px) - 模型选择器极简模式 */
+@media screen and (max-width: 320px) {
+  .model-selector-compact .model-select {
+    max-width: 40px !important;
+    min-width: 35px !important;
+    font-size: 9px;
+  }
+
+  .model-selector-compact {
+    max-width: 50px;
+    min-width: 45px;
+    padding-left: 0.25rem;
+    padding-right: 0.25rem;
+  }
+
+  .input-bar-controls {
+    max-width: 35%;
+  }
+}
+
+/* 输入栏容�?- 使用 flex 布局防止溢出 */
+.input-bar-container {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  overflow: hidden;
+  position: relative;
+}
+
+/* 输入�?- 弹性收�?*/
+.input-bar-textarea {
+  flex: 1;
+  min-width: 0;
+}
+
+/* 输入栏控件容�?- 防止溢出 */
+.input-bar-controls {
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+  /* gap-1.5 */
+  flex-shrink: 0;
+  min-width: 0;
+  max-width: 50%;
+  /* 确保控件不会占用超过50%的空�?*/
+}
+
+/* 确保发送按钮最小尺�?*/
+.send-button {
+  min-width: 36px;
+  min-height: 36px;
+  flex-shrink: 0;
+  box-sizing: border-box;
+}
+
+/* 在极小屏幕上稍微减小发送按钮尺寸但保持可用�?*/
+@media screen and (max-width: 320px) {
+  .send-button {
+    min-width: 32px;
+    min-height: 32px;
+    padding: 0.375rem;
+    /* 6px */
+  }
+}
+
+/* 模型选择器改�?*/
+.model-selector-compact {
+  max-width: 120px;
+  /* 设置最大宽度防止过度扩�?*/
+  min-width: 60px;
+  /* 设置最小宽度确保可用�?*/
+}
+
+.model-selector-compact .model-select {
+  max-width: 80px;
+  min-width: 40px;
+  text-overflow: ellipsis;
+  overflow: hidden;
+  white-space: nowrap;
+}
+
+/* 模型选择器选项文本截断 */
+.model-selector-compact .model-select option {
+  text-overflow: ellipsis;
+  overflow: hidden;
+  white-space: nowrap;
+}
+
+/* ========================================
+   17. 顶部标题栏响应式布局
+   ======================================== */
+
+/* 窄屏时隐藏按钮文字，仅保留图�?*/
+@media screen and (max-width: 768px) {
+  .header-button-text {
+    display: none !important;
+  }
+
+  .header-button-icon-only {
+    padding: 0.5rem !important;
+    min-width: 44px;
+    min-height: 44px;
+  }
+}
+
+/* 极窄屏幕时进一步优�?*/
+@media screen and (max-width: 480px) {
+  .header-button-icon-only {
+    padding: 0.375rem !important;
+    min-width: 36px;
+    min-height: 36px;
+  }
+}
+
+/* ========================================
+   18. 面板切换按钮样式
+   ======================================== */
+
+/* 面板切换按钮 - 确保最小可点击区域 */
+.panel-toggle-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  /* 保持最小可点击区域，不受全局缩放影响 */
+  min-width: var(--button-min-size);
+  min-height: var(--button-min-size);
+  /* 内部内容使用缩放后的尺寸 */
+  padding: 0.625rem;
+  /* p-2.5 = 10px */
+  border-radius: 0.375rem;
+  background-color: transparent;
+  border: none;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  color: #6b7280;
+  /* text-gray-500 */
+  box-sizing: border-box;
+}
+
+.panel-toggle-button:hover {
+  background-color: #f3f4f6;
+  /* hover:bg-gray-100 */
+  color: #1f2937;
+  /* hover:text-gray-800 */
+}
+
+.panel-toggle-button:focus-visible {
+  outline: 2px solid #1677ff;
+  outline-offset: 2px;
+}
+
+.panel-toggle-button svg,
+.panel-toggle-button .icon {
+  width: var(--icon-size-base);
+  height: var(--icon-size-base);
+}
+
+/* 紧凑模式下的面板切换按钮 */
+@media screen and (max-width: 768px) {
+  .panel-toggle-button {
+    min-width: var(--button-min-size-compact);
+    min-height: var(--button-min-size-compact);
+    padding: 0.375rem;
+    /* p-1.5 = 6px */
+  }
+
+  .panel-toggle-button svg,
+  .panel-toggle-button .icon {
+    width: var(--icon-size-sm);
+    height: var(--icon-size-sm);
+  }
+}
+
+/* ========================================
+   19. 通用工具类（应用全局缩放�?
+   ======================================== */
+
+/* 间距工具�?*/
+.p-1 {
+  padding: var(--spacing-1);
+}
+
+.p-2 {
+  padding: var(--spacing-2);
+}
+
+.p-3 {
+  padding: var(--spacing-3);
+}
+
+.p-4 {
+  padding: var(--spacing-4);
+}
+
+.p-5 {
+  padding: var(--spacing-5);
+}
+
+.p-6 {
+  padding: var(--spacing-6);
+}
+
+.p-8 {
+  padding: var(--spacing-8);
+}
+
+.px-1 {
+  padding-left: var(--spacing-1);
+  padding-right: var(--spacing-1);
+}
+
+.px-2 {
+  padding-left: var(--spacing-2);
+  padding-right: var(--spacing-2);
+}
+
+.px-3 {
+  padding-left: var(--spacing-3);
+  padding-right: var(--spacing-3);
+}
+
+.px-4 {
+  padding-left: var(--spacing-4);
+  padding-right: var(--spacing-4);
+}
+
+.px-6 {
+  padding-left: var(--spacing-6);
+  padding-right: var(--spacing-6);
+}
+
+.py-1 {
+  padding-top: var(--spacing-1);
+  padding-bottom: var(--spacing-1);
+}
+
+.py-2 {
+  padding-top: var(--spacing-2);
+  padding-bottom: var(--spacing-2);
+}
+
+.py-3 {
+  padding-top: var(--spacing-3);
+  padding-bottom: var(--spacing-3);
+}
+
+.py-4 {
+  padding-top: var(--spacing-4);
+  padding-bottom: var(--spacing-4);
+}
+
+.py-6 {
+  padding-top: var(--spacing-6);
+  padding-bottom: var(--spacing-6);
+}
+
+.m-1 {
+  margin: var(--spacing-1);
+}
+
+.m-2 {
+  margin: var(--spacing-2);
+}
+
+.m-3 {
+  margin: var(--spacing-3);
+}
+
+.m-4 {
+  margin: var(--spacing-4);
+}
+
+.m-6 {
+  margin: var(--spacing-6);
+}
+
+.mx-1 {
+  margin-left: var(--spacing-1);
+  margin-right: var(--spacing-1);
+}
+
+.mx-2 {
+  margin-left: var(--spacing-2);
+  margin-right: var(--spacing-2);
+}
+
+.mx-4 {
+  margin-left: var(--spacing-4);
+  margin-right: var(--spacing-4);
+}
+
+.mx-auto {
+  margin-left: auto;
+  margin-right: auto;
+}
+
+.my-1 {
+  margin-top: var(--spacing-1);
+  margin-bottom: var(--spacing-1);
+}
+
+.my-2 {
+  margin-top: var(--spacing-2);
+  margin-bottom: var(--spacing-2);
+}
+
+.my-4 {
+  margin-top: var(--spacing-4);
+  margin-bottom: var(--spacing-4);
+}
+
+.mb-2 {
+  margin-bottom: var(--spacing-2);
+}
+
+.mb-4 {
+  margin-bottom: var(--spacing-4);
+}
+
+.mt-4 {
+  margin-top: var(--spacing-4);
+}
+
+/* 间隙工具�?*/
+.gap-1 {
+  gap: var(--spacing-1);
+}
+
+.gap-2 {
+  gap: var(--spacing-2);
+}
+
+.gap-3 {
+  gap: var(--spacing-3);
+}
+
+.gap-4 {
+  gap: var(--spacing-4);
+}
+
+.gap-6 {
+  gap: var(--spacing-6);
+}
+
+/* 圆角工具�?*/
+.rounded {
+  border-radius: 0.25rem;
+}
+
+.rounded-md {
+  border-radius: 0.375rem;
+}
+
+.rounded-lg {
+  border-radius: 0.5rem;
+}
+
+.rounded-xl {
+  border-radius: 0.75rem;
+}
+
+/* 图标尺寸工具�?*/
+.icon-xs {
+  width: var(--icon-size-xs);
+  height: var(--icon-size-xs);
+}
+
+.icon-sm {
+  width: var(--icon-size-sm);
+  height: var(--icon-size-sm);
+}
+
+.icon-base {
+  width: var(--icon-size-base);
+  height: var(--icon-size-base);
+}
+
+.icon-lg {
+  width: var(--icon-size-lg);
+  height: var(--icon-size-lg);
+}
+
+.icon-xl {
+  width: var(--icon-size-xl);
+  height: var(--icon-size-xl);
+}
+
+/* 最小尺寸工具类（不受全局缩放影响，保持可访问性） */
+.min-touch-target {
+  min-width: var(--button-min-size);
+  min-height: var(--button-min-size);
+}
+
+.min-touch-target-sm {
+  min-width: var(--button-min-size-compact);
+  min-height: var(--button-min-size-compact);
+}
+
+/* ========================================
+   20. 全局缩放调试工具（开发环境）
+   ======================================== */
+
+/* 调试信息显示 */
+.debug-zoom-info {
+  position: fixed;
+  top: var(--spacing-4);
+  right: var(--spacing-4);
+  background: rgba(0, 0, 0, 0.8);
+  color: white;
+  padding: var(--spacing-2);
+  border-radius: var(--spacing-1);
+  font-size: var(--font-size-xs);
+  font-family: monospace;
+  z-index: 9999;
+  pointer-events: none;
+}
+
+.debug-zoom-info::before {
+  content: "Scale: " attr(data-scale-factor);
+  display: block;
+}
+
+/* 在开发环境中显示缩放边界 */
+.debug-scale-boundaries * {
+  outline: 1px dashed rgba(255, 0, 0, 0.3);
+}
+
+.debug-scale-boundaries *:hover {
+  outline-color: rgba(255, 0, 0, 0.8);
+}
+
+/* ========================================
+   21. 全局字体大小保障（可访问性）
+   ======================================== */
+
+/* 全局字体大小保障 - 确保所有文本元素都有最小字体大�?*/
+p,
+span,
+div,
+h1,
+h2,
+h3,
+h4,
+h5,
+h6,
+label,
+a,
+li,
+button,
+input,
+textarea,
+select {
+  font-size: max(1em, var(--font-size-min)) !important;
+}
+
+/* 标题元素的最小字体大�?*/
+h1 {
+  font-size: max(var(--font-size-3xl), calc(var(--font-size-min) * 1.5)) !important;
+}
+
+h2 {
+  font-size: max(var(--font-size-2xl), calc(var(--font-size-min) * 1.3)) !important;
+}
+
+h3 {
+  font-size: max(var(--font-size-xl), calc(var(--font-size-min) * 1.2)) !important;
+}
+
+h4 {
+  font-size: max(var(--font-size-lg), var(--font-size-min)) !important;
+}
+
+h5 {
+  font-size: max(var(--font-size-base), var(--font-size-min)) !important;
+}
+
+h6 {
+  font-size: max(var(--font-size-sm), var(--font-size-min)) !important;
+}
+
+/* 特殊情况下的字体大小保障 */
+.text-xs {
+  font-size: max(var(--font-size-xs), var(--font-size-min)) !important;
+}
+
+.text-sm {
+  font-size: max(var(--font-size-sm), var(--font-size-min)) !important;
+}
+
+.text-base {
+  font-size: max(var(--font-size-base), var(--font-size-min)) !important;
+}
+
+.text-lg {
+  font-size: max(var(--font-size-lg), var(--font-size-min)) !important;
+}
+
+.text-xl {
+  font-size: max(var(--font-size-xl), var(--font-size-min)) !important;
+}
+
+.text-2xl {
+  font-size: max(var(--font-size-2xl), var(--font-size-min)) !important;
+}
+
+.text-3xl {
+  font-size: max(var(--font-size-3xl), var(--font-size-min)) !important;
+}
+
+/* 表单控件字体大小保障 */
+input,
+textarea,
+select,
+button {
+  font-size: max(var(--font-size-base), var(--font-size-min)) !important;
+}
+
+/* 导航元素字体大小保障 */
+.sidebar-nav-link,
+.pagination-btn,
+.panel-toggle-button {
+  font-size: max(var(--font-size-sm), var(--font-size-min)) !important;
+}
+
+/* 卡片元素字体大小保障 */
+.card-title {
+  font-size: max(var(--font-size-lg), var(--font-size-min)) !important;
+}
+
+.card-subtitle {
+  font-size: max(var(--font-size-sm), var(--font-size-min)) !important;
+}
+
+/* 模态框元素字体大小保障 */
+.modal-title {
+  font-size: max(var(--font-size-xl), var(--font-size-min)) !important;
+}
+
+.modal-body {
+  font-size: max(var(--font-size-base), var(--font-size-min)) !important;
+}
+
+/* ========================================
+   23. 工作区响应式布局�?
+   ======================================== */
+
+/* 工作区响应式布局基础�?*/
+.workspace-mobile {
+  /* 移动端布局优化 */
+  --workspace-header-padding: 0.75rem;
+  --workspace-content-padding: 0.75rem;
+  --workspace-input-padding: 0.75rem;
+  --workspace-button-size: 32px;
+  --workspace-icon-size: 14px;
+  --workspace-font-size: 0.875rem;
+  --workspace-gap: 0.25rem;
+}
+
+.workspace-tablet {
+  /* 平板端布局优化 */
+  --workspace-header-padding: 1rem;
+  --workspace-content-padding: 1rem;
+  --workspace-input-padding: 1rem;
+  --workspace-button-size: 36px;
+  --workspace-icon-size: 16px;
+  --workspace-font-size: 1rem;
+  --workspace-gap: 0.375rem;
+}
+
+.workspace-desktop {
+  /* 桌面端布局优化 */
+  --workspace-header-padding: 1.5rem;
+  --workspace-content-padding: 1.5rem;
+  --workspace-input-padding: 1.5rem;
+  --workspace-button-size: 44px;
+  --workspace-icon-size: 16px;
+  --workspace-font-size: 1rem;
+  --workspace-gap: 0.5rem;
+}
+
+/* 工作区面板响应式行为 */
+.workspace-mobile .left-panel,
+.workspace-mobile .right-panel {
+  /* 移动端自动隐藏侧边面�?*/
+  display: none;
+}
+
+.workspace-tablet .left-panel {
+  /* 平板端左侧面板可选显�?*/
+  max-width: 35vw;
+}
+
+.workspace-tablet .right-panel {
+  /* 平板端右侧面板自动隐�?*/
+  display: none;
+}
+
+.workspace-desktop .left-panel {
+  /* 桌面端左侧面板正常显�?*/
+  max-width: 40vw;
+}
+
+.workspace-desktop .right-panel {
+  /* 桌面端右侧面板正常显�?*/
+  width: 256px;
+}
+
+/* 工作区内容区域响应式调整 */
+.workspace-mobile .chat-area {
+  /* 移动端对话区占满全宽 */
+  width: 100%;
+  min-width: 320px;
+}
+
+.workspace-tablet .chat-area {
+  /* 平板端对话区弹性布局 */
+  flex: 1;
+  min-width: 400px;
+}
+
+.workspace-desktop .chat-area {
+  /* 桌面端对话区弹性布局 */
+  flex: 1;
+  min-width: 480px;
+}
+
+/* 工作区消息区域响应式间距 */
+.workspace-mobile .messages-area {
+  padding: var(--workspace-content-padding);
+  gap: 0.75rem;
+}
+
+.workspace-tablet .messages-area {
+  padding: var(--workspace-content-padding);
+  gap: 1rem;
+}
+
+.workspace-desktop .messages-area {
+  padding: var(--workspace-content-padding);
+  gap: 1.5rem;
+}
+
+/* 工作区输入栏响应式调�?*/
+.workspace-mobile .input-bar {
+  padding: var(--workspace-input-padding);
+}
+
+.workspace-tablet .input-bar {
+  padding: var(--workspace-input-padding);
+}
+
+.workspace-desktop .input-bar {
+  padding: var(--workspace-input-padding);
+}
+
+/* 工作区按钮响应式尺寸 */
+.workspace-mobile button,
+.workspace-mobile .btn {
+  min-width: var(--workspace-button-size);
+  min-height: var(--workspace-button-size);
+  font-size: max(0.75rem, var(--font-size-min));
+}
+
+.workspace-tablet button,
+.workspace-tablet .btn {
+  min-width: var(--workspace-button-size);
+  min-height: var(--workspace-button-size);
+  font-size: max(0.875rem, var(--font-size-min));
+}
+
+.workspace-desktop button,
+.workspace-desktop .btn {
+  min-width: var(--workspace-button-size);
+  min-height: var(--workspace-button-size);
+  font-size: max(var(--workspace-font-size), var(--font-size-min));
+}
+
+/* 工作区图标响应式尺寸 */
+.workspace-mobile svg,
+.workspace-mobile .icon {
+  width: var(--workspace-icon-size);
+  height: var(--workspace-icon-size);
+}
+
+.workspace-tablet svg,
+.workspace-tablet .icon {
+  width: var(--workspace-icon-size);
+  height: var(--workspace-icon-size);
+}
+
+.workspace-desktop svg,
+.workspace-desktop .icon {
+  width: var(--workspace-icon-size);
+  height: var(--workspace-icon-size);
+}
+
+/* 工作区文本响应式字体大小 */
+.workspace-mobile {
+  font-size: max(var(--workspace-font-size), var(--font-size-min));
+}
+
+.workspace-tablet {
+  font-size: max(var(--workspace-font-size), var(--font-size-min));
+}
+
+.workspace-desktop {
+  font-size: max(var(--workspace-font-size), var(--font-size-min));
+}
+
+/* 工作区标题响应式调整 */
+.workspace-mobile h1,
+.workspace-mobile h2,
+.workspace-mobile h3 {
+  font-size: max(1rem, var(--font-size-min));
+}
+
+.workspace-tablet h1,
+.workspace-tablet h2,
+.workspace-tablet h3 {
+  font-size: max(1.125rem, var(--font-size-min));
+}
+
+.workspace-desktop h1,
+.workspace-desktop h2,
+.workspace-desktop h3 {
+  font-size: max(1.25rem, var(--font-size-min));
+}
+
+/* 工作区面板切换按钮响应式调整 */
+.workspace-mobile .panel-toggle-button {
+  min-width: 32px;
+  min-height: 32px;
+  padding: 0.25rem;
+}
+
+.workspace-tablet .panel-toggle-button {
+  min-width: 36px;
+  min-height: 36px;
+  padding: 0.375rem;
+}
+
+.workspace-desktop .panel-toggle-button {
+  min-width: var(--button-min-size);
+  min-height: var(--button-min-size);
+  padding: 0.625rem;
+}
+
+/* 工作区会话列表响应式调整 */
+.workspace-mobile .session-list-item {
+  padding: 0.5rem;
+  font-size: max(0.75rem, var(--font-size-min));
+}
+
+.workspace-tablet .session-list-item {
+  padding: 0.625rem;
+  font-size: max(0.875rem, var(--font-size-min));
+}
+
+.workspace-desktop .session-list-item {
+  padding: 0.75rem;
+  font-size: max(0.875rem, var(--font-size-min));
+}
+
+/* ========================================
+   24. 工作区响应式断点特定样式
+   ======================================== */
+
+/* 移动端特定样�?(< 768px) */
+@media screen and (max-width: 767px) {
+  .workspace-container {
+    /* 移动端强制单列布局 */
+    flex-direction: column;
+  }
+
+  .workspace-header {
+    /* 移动端标题栏紧凑布局 */
+    padding: 0.5rem 0.75rem;
+    min-height: 48px;
+  }
+
+  .workspace-input-bar {
+    /* 移动端输入栏紧凑布局 */
+    padding: 0.75rem;
+  }
+
+  .workspace-input-controls {
+    /* 移动端输入控件紧凑间�?*/
+    gap: 0.25rem;
+  }
+
+  .workspace-model-selector {
+    /* 移动端模型选择器最小化 */
+    max-width: 60px;
+    min-width: 50px;
+  }
+
+  .workspace-send-button {
+    /* 移动端发送按钮紧凑尺�?*/
+    min-width: 32px;
+    min-height: 32px;
+  }
+}
+
+/* 平板端特定样�?(768px - 1023px) */
+@media screen and (min-width: 768px) and (max-width: 1023px) {
+  .workspace-container {
+    /* 平板端双列布局 */
+    flex-direction: row;
+  }
+
+  .workspace-left-panel {
+    /* 平板端左侧面板可选显�?*/
+    max-width: 35vw;
+  }
+
+  .workspace-right-panel {
+    /* 平板端右侧面板默认隐�?*/
+    display: none;
+  }
+
+  .workspace-header {
+    /* 平板端标题栏标准布局 */
+    padding: 0.75rem 1rem;
+    min-height: 52px;
+  }
+
+  .workspace-input-bar {
+    /* 平板端输入栏标准布局 */
+    padding: 1rem;
+  }
+
+  .workspace-input-controls {
+    /* 平板端输入控件标准间�?*/
+    gap: 0.375rem;
+  }
+
+  .workspace-model-selector {
+    /* 平板端模型选择器标准尺�?*/
+    max-width: 100px;
+    min-width: 70px;
+  }
+
+  .workspace-send-button {
+    /* 平板端发送按钮标准尺�?*/
+    min-width: 36px;
+    min-height: 36px;
+  }
+}
+
+/* 桌面端特定样�?(>= 1024px) */
+@media screen and (min-width: 1024px) {
+  .workspace-container {
+    /* 桌面端三列布局 */
+    flex-direction: row;
+  }
+
+  .workspace-left-panel {
+    /* 桌面端左侧面板正常显�?*/
+    max-width: 40vw;
+  }
+
+  .workspace-right-panel {
+    /* 桌面端右侧面板正常显�?*/
+    width: 256px;
+    display: flex;
+  }
+
+  .workspace-header {
+    /* 桌面端标题栏宽松布局 */
+    padding: 1rem 1.5rem;
+    min-height: 56px;
+  }
+
+  .workspace-input-bar {
+    /* 桌面端输入栏宽松布局 */
+    padding: 1rem 1.5rem;
+  }
+
+  .workspace-input-controls {
+    /* 桌面端输入控件宽松间�?*/
+    gap: 0.5rem;
+  }
+
+  .workspace-model-selector {
+    /* 桌面端模型选择器完整尺�?*/
+    max-width: 120px;
+    min-width: 80px;
+  }
+
+  .workspace-send-button {
+    /* 桌面端发送按钮完整尺�?*/
+    min-width: var(--button-min-size);
+    min-height: var(--button-min-size);
+  }
+}
+
+/* 超大屏幕特定样式 (>= 1440px) */
+@media screen and (min-width: 1440px) {
+  .workspace-container {
+    /* 超大屏幕三列布局，最大内容宽度限�?*/
+    max-width: 1920px;
+    margin: 0 auto;
+  }
+
+  .workspace-left-panel {
+    /* 超大屏幕左侧面板最大宽�?*/
+    max-width: 600px;
+  }
+
+  .workspace-right-panel {
+    /* 超大屏幕右侧面板固定宽度 */
+    width: 280px;
+  }
+
+  .workspace-chat-area {
+    /* 超大屏幕对话区最大宽�?*/
+    max-width: 1200px;
+  }
+}
+
+/* 高对比度模式支持 */
+@media (prefers-contrast: high) {
+  :root {
+    --font-size-min: 14px;
+    /* 在高对比度模式下增加最小字体大�?*/
+  }
+
+  button,
+  .btn,
+  [role="button"] {
+    border: 2px solid currentColor;
+  }
+}
+
+/* 大字体偏好支�?*/
+@media (prefers-reduced-motion: no-preference) and (min-resolution: 2dppx) {
+  :root {
+    --font-size-min: 13px;
+    /* 在高分辨率屏幕上稍微增加最小字体大�?*/
+  }
+}
+
+/* 强制最小可点击区域（可访问性） */
+button,
+[role="button"],
+a,
+input[type="button"],
+input[type="submit"],
+input[type="reset"],
+.btn {
+  min-width: var(--button-min-size) !important;
+  min-height: var(--button-min-size) !important;
+}
+
+.btn-sm,
+button.btn-sm,
+.panel-toggle-button {
+  min-width: var(--button-min-size-compact) !important;
+  min-height: var(--button-min-size-compact) !important;
+}
+
+/* 焦点指示器增�?*/
+:focus-visible {
+  outline: 3px solid #1677ff !important;
+  outline-offset: 2px !important;
+  border-radius: 2px;
+}
+
+/* 确保在极高缩放下仍然可见的焦点指示器 */
+@media screen and (max-width: 300px) {
+  :focus-visible {
+    outline-width: 2px !important;
+    outline-offset: 1px !important;
+  }
+}

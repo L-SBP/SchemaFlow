@@ -4,10 +4,23 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
+from fastapi.exceptions import RequestValidationError
+from pydantic import ValidationError
+from sqlalchemy.exc import SQLAlchemyError
 
 from core.config import config
 from core.log import log
 from core.database import PsqlHelper
+from core.exceptions import BusinessException, AppException
+from core.exception_handlers import (
+    business_exception_handler,
+    app_exception_handler,
+    validation_exception_handler,
+    pydantic_validation_exception_handler,
+    sqlalchemy_exception_handler,
+    general_exception_handler
+)
+
 import models
 from mysql.mysql_database import MysqlHelper
 from postgresql.postgres_database import PostgresHelper
@@ -49,14 +62,14 @@ async def startup_services(app: FastAPI):
         log.error(f"PostgreSQL connection test failed: {e}")
 
     # 初始化Redis连接
-    log.info("initialize redis linking")
+    log.info("initialize redis_client linking")
     await init_redis()
     redis = get_redis()
     if redis :
         app.state.redis = get_redis()
     
     # 初始化Redis监听连接并启动监听器
-    log.info("initialize redis listener")
+    log.info("initialize redis_client listener")
     await init_redis_listener()
     # 在后台启动Redis过期事件监听器
     asyncio.create_task(redis_expire_listener())
@@ -100,6 +113,14 @@ my_app = FastAPI(
     version=config.app.version,
     lifespan=lifespan,
 )
+
+# 注册异常处理器
+my_app.add_exception_handler(BusinessException, business_exception_handler)
+my_app.add_exception_handler(AppException, app_exception_handler)
+my_app.add_exception_handler(RequestValidationError, validation_exception_handler)
+my_app.add_exception_handler(ValidationError, pydantic_validation_exception_handler)
+my_app.add_exception_handler(SQLAlchemyError, sqlalchemy_exception_handler)
+my_app.add_exception_handler(Exception, general_exception_handler)
 
 # ============================================================
 # 挂载静态目录 (为了支持文件导出下载)

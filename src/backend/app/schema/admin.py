@@ -7,10 +7,11 @@
 
 # backend/app/schema/admin.py
 
-from pydantic import BaseModel, Field, ConfigDict
+from pydantic import BaseModel, Field, ConfigDict, validator
 from typing import Optional, List, Literal, Any
 from datetime import datetime
 from schema.user import UserMe  # 确保这里能导入 UserMe
+from schema.announcement import AnnouncementResponse  # 导入统一的公告响应模型
 
 
 # ----------------------------------------------------------------------
@@ -54,8 +55,8 @@ class AdminUserListItem(BaseModel):
     username: str
     email: str
     status: Literal["normal", "suspended", "banned"]
-    project_count: int = Field(0, description="该用户拥有的项目数量")
-    max_databases: int = Field(10, description="该用户最大数据库额度")
+    project_count: int = Field(default=0, description="该用户拥有的项目数量")
+    max_databases: int = Field(default=10, description="该用户最大数据库额度")
     last_login_at: Optional[datetime] = None
 
     model_config = ConfigDict(from_attributes=True)
@@ -110,7 +111,13 @@ class AdminUpdateUserQuotaRequest(BaseModel):
     Attributes:
         max_databases (int): 新的最大数据库额度。
     """
-    max_databases: int = Field(..., gt=0, description="新的最大数据库额度")
+    max_databases: int = Field(..., description="新的最大数据库额度")
+    
+    @validator('max_databases')
+    def max_databases_positive(cls, v):
+        if v <= 0:
+            raise ValueError('最大数据库额度必须大于0')
+        return v
 
 
 # 4.1.3. 调整用户资源额度 - Response (新增，解决 ImportError)
@@ -167,13 +174,15 @@ class AdminUserDetailResponse(BaseModel):
     username: str
     email: str
     status: Literal["normal", "suspended", "banned"]
-    max_databases: int
-    project_count: int
+    max_databases: int = Field(default=10, description="最大数据库额度")
+    project_count: int = Field(default=0, description="项目数量")
     last_login_at: Optional[datetime] = None
     created_at: Optional[datetime] = None
 
     projects: List[AdminUserProjectItem] = Field(default_factory=list)
     login_history: List[AdminUserLoginHistoryItem] = Field(default_factory=list)
+
+    model_config = ConfigDict(from_attributes=True)
 
 
 # ----------------------------------------------------------------------
@@ -189,9 +198,15 @@ class AnnouncementCreateRequest(BaseModel):
         content (str): 公告内容。
         status (str): 公告状态 (默认 "published")。
     """
-    title: str = Field(..., min_length=1, max_length=100)
+    title: str = Field(..., description="公告标题")
     content: str
     status: Literal['draft', 'published'] = 'published'
+    
+    @validator('title')
+    def title_length(cls, v):
+        if not 1 <= len(v) <= 100:
+            raise ValueError('公告标题长度必须在1到100个字符之间')
+        return v
 
 
 class AnnouncementUpdateRequest(BaseModel):
@@ -208,30 +223,6 @@ class AnnouncementUpdateRequest(BaseModel):
     status: Optional[Literal["draft", "published", "unpublished", "expired"]] = None
 
 
-class AnnouncementResponse(BaseModel):
-    """
-    公告响应 Schema。
-
-    Attributes:
-        announcement_id (int): 公告 ID。
-        title (str): 公告标题。
-        content (str): 公告内容。
-        status (str): 公告状态。
-        created_at (datetime): 创建时间。
-        updated_at (Optional[datetime]): 更新时间。
-        created_by (Optional[int]): 创建人 ID。
-    """
-    announcement_id: int
-    title: str
-    content: str
-    status: str
-    created_at: datetime
-    updated_at: Optional[datetime] = None
-    created_by: Optional[int] = None  # 允许为空
-
-    model_config = ConfigDict(from_attributes=True)
-
-
 # ----------------------------------------------------------------------
 # 4.3. 管理员列表 & 4.4. 违规/统计 Schemas
 # ----------------------------------------------------------------------
@@ -240,19 +231,21 @@ class AnnouncementResponse(BaseModel):
 class AdminListItem(BaseModel):
     """
     管理员列表单项 Schema。
+    
+    与前端 AdminListItem 接口保持一致的字段结构。
 
     Attributes:
         user_id (int): 用户 ID。
         username (str): 用户名。
         email (str): 邮箱。
-        last_login_at (Optional[datetime]): 最后登录时间。
-        is_online (bool): 是否在线。
+        last_login_at (Optional[str]): 最后登录时间（ISO格式字符串）。
+        is_online (bool): 是否在线（基于 Redis 实时状态）。
     """
     user_id: int
     username: str
     email: str
-    last_login_at: Optional[datetime]
-    is_online: bool = False
+    last_login_at: Optional[str] = None  # 前端期望字符串格式
+    is_online: bool = Field(default=False, description="是否在线状态（基于 Redis 实时状态）")
 
     model_config = ConfigDict(from_attributes=True)
 

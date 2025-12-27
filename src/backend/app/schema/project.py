@@ -6,7 +6,7 @@
 
 # backend/app/schema/project.py
 
-from pydantic import BaseModel, Field, ConfigDict
+from pydantic import BaseModel, Field, ConfigDict, validator
 from typing import Optional, Literal, List, Any,Dict
 from datetime import datetime
 from enum import Enum
@@ -43,10 +43,22 @@ class ProjectCreate(BaseModel):
         description (str): 项目描述。
         ai_model (Literal): 用于生成Schema的AI模型。
     """
-    project_name: str = Field(..., min_length=1, max_length=50, description="项目名称")
+    project_name: str = Field(..., description="项目名称")
     db_type: Literal['mysql', 'postgresql', 'sqlite'] = Field(..., description="数据库类型")
-    description: str = Field(..., max_length=1000, description="项目描述")
+    description: str = Field(..., description="项目描述")
     ai_model: Literal["gpt4", "deepseek", "chatgpt"] = Field("gpt4",description="用于生成Schema的AI模型")
+    
+    @validator('project_name')
+    def project_name_length(cls, v):
+        if not 1 <= len(v) <= 50:
+            raise ValueError('项目名称长度必须在1到50个字符之间')
+        return v
+    
+    @validator('description')
+    def description_length(cls, v):
+        if len(v) > 1000:
+            raise ValueError('项目描述长度不能超过1000个字符')
+        return v
 
 
 class ProjectUpdate(BaseModel):
@@ -58,8 +70,8 @@ class ProjectUpdate(BaseModel):
         description (Optional[str]): 项目描述。
         schema_definition (Optional[Dict[str, Any]]): 前端修改后的DDL和Schema结构。
     """
-    project_name: Optional[str] = Field(None, min_length=1, max_length=50)
-    description: Optional[str] = Field(None, max_length=500)
+    project_name: Optional[str] = Field(None, description="项目名称")
+    description: Optional[str] = Field(None, description="项目描述")
     # =========================================================
     # 允许前端回传修改后的 Schema/DDL 进行保存
     # =========================================================
@@ -68,6 +80,18 @@ class ProjectUpdate(BaseModel):
         description="前端修改后的DDL和Schema结构 {'ddl': '...', 'schema': '...'}"
     )
     ddl_statement: Optional[str] = None
+    
+    @validator('project_name')
+    def project_name_length(cls, v):
+        if v is not None and not 1 <= len(v) <= 50:
+            raise ValueError('项目名称长度必须在1到50个字符之间')
+        return v
+    
+    @validator('description')
+    def description_length(cls, v):
+        if v is not None and len(v) > 500:
+            raise ValueError('项目描述长度不能超过500个字符')
+        return v
 
 
 class GenerateDDLRequest(BaseModel):
@@ -100,7 +124,13 @@ class ProjectDeployRequest(BaseModel):
 
 class DeleteConfirmationRequest(BaseModel):
     """3.2.5 确认删除请求"""
-    confirmation_text: str = Field(..., pattern=r'^DELETE$', description="必须输入 DELETE")
+    confirmation_text: str = Field(..., description="必须输入 DELETE")
+    
+    @validator('confirmation_text')
+    def confirmation_text_must_be_delete(cls, v):
+        if v != 'DELETE':
+            raise ValueError('必须输入 DELETE 以确认删除')
+        return v
 
 
 # --- 3. 响应 DTOs ---
@@ -170,12 +200,10 @@ class ProjectDetailOut(ProjectListOne):
     Attributes:
         created_at (datetime): 创建时间。
         creation_stage (Optional[CreationStageEnum]): 创建进度阶段。
-        progress_percentage (Optional[int]): 创建进度百分比。
         schema_definition (Optional[Dict[str, Any]]): AI生成的包含 'schema' 和 'ddl' 的JSON对象。
     """
     created_at: datetime
     creation_stage: Optional[CreationStageEnum] = CreationStageEnum.INITIALIZING
-    progress_percentage: Optional[int] = 0
     # 可以添加 analysis_result, ddl_result 等字段
     # =========================================================
     # 将数据库中的 JSONB 字段返回给前端
@@ -189,16 +217,8 @@ class ProjectDetailOut(ProjectListOne):
     model_config = ConfigDict(from_attributes=True)
 
 
-class ProjectResponse(BaseModel):
-    """
-    单个项目包装器。
-
-    Attributes:
-        data (ProjectDetailOut): 项目详情数据。
-    """
-    data: ProjectDetailOut
-
-    model_config = ConfigDict(from_attributes=True)
+# Removed ProjectResponse wrapper to avoid unnecessary nesting
+# ProjectDetailOut is used directly in API responses
 
 
 class ConfirmationTokenResponse(BaseModel):

@@ -1,5 +1,5 @@
 import client from './client.ts';
-import { ChatResponse } from '../types';
+import { ChatResponse, PageData } from '../types';
 
 // 对应文档: SessionResponse (会话信息)
 export interface SessionItem {
@@ -16,7 +16,7 @@ export const sessionApi = {
    * GET /api/v1/sessions/
    */
   getList: (projectId: number | string, page: number = 0, limit: number = 100) => {
-    return client.get<any, SessionItem[]>('/v1/sessions/', {
+    return client.get<any, PageData<SessionItem[]>>('/v1/sessions/', {
       params: {
         project_id: Number(projectId),
         skip: page * limit,
@@ -60,7 +60,7 @@ export const sessionApi = {
    * DELETE /api/v1/sessions/{session_id}
    */
   delete: (sessionId: number) => {
-    return client.delete<any, boolean>(`/v1/sessions/${sessionId}`);
+    return client.delete<any, { success: boolean }>(`/v1/sessions/${sessionId}`);
   },
 
   /**

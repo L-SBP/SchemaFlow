@@ -5,7 +5,7 @@ Redis 过期事件监听器。
 主要用于处理 Token 过期、验证码失效等需要触发后续业务逻辑的场景。
 """
 
-# backend/app/redis/expiration_listener.py
+# backend/app/redis_client/expiration_listener.py
 
 import asyncio
 import aioredis
@@ -73,7 +73,7 @@ async def redis_expire_listener():
                 await asyncio.sleep(3)
                 
     except Exception as e:
-        log.error(f"Failed to start Redis expiration listener: {e}")
+        log.error(f"无法启动Redis过期监听器: {e}")
     finally:
         try:
             await redis_conn.aclose()

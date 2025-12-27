@@ -98,14 +98,14 @@ async def _verify_session_ownership(db: AsyncSession, session_id: int, user_id: 
     session = result.scalar_one_or_none()
 
     if not session:
-        raise HTTPException(status_code=404, detail="Session not found")
+        raise HTTPException(status_code=404, detail="会话未找到")
     
     if not session.project:
-        raise HTTPException(status_code=404, detail="Project not found for this session")
+        raise HTTPException(status_code=404, detail="此会话的项目未找到")
 
     if session.project.user_id != user_id:
         log.warning(f"Security Alert: User {user_id} tried to access session {session_id}")
-        raise HTTPException(status_code=403, detail="Permission denied")
+        raise HTTPException(status_code=403, detail="权限拒绝")
 
     return session.project_id
 
@@ -116,7 +116,7 @@ async def _get_session_obj(db: AsyncSession, session_id: int) -> SessionModel:
     result = await db.execute(stmt)
     session_obj = result.scalar_one_or_none()
     if not session_obj:
-        raise HTTPException(status_code=404, detail="Session lost")
+        raise HTTPException(status_code=404, detail="会话已丢失")
     return session_obj
 
 
@@ -172,6 +172,19 @@ def _clean_ai_response(content: str) -> str:
     
     # 去除 Markdown 标记
     clean_sql = content.strip().replace("```sql", "").replace("```", "").strip()
+    
+    # 移除可能的前缀文本（如"已生成sql语句："等）
+    prefixes_to_remove = [
+        "已生成sql语句：",
+        "已生成SQL语句：", 
+        "生成的SQL语句：",
+        "SQL语句：",
+        "查询语句："
+    ]
+    
+    for prefix in prefixes_to_remove:
+        if clean_sql.startswith(prefix):
+            clean_sql = clean_sql[len(prefix):].strip()
     
     # 只取第一条 SQL
     if ";\n" in clean_sql:
@@ -255,19 +268,73 @@ def _parse_sql_type(sql_text: str) -> str:
     sql_type = "UNKNOWN"
     try:
         if sql_text and not sql_text.startswith("--"):
-            parsed = sqlparse.parse(sql_text)
+            # 先清洗SQL文本，移除可能的前缀
+            clean_sql = sql_text.strip()
+            
+            # 移除可能的前缀文本
+            prefixes_to_remove = [
+                "已生成sql语句：",
+                "已生成SQL语句：", 
+                "生成的SQL语句：",
+                "SQL语句：",
+                "查询语句："
+            ]
+            
+            for prefix in prefixes_to_remove:
+                if clean_sql.startswith(prefix):
+                    clean_sql = clean_sql[len(prefix):].strip()
+            
+            # 使用sqlparse解析
+            parsed = sqlparse.parse(clean_sql)
             if parsed:
                 sql_type = parsed[0].get_type().upper()
-                if sql_type == "UNKNOWN" and sql_text.strip().upper().startswith("SELECT"):
+                
+            # 兜底逻辑：如果sqlparse无法识别，使用简单的关键字匹配
+            if sql_type == "UNKNOWN":
+                clean_upper = clean_sql.strip().upper()
+                if clean_upper.startswith("SELECT"):
                     sql_type = "SELECT"
-    except Exception:
-        pass
+                elif clean_upper.startswith("INSERT"):
+                    sql_type = "INSERT"
+                elif clean_upper.startswith("UPDATE"):
+                    sql_type = "UPDATE"
+                elif clean_upper.startswith("DELETE"):
+                    sql_type = "DELETE"
+                elif clean_upper.startswith("CREATE"):
+                    sql_type = "CREATE"
+                elif clean_upper.startswith("DROP"):
+                    sql_type = "DROP"
+                elif clean_upper.startswith("ALTER"):
+                    sql_type = "ALTER"
+                elif clean_upper.startswith("TRUNCATE"):
+                    sql_type = "TRUNCATE"
+                    
+    except Exception as e:
+        log.warning(f"SQL parsing failed for: {sql_text[:100]}..., error: {e}")
+        
     return sql_type
 
 
 def _is_meta_sql(sql_text: str) -> bool:
     """判断是否为元数据/错误 SQL。"""
-    return any(kw in sql_text.upper() for kw in ["'CANCELED'", "'ERROR'"])
+    if not sql_text:
+        return False
+        
+    sql_upper = sql_text.upper()
+    
+    # 检查是否包含错误关键字
+    error_patterns = [
+        "'CANCELED'",
+        "'ERROR'", 
+        "ERROR:",
+        "CANNOT ANSWER",
+        "无法回答",
+        "CAN'T ANSWER",
+        "UNABLE TO",
+        "NOT SUPPORTED"
+    ]
+    
+    return any(pattern in sql_upper for pattern in error_patterns)
 
 
 def _requires_confirmation(sql_type: str) -> bool:
@@ -312,7 +379,22 @@ async def _save_ai_response(
     """
     保存 AI 响应和执行结果（独立事务）。
     """
-    reply_content = f"已生成sql语句：\n{sql_text}"
+    # 确保sql_text是干净的，不包含前缀
+    clean_sql_text = sql_text
+    prefixes_to_remove = [
+        "已生成sql语句：",
+        "已生成SQL语句：", 
+        "生成的SQL语句：",
+        "SQL语句：",
+        "查询语句："
+    ]
+    
+    for prefix in prefixes_to_remove:
+        if clean_sql_text.startswith(prefix):
+            clean_sql_text = clean_sql_text[len(prefix):].strip()
+    
+    # 构建回复内容，确保只有一个前缀
+    reply_content = f"已生成SQL语句：\n{clean_sql_text}"
     ai_message = await crud_message.create_message(db, session_id, reply_content, role="assistant")
     
     if requires_confirm:
@@ -322,7 +404,7 @@ async def _save_ai_response(
     safe_data = jsonable_encoder(data)
     new_statement = AIGeneratedStatement(
         message_id=ai_message.message_id,
-        sql_text=sql_text,
+        sql_text=clean_sql_text,  # 存储干净的SQL文本
         statement_type=sql_type,
         execution_status=execution_status,
         execution_result=safe_data,
@@ -457,7 +539,7 @@ async def process_chat(
     
     return ChatResponse(
         message_id=ai_message.message_id,
-        content=f"已生成sql语句：\n{sql_text}",
+        content=f"已生成SQL语句：\n{sql_text}",
         message_type=MessageType.ASSISTANT,
         sql_text=sql_text,
         sql_type=sql_type,
@@ -535,7 +617,7 @@ async def _get_message_context(
     result = await db.execute(stmt)
     message = result.scalar_one_or_none()
     if not message:
-        raise HTTPException(status_code=404, detail="Message not found")
+        raise HTTPException(status_code=404, detail="消息未找到")
 
     stmt_session = select(SessionModel).where(SessionModel.session_id == message.session_id)
     result_session = await db.execute(stmt_session)
@@ -547,7 +629,7 @@ async def _get_message_context(
     result_project = await db.execute(stmt_project)
     project = result_project.scalar_one_or_none()
     if not project:
-        raise HTTPException(status_code=404, detail="Project not found")
+        raise HTTPException(status_code=404, detail="项目未找到")
 
     return message, session_obj, project
 
@@ -555,11 +637,11 @@ async def _get_message_context(
 def _validate_confirmation(message: MessageModel, project: ProjectModel, user_id: int) -> None:
     """验证确认操作的合法性。"""
     if project.user_id != user_id:
-        raise HTTPException(status_code=403, detail="Access denied")
+        raise HTTPException(status_code=403, detail="访问拒绝")
     if not message.requires_confirmation:
-        raise HTTPException(status_code=400, detail="This message does not require confirmation")
+        raise HTTPException(status_code=400, detail="此消息不需要确认")
     if message.user_confirmed:
-        raise HTTPException(status_code=400, detail="Already confirmed/executed")
+        raise HTTPException(status_code=400, detail="已确认/执行")
 
 
 def _extract_sql_from_content(content: str) -> str:
@@ -590,31 +672,48 @@ async def _update_statement_result(
 
 async def _handle_execution_error(
     db: AsyncSession,
-    session_id: int,
+    original_message_id: int,
     error: Exception
 ) -> ChatResponse:
-    """处理执行错误并返回错误响应。"""
+    """处理执行错误并返回错误响应，不创建新消息。"""
     error_msg = str(error)
     if isinstance(error, HTTPException):
         error_msg = error.detail
     
-    content = f"❌ 执行失败：\n{error_msg}"
-    error_message = await crud_message.create_message(
-        db=db,
-        session_id=session_id,
-        content=content,
-        role=MessageType.ASSISTANT
-    )
+    # 提供更友好的错误信息
+    friendly_msg = _get_friendly_error_message(error_msg)
+    content = f"❌ 执行失败：\n{friendly_msg}"
     
     return ChatResponse(
-        message_id=error_message.message_id,
-        content=error_message.content,
+        message_id=original_message_id,  # 使用原始消息ID
+        content=content,
         message_type=MessageType.ASSISTANT,
         sql_text=None,
         sql_type="ERROR",
         requires_confirmation=False,
         data=None
     )
+
+
+def _get_friendly_error_message(error_msg: str) -> str:
+    """将技术错误信息转换为用户友好的错误信息。"""
+    error_lower = error_msg.lower()
+    
+    # 常见数据库错误的友好提示
+    if "duplicate entry" in error_lower or "unique constraint" in error_lower:
+        return "数据重复（违反唯一约束）。\n详细信息: " + error_msg
+    elif "foreign key constraint" in error_lower:
+        return "外键约束错误，请检查关联数据是否存在。\n详细信息: " + error_msg
+    elif "table doesn't exist" in error_lower or "no such table" in error_lower:
+        return "表不存在，请检查表名是否正确。\n详细信息: " + error_msg
+    elif "column" in error_lower and "doesn't exist" in error_lower:
+        return "列不存在，请检查列名是否正确。\n详细信息: " + error_msg
+    elif "syntax error" in error_lower:
+        return "SQL语法错误，请检查SQL语句。\n详细信息: " + error_msg
+    elif "access denied" in error_lower or "permission denied" in error_lower:
+        return "权限不足，无法执行此操作。\n详细信息: " + error_msg
+    else:
+        return error_msg
 
 
 async def confirm_and_execute_sql(
@@ -650,7 +749,7 @@ async def confirm_and_execute_sql(
         
     except Exception as e:
         log.error(f"Execution failed: {e}")
-        return await _handle_execution_error(db, message.session_id, e)
+        return await _handle_execution_error(db, message_id, e)
 
     return ChatResponse(
         message_id=message.message_id,

@@ -1,0 +1,56 @@
+/**
+ * ProjectStatusBadge Component Styles
+ * Requirements: 6.1, 6.3, 6.4, 6.5
+ */
+
+.status-badge {
+  /* Requirement 6.3: Badge-style design */
+  display: inline-block;
+  padding: 4px 8px;
+  border-radius: 12px;
+  font-weight: 500;
+  text-transform: capitalize;
+
+  /* Requirement 6.4: Small font size (12px) */
+  font-size: 12px;
+  line-height: 1;
+
+  /* Requirement 6.5: 8px margin from card edges */
+  margin: 0;
+
+  /* Base styling */
+  border: 1px solid transparent;
+  transition: all 0.2s ease-in-out;
+}
+
+/* Requirement 6.3: Appropriate color coding */
+.status-badge--initializing {
+  background-color: #fef3c7;
+  color: #92400e;
+  border-color: #fde68a;
+}
+
+.status-badge--active {
+  background-color: #dcfce7;
+  color: #166534;
+  border-color: #bbf7d0;
+}
+
+.status-badge--inactive {
+  background-color: #f3f4f6;
+  color: #6b7280;
+  border-color: #e5e7eb;
+}
+
+/* Hover effects for better interactivity */
+.status-badge--initializing:hover {
+  background-color: #fde68a;
+}
+
+.status-badge--active:hover {
+  background-color: #bbf7d0;
+}
+
+.status-badge--inactive:hover {
+  background-color: #e5e7eb;
+}

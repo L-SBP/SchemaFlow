@@ -15,9 +15,9 @@ import { AdminStatus } from './pages/AdminStatus.tsx';
 import { Announcements } from './pages/Announcements.tsx';
 import { UserRole, Project, User } from './types.ts';
 import { authApi } from './api/auth.ts';
-import { getUserProfile } from './api/user.ts'; // 新增：引入获取用户信息接口
+import { getUserProfile } from './api/user.ts';
 import { ProjectDTO } from './api/project.ts';
-import { Loader2 } from 'lucide-react'; // 新增：引入 Loading 图标
+import { Loader2 } from 'lucide-react';
 
 const App: React.FC = () => {
   // 新增：isLoading 状态，用于在检查 Token 时显示加载动画，防止登录页闪烁
@@ -204,7 +204,7 @@ const App: React.FC = () => {
   };
 
   return (
-    <div className="flex h-screen bg-[#f0f2f5] bg-[url('https://gw.alipayobjects.com/zos/rmsportal/TVYTbAXWheQpRcWDaDMu.svg')] bg-center bg-no-repeat bg-contain overflow-hidden">
+    <div className="flex h-screen h-[100dvh] bg-[#f0f2f5] bg-[url('https://gw.alipayobjects.com/zos/rmsportal/TVYTbAXWheQpRcWDaDMu.svg')] bg-center bg-no-repeat bg-contain overflow-hidden">
       <ToastContainer />
 
       <Sidebar
@@ -221,11 +221,11 @@ const App: React.FC = () => {
           setIsSidebarOpen(false);
         }}
       />
-      <main className="flex-1 flex flex-col min-w-0">
+      <main className="flex-1 flex flex-col min-w-0 min-h-0">
         <Header
           onToggleSidebar={() => setIsSidebarOpen(!isSidebarOpen)}
         />
-        <div className="flex-1 overflow-auto relative">
+        <div className="flex-1 overflow-hidden relative">
           {renderContent()}
         </div>
       </main>

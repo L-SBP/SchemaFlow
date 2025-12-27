@@ -180,7 +180,7 @@ async def execute_sqlite_sql_with_user_check(
         user_id=user_id
     )
     if not success:
-        raise Exception(f"Failed to ensure SQLite engine for instance {instance_obj.instance_id}")
+        raise Exception(f"无法确保实例 {instance_obj.instance_id} 的SQLite引擎")
 
     # 2. 调用执行器
     from sqlite.sqlite_execute import execute_dql_user, execute_dml_user

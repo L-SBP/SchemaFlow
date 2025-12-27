@@ -8,7 +8,7 @@
 
 from datetime import datetime
 from typing import Optional
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, validator, ConfigDict
 
 # 基础 Schema，包含共享字段
 class SessionBase(BaseModel):
@@ -18,7 +18,7 @@ class SessionBase(BaseModel):
     Attributes:
         session_name (Optional[str]): 会话名称。
     """
-    session_name: Optional[str] = Field(default="New Session", description="会话名称")
+    session_name: Optional[str] = "New Session"  # 会话名称
 
 # 创建会话时的请求模型
 class SessionCreate(SessionBase):
@@ -28,7 +28,13 @@ class SessionCreate(SessionBase):
     Attributes:
         project_id (int): 关联的项目 ID。
     """
-    project_id: int = Field(..., description="关联的项目ID")
+    project_id: int
+    
+    @validator('project_id')
+    def project_id_positive(cls, v):
+        if v <= 0:
+            raise ValueError('项目ID必须大于0')
+        return v
 
 # 更新会话时的请求模型
 class SessionUpdate(SessionBase):
@@ -58,5 +64,4 @@ class SessionResponse(SessionBase):
     created_at: datetime
     last_activity: Optional[datetime]
 
-    class Config:
-        from_attributes = True  # 允许从 ORM 对象读取数据 (Pydantic V2 使用 model_config)
+    model_config = ConfigDict(from_attributes=True)

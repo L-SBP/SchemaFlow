@@ -7,7 +7,7 @@
 
 # backend/app/schema/chat.py
 
-from pydantic import BaseModel, Field, ConfigDict
+from pydantic import BaseModel, Field, ConfigDict, validator
 from typing import List, Optional, Any, Dict
 from enum import Enum
 
@@ -26,9 +26,15 @@ class ChatRequest(BaseModel):
         content (str): 用户输入的自然语言内容。
         model (Optional[str]): 指定使用的AI模型ID。
     """
-    content: str = Field(..., min_length=1, description="用户输入的自然语言内容")
+    content: str = Field(..., description="用户输入的自然语言内容")
     # 允许前端指定模型，可选值建议与后端 Registry 保持一致，但为了灵活先用 str
     model: Optional[str] = Field(None, description="指定使用的AI模型ID，如 'xiyan-sql'")
+    
+    @validator('content')
+    def content_not_empty(cls, v):
+        if not v or len(v.strip()) == 0:
+            raise ValueError('消息内容不能为空')
+        return v
 
 # 2. 响应体：包含完整的对话信息 (Response DTO)
 class ChatResponse(BaseModel):

@@ -1,5 +1,5 @@
 import client from './client.ts';
-import { Announcement, ApiResponse } from '../types.ts';
+import { Announcement } from '../types.ts';
 
 // 列表响应接口
 interface AnnouncementListResponse {

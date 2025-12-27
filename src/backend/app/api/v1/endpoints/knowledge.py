@@ -6,12 +6,13 @@
 
 from fastapi import APIRouter, Depends, HTTPException, status, Query, UploadFile, File, Path
 from sqlalchemy.ext.asyncio import AsyncSession as Session
-from typing import Any, Optional
+from typing import Any, Optional, List
 
 # 隐式绝对导入
 from api.v1 import deps
 from service import knowledge_service
 from schema import knowledge as schemas
+from schema.unified_response import UnifiedResponse, PageData
 from core.exceptions import ItemNotFoundException, ValidationException
 
 # 注意：这个 Router 稍后需要在 api.py 中注册，且不带 prefix，因为路径包含 {project_id}
@@ -20,7 +21,7 @@ router = APIRouter()
 # ----------------------------------------------------------------------
 # 3.4.1. 创建术语
 # ----------------------------------------------------------------------
-@router.post("/projects/{project_id}/knowledge", response_model=schemas.KnowledgeResponse, status_code=status.HTTP_201_CREATED)
+@router.post("/projects/{project_id}/knowledge", response_model=UnifiedResponse[schemas.KnowledgeResponse])
 async def create_term(
     data: schemas.KnowledgeCreate,
     project_id: int = Path(..., description="项目ID"),
@@ -37,25 +38,16 @@ async def create_term(
         current_user (Any): 当前登录用户。
 
     Returns:
-        Any: 创建后的术语信息。
-
-    Raises:
-        HTTPException: 项目未找到(404)、冲突(409)或内部错误(500)。
+        UnifiedResponse[schemas.KnowledgeResponse]: 创建后的术语信息。
     """
-    try:
-        return await knowledge_service.create_knowledge_service(db, project_id, current_user.user_id, data)
-    except ItemNotFoundException:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Project not found.")
-    except ValidationException as e:
-        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(e)) # 409 for conflict
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+    result = await knowledge_service.create_knowledge_service(db, project_id, current_user.user_id, data)
+    return UnifiedResponse.success(data=result, message="创建业务术语成功")
 
 
 # ----------------------------------------------------------------------
 # 3.4.2. 获取术语列表
 # ----------------------------------------------------------------------
-@router.get("/projects/{project_id}/knowledge", response_model=schemas.PaginatedKnowledgeList)
+@router.get("/projects/{project_id}/knowledge", response_model=UnifiedResponse[PageData[List[schemas.KnowledgeResponse]]])
 async def get_terms(
     project_id: int = Path(..., description="项目ID"),
     search: Optional[str] = Query(None, description="按术语名称搜索"),
@@ -76,25 +68,24 @@ async def get_terms(
         current_user (Any): 当前登录用户。
 
     Returns:
-        Any: 分页术语列表。
-
-    Raises:
-        HTTPException: 项目未找到(404)或内部错误(500)。
+        UnifiedResponse[PageData[List[schemas.KnowledgeResponse]]]: 分页术语列表。
     """
-    try:
-        return await knowledge_service.get_knowledge_list_service(
-            db, project_id, current_user.user_id, page, page_size, search
-        )
-    except ItemNotFoundException:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Project not found.")
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+    result = await knowledge_service.get_knowledge_list_service(
+        db, project_id, current_user.user_id, page, page_size, search
+    )
+    page_data = PageData(
+        total=result.total,
+        page=result.page,
+        page_size=result.page_size,
+        items=result.items
+    )
+    return UnifiedResponse.success(data=page_data, message="获取术语列表成功")
 
 
 # ----------------------------------------------------------------------
 # [新增] 更新术语
 # ----------------------------------------------------------------------
-@router.patch("/projects/{project_id}/knowledge/{knowledge_id}", response_model=schemas.KnowledgeResponse)
+@router.patch("/projects/{project_id}/knowledge/{knowledge_id}", response_model=UnifiedResponse[schemas.KnowledgeResponse])
 async def update_term(
     data: schemas.KnowledgeUpdate,
     project_id: int = Path(..., description="项目ID"),
@@ -113,24 +104,17 @@ async def update_term(
         current_user (Any): 当前登录用户。
 
     Returns:
-        Any: 更新后的术语信息。
-
-    Raises:
-        HTTPException: 术语/项目未找到(404)或内部错误(500)。
+        UnifiedResponse[schemas.KnowledgeResponse]: 更新后的术语信息。
     """
-    try:
-        return await knowledge_service.update_knowledge_service(
-            db, project_id, knowledge_id, current_user.user_id, data
-        )
-    except ItemNotFoundException:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Term or Project not found.")
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+    result = await knowledge_service.update_knowledge_service(
+        db, project_id, knowledge_id, current_user.user_id, data
+    )
+    return UnifiedResponse.success(data=result, message="更新术语成功")
 
 # ----------------------------------------------------------------------
 # [新增] 批量删除术语
 # ----------------------------------------------------------------------
-@router.delete("/projects/{project_id}/knowledge/batch", response_model=schemas.ImportResponse) # 复用 ImportResponse 或新建一个 DeleteResponse
+@router.delete("/projects/{project_id}/knowledge/batch", response_model=UnifiedResponse[schemas.ImportResponse])
 async def batch_delete_terms(
     data: schemas.BulkDeleteRequest,
     project_id: int = Path(..., description="项目ID"),
@@ -147,28 +131,25 @@ async def batch_delete_terms(
         current_user (Any): 当前登录用户。
 
     Returns:
-        Any: 删除结果。
-
-    Raises:
-        HTTPException: 项目未找到(404)或内部错误(500)。
+        UnifiedResponse[schemas.ImportResponse]: 删除结果。
     """
-    try:
-        count = await knowledge_service.batch_delete_knowledge_service(
-            db, project_id, current_user.user_id, data.ids
-        )
-        # 这里临时构造一个返回，您也可以定义专门的 DeleteResponse
-        return {"imported_count": 0, "failed_count": 0, "failures": [], "message": f"Successfully deleted {count} items."}
-    except ItemNotFoundException:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Project not found.")
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+    count = await knowledge_service.batch_delete_knowledge_service(
+        db, project_id, current_user.user_id, data.ids
+    )
+    delete_result = schemas.ImportResponse(
+        imported_count=0,
+        failed_count=0,
+        failures=[],
+        message=f"成功删除 {count} 项"
+    )
+    return UnifiedResponse.success(data=delete_result, message="批量删除术语成功")
 
 
 
 # ----------------------------------------------------------------------
 # 3.4.3. 批量导入术语
 # ----------------------------------------------------------------------
-@router.post("/projects/{project_id}/knowledge/import", response_model=schemas.ImportResponse)
+@router.post("/projects/{project_id}/knowledge/import", response_model=UnifiedResponse[schemas.ImportResponse])
 async def import_terms(
     project_id: int = Path(..., description="项目ID"),
     file: UploadFile = File(..., description="CSV 文件"),
@@ -185,27 +166,18 @@ async def import_terms(
         current_user (Any): 当前登录用户。
 
     Returns:
-        Any: 导入结果统计。
-
-    Raises:
-        HTTPException: 格式错误(400)、项目未找到(404)或导入失败(500)。
+        UnifiedResponse[schemas.ImportResponse]: 导入结果统计。
     """
-    try:
-        return await knowledge_service.import_knowledge_service(
-            db, project_id, current_user.user_id, file
-        )
-    except ValidationException as e:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
-    except ItemNotFoundException:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Project not found.")
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Import failed: {e}")
+    result = await knowledge_service.import_knowledge_service(
+        db, project_id, current_user.user_id, file
+    )
+    return UnifiedResponse.success(data=result, message="批量导入术语成功")
 
 
 # ----------------------------------------------------------------------
 # 3.4.4. 导出术语
 # ----------------------------------------------------------------------
-@router.get("/projects/{project_id}/knowledge/export", response_model=schemas.ExportResponse)
+@router.get("/projects/{project_id}/knowledge/export", response_model=UnifiedResponse[schemas.ExportResponse])
 async def export_terms(
     project_id: int = Path(..., description="项目ID"),
     db: Session = Depends(deps.get_db),
@@ -220,14 +192,7 @@ async def export_terms(
         current_user (Any): 当前登录用户。
 
     Returns:
-        Any: 导出文件下载链接。
-
-    Raises:
-        HTTPException: 项目未找到(404)或内部错误(500)。
+        UnifiedResponse[schemas.ExportResponse]: 导出文件下载链接。
     """
-    try:
-        return await knowledge_service.export_knowledge_service(db, project_id, current_user.user_id)
-    except ItemNotFoundException:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Project not found.")
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+    result = await knowledge_service.export_knowledge_service(db, project_id, current_user.user_id)
+    return UnifiedResponse.success(data=result, message="导出术语成功")

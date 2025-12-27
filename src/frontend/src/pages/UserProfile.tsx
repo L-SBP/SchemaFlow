@@ -67,7 +67,11 @@ export const UserProfile: React.FC<UserProfileProps> = ({ user, onBack }) => {
         const res = await adminApi.getUserDetail(user.id, 100, 20);
         if (!cancelled) setDetail(res);
       } catch (e: any) {
-        if (!cancelled) setLoadError(e?.message || '加载失败');
+        console.error('Fetch user detail error:', e);
+        // 错误已由API客户端统一处理，这里只需记录日志和设置本地错误状态
+        if (!cancelled) {
+          setLoadError(e?.message || '加载用户详情失败，请稍后重试');
+        }
       } finally {
         if (!cancelled) setLoading(false);
       }

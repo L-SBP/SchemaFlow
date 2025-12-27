@@ -1,0 +1,446 @@
+/**
+ * ProjectCard Component Styles
+ * Requirements: 9.1, 9.2, 9.3, 9.4, 9.5
+ */
+
+.project-card {
+  /* 恢复原来的卡片高度 */
+  width: 100%;
+  height: 220px;
+  /* 恢复到220px，不需要额外空间 */
+
+  /* Card styling with default shadow for depth */
+  background: #ffffff;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  padding: 18px;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.06), 0 1px 2px rgba(0, 0, 0, 0.04);
+
+  /* Layout structure */
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+
+  /* Requirement 9.2: Consistent spacing and margins */
+  box-sizing: border-box;
+
+  /* Transition for hover effects */
+  transition: all 0.3s ease-in-out;
+
+  /* Requirement 9.5: Responsive behavior */
+  min-width: 320px;
+}
+
+/* Requirement 1.5: Cursor pointer for clickable areas */
+.project-card--clickable {
+  cursor: pointer;
+}
+
+/* 增强的悬浮效果 */
+.project-card:hover {
+  /* 浮动效果 - 向上移动并增加阴影 */
+  transform: translateY(-8px) scale(1.02);
+  box-shadow: 0 12px 24px rgba(0, 0, 0, 0.15), 0 6px 12px rgba(0, 0, 0, 0.1);
+  border-color: #9ca3af;
+}
+
+/* Card sections layout */
+.project-card__header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  /* 改为center对齐，确保所有元素垂直居中 */
+  margin-bottom: 12px;
+  min-height: 24px;
+}
+
+.project-card__header-left {
+  display: flex;
+  align-items: center;
+  flex: 1;
+  min-width: 0;
+  /* Allow text truncation */
+}
+
+/* Project name styling */
+.project-name {
+  font-size: 16px;
+  font-weight: 600;
+  color: #1f2937;
+  line-height: 1.2;
+}
+
+.project-name--truncated {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 200px;
+  /* Increase space for longer names with wider cards */
+}
+
+.project-card__content {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-start;
+  margin-bottom: 12px;
+  overflow: hidden;
+  /* 确保内容区域有足够高度显示三行文本 */
+  min-height: 60px;
+}
+
+/* Project description styling */
+.project-description-container {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+/* 新的三行描述样式 */
+.project-description-multiline {
+  font-size: 14px;
+  color: #6b7280;
+  line-height: 1.4;
+  margin: 0;
+  word-wrap: break-word;
+  overflow-wrap: break-word;
+
+  /* 限制显示三行，超出显示省略号 */
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  text-overflow: ellipsis;
+
+  /* 确保三行的高度 */
+  max-height: calc(1.4em * 3);
+  /* line-height * 3 lines */
+}
+
+.project-description {
+  font-size: 14px;
+  color: #6b7280;
+  line-height: 1.4;
+  margin: 0;
+  word-wrap: break-word;
+  overflow-wrap: break-word;
+}
+
+.project-description--truncated {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  line-clamp: 2;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.project-card__footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  min-height: 32px;
+  margin-top: auto;
+}
+
+.project-card__footer-left {
+  display: flex;
+  align-items: center;
+  flex: 0 0 auto;
+  /* 不伸缩，保持内容宽度 */
+}
+
+.project-card__footer-center {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  flex: 1;
+  /* 占据中间剩余空间 */
+}
+
+.project-card__footer-right {
+  display: flex;
+  align-items: center;
+  flex: 0 0 auto;
+  /* 不伸缩，保持内容宽度 */
+}
+
+/* 移除不再需要的样式 */
+.project-card__status {
+  display: none;
+  /* 不再使用 */
+}
+
+/* 移除底部时间区域样式 */
+.project-card__bottom {
+  display: none;
+  /* 不再使用 */
+}
+
+/* View Details Button */
+.view-details-button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  min-width: 32px;
+  min-height: 32px;
+  border: none;
+  border-radius: 4px;
+  background: transparent;
+  color: #6b7280;
+  cursor: pointer;
+  transition: all 0.2s ease-in-out;
+  flex-shrink: 0;
+  padding: 0;
+  margin-left: 8px;
+  /* Add margin to separate from status/date */
+  align-self: center;
+  /* Ensure vertical alignment with status badge and date */
+}
+
+.view-details-button:hover {
+  background: #f3f4f6;
+  color: #374151;
+  transform: scale(1.05);
+}
+
+.view-details-button:active {
+  transform: scale(0.95);
+  background: #e5e7eb;
+}
+
+.view-details-button:focus {
+  outline: none;
+  background: #f3f4f6;
+  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.2);
+}
+
+.view-details-button svg {
+  width: 14px;
+  height: 14px;
+  transition: transform 0.2s ease-in-out;
+  stroke-width: 1.5;
+}
+
+.view-details-button:hover svg {
+  transform: scale(1.1);
+}
+
+/* Responsive design */
+/* Requirement 9.4: Responsive card layout for different screen sizes */
+@media (max-width: 768px) {
+  .project-card {
+    width: 100%;
+    max-width: 100%;
+    min-width: 320px;
+  }
+
+  /* Adjust header layout for smaller screens */
+  .project-card__header {
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
+  .project-name--truncated {
+    max-width: 180px;
+    /* Adjust for wider cards */
+  }
+}
+
+/* Medium mobile screens */
+@media (max-width: 480px) {
+  .project-card {
+    width: 100%;
+    min-width: 300px;
+    padding: 14px;
+    height: 200px;
+    /* 调整移动端高度 */
+  }
+
+  .project-card__header {
+    margin-bottom: 10px;
+  }
+
+  .project-card__content {
+    margin-bottom: 10px;
+    min-height: 50px;
+    /* 调整内容区域高度 */
+  }
+
+  .project-name--truncated {
+    max-width: 160px;
+  }
+
+  /* 移动端仍保持三行显示 */
+  .project-description-multiline {
+    -webkit-line-clamp: 3;
+    line-clamp: 3;
+    font-size: 13px;
+  }
+
+  /* 移动端悬浮效果减弱 */
+  .project-card:hover {
+    transform: translateY(-4px) scale(1.01);
+  }
+}
+
+-webkit-line-clamp: 3;
+line-clamp: 3;
+font-size: 13px;
+}
+}
+
+/* Requirement 9.5: Accessibility at minimum 320px viewport width */
+@media (max-width: 360px) {
+  .project-card {
+    width: 100%;
+    min-width: 240px;
+    padding: 12px;
+    height: 180px;
+    /* 调整小屏幕高度 */
+  }
+
+  .project-card__header {
+    margin-bottom: 8px;
+  }
+
+  .project-card__content {
+    margin-bottom: 8px;
+    min-height: 45px;
+    /* 调整内容区域高度 */
+  }
+
+  .project-name--truncated {
+    max-width: 100px;
+  }
+
+  /* 小屏幕显示两行描述 */
+  .project-description-multiline {
+    -webkit-line-clamp: 2;
+    line-clamp: 2;
+    font-size: 13px;
+  }
+
+  /* 小屏幕悬浮效果进一步减弱 */
+  .project-card:hover {
+    transform: translateY(-2px);
+  }
+
+  /* Adjust footer elements */
+  .project-card__footer {
+    flex-wrap: nowrap;
+    gap: 8px;
+    min-height: 32px;
+    padding-right: 2px;
+  }
+
+  .project-card__footer-left {
+    gap: 8px;
+    min-height: 32px;
+  }
+
+  /* Keep view details button consistent with action buttons */
+  .view-details-button {
+    width: 32px;
+    height: 32px;
+    min-width: 32px;
+    min-height: 32px;
+    margin-left: 6px;
+  }
+
+  .view-details-button svg {
+    width: 14px;
+    height: 14px;
+  }
+}
+
+/* Critical minimum width - 320px viewport */
+@media (max-width: 320px) {
+  .project-card {
+    width: 100%;
+    min-width: 280px;
+    padding: 10px;
+    height: 130px;
+  }
+
+  .project-card__header {
+    margin-bottom: 6px;
+  }
+
+  .project-card__content {
+    margin-bottom: 6px;
+  }
+
+  .project-name--truncated {
+    max-width: 80px;
+    font-size: 15px;
+  }
+
+  /* Progressive element hiding for insufficient space */
+  .project-description {
+    font-size: 12px;
+  }
+
+  .project-description--truncated {
+    -webkit-line-clamp: 1;
+    line-clamp: 1;
+  }
+
+  /* Adjust footer for minimal space */
+  .project-card__footer {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 4px;
+    min-height: 32px;
+    padding-right: 0;
+    /* Remove padding on very small screens */
+  }
+
+  .project-card__footer-left {
+    gap: 8px;
+    min-height: auto;
+  }
+
+  /* Hide view details button on very small screens to save space */
+  .view-details-button {
+    display: none;
+  }
+
+  /* Smaller status badge and date */
+  .status-badge {
+    font-size: 10px;
+  }
+
+  .date-display {
+    font-size: 9px;
+  }
+}
+
+/* Container queries for responsive card grids */
+@container (max-width: 600px) {
+  .project-card {
+    width: 100%;
+    max-width: 100%;
+  }
+}
+
+@container (max-width: 400px) {
+  .project-card {
+    min-width: 240px;
+  }
+}
+
+/* Focus styles for accessibility */
+.project-card:focus {
+  outline: 2px solid #3b82f6;
+  outline-offset: 2px;
+}
+
+/* Ensure card maintains structure even with varying content */
+.project-card__header,
+.project-card__content,
+.project-card__footer {
+  width: 100%;
+}

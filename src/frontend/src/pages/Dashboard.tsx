@@ -1,35 +1,36 @@
-import React, { useState, useRef, useEffect } from 'react';
-import { ProjectDTO, fetchProjects, createProject, getProjectDetail, updateProject, confirmDeleteProject, deleteProject } from '../api/project';
-import { Card, Button, Tag, Modal, Input, ProgressBar, Steps } from '../components/UI';
-import { Plus, Database, Server, Clock, ArrowRight, Loader2, CheckCircle2, BrainCircuit, Code2, PlayCircle, Sparkles, RefreshCw, Edit3, Save, Trash2, AlertTriangle } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { ProjectDTO, fetchProjects, createProject, updateProject, confirmDeleteProject, deleteProject } from '../api/project';
+import { ProjectStatusEnum } from '../types';
+import { Button, Modal, Input, message } from '../components/UI';
+import { Plus, PlayCircle, Sparkles, AlertTriangle, LayoutDashboard, Database } from 'lucide-react';
 import { ProjectWizard } from '../components/ProjectWizard';
+import { ProjectOverview } from '../project-overview-optimization/ProjectOverview';
+import { ProjectData } from '../types/project-overview';
 
-// 常量定义
-const DEPLOYMENT_STEPS = [
-  { title: '需求分析', key: 'analyzing' },
-  { title: 'Schema 设计', key: 'generating_schema' }, // 细化步骤
-  { title: 'DDL 生成', key: 'generating_ddl' },
-  { title: '服务就绪', key: 'completed' },
-];
-
-// 辅助函数：安全格式化日期
-const formatDate = (dateString?: string) => {
-  if (!dateString) return null;
-  const date = new Date(dateString);
-  if (isNaN(date.getTime())) return null; // 检查日期是否有效
-  return date.toLocaleDateString();
-};
-
-// 辅助函数：格式化数据库类型展示
-const formatDbType = (type?: string) => {
-  if (!type) return 'Unknown';
-  const lower = type.toLowerCase();
-  switch (lower) {
-    case 'mysql': return 'MySQL';
-    case 'postgresql': return 'PostgreSQL';
-    case 'sqlite': return 'SQLite';
-    default: return type.charAt(0).toUpperCase() + type.slice(1);
+// 数据转换函数：将 ProjectDTO 转换为 ProjectData
+const convertProjectDTOToProjectData = (dto: ProjectDTO): ProjectData => {
+  // 状态映射
+  let projectStatus: 'initializing' | 'active' | 'inactive';
+  switch (dto.project_status) {
+    case ProjectStatusEnum.INITIALIZING:
+      projectStatus = 'initializing';
+      break;
+    case ProjectStatusEnum.ACTIVE:
+      projectStatus = 'active';
+      break;
+    default:
+      projectStatus = 'inactive';
+      break;
   }
+
+  return {
+    project_id: dto.project_id,
+    project_name: dto.project_name,
+    description: dto.description,
+    project_status: projectStatus,
+    updated_at: dto.updated_at || dto.created_at,
+    db_type: dto.db_type
+  };
 };
 
 interface DashboardProps {
@@ -39,13 +40,14 @@ interface DashboardProps {
 export const Dashboard: React.FC<DashboardProps> = ({ onProjectSelect }) => {
   const [projects, setProjects] = useState<ProjectDTO[]>([]);
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   // 部署状态管理
   const [isDeploying, setIsDeploying] = useState(false);
   const [currentProjectId, setCurrentProjectId] = useState<string | number | null>(null);
 
   // 创建表单状态
-  // 更新：增加 SQLite 类型支持
   const [newProjectName, setNewProjectName] = useState('');
   const [newProjectType, setNewProjectType] = useState<'MySQL' | 'PostgreSQL' | 'SQLite'>('MySQL');
   const [newProjectDesc, setNewProjectDesc] = useState('');
@@ -62,11 +64,16 @@ export const Dashboard: React.FC<DashboardProps> = ({ onProjectSelect }) => {
 
   // 1. 初始化加载
   const loadProjects = async () => {
+    setLoading(true);
+    setError(null);
     try {
       const data = await fetchProjects();
-      setProjects(data);
+      setProjects(data.items);
     } catch (error) {
       console.error("Failed to load projects:", error);
+      setError("Failed to load projects. Please try again.");
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -91,7 +98,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ onProjectSelect }) => {
       console.error("Failed to create project:", e);
       setIsDeploying(false);
       setCurrentProjectId(null);
-      alert("创建失败，请检查网络或重试");
+      message.error("创建失败，请检查网络或重试");
     }
   };
 
@@ -107,11 +114,27 @@ export const Dashboard: React.FC<DashboardProps> = ({ onProjectSelect }) => {
   };
 
   // --- 项目管理操作 ---
-  const handleDeleteClick = (e: React.MouseEvent, project: ProjectDTO) => {
-    e.stopPropagation();
-    setProjectToDelete(project);
-    setDeleteConfirmation('');
-    setIsDeleteModalOpen(true);
+  const handleCardClick = (projectId: number) => {
+    const project = projects.find(p => p.project_id === projectId);
+    if (project) {
+      if (project.project_status === ProjectStatusEnum.ACTIVE) {
+        onProjectSelect?.(project);
+      } else {
+        // Resume deployment
+        setCurrentProjectId(project.project_id);
+        setIsDeploying(true);
+        setIsModalOpen(true);
+      }
+    }
+  };
+
+  const handleDeleteClick = (projectId: number) => {
+    const project = projects.find(p => p.project_id === projectId);
+    if (project) {
+      setProjectToDelete(project);
+      setDeleteConfirmation('');
+      setIsDeleteModalOpen(true);
+    }
   };
 
   const handleConfirmDelete = async () => {
@@ -124,16 +147,18 @@ export const Dashboard: React.FC<DashboardProps> = ({ onProjectSelect }) => {
       loadProjects();
     } catch (err) {
       console.error("Delete failed", err);
-      alert("删除失败，请确认输入的验证信息正确");
+      message.error("删除失败，请确认输入的验证信息正确");
     }
   };
 
-  const handleEditClick = (e: React.MouseEvent, project: ProjectDTO) => {
-    e.stopPropagation();
-    setProjectToEdit(project);
-    setEditName(project.project_name);
-    setEditDesc(project.description);
-    setIsEditModalOpen(true);
+  const handleEditClick = (projectId: number) => {
+    const project = projects.find(p => p.project_id === projectId);
+    if (project) {
+      setProjectToEdit(project);
+      setEditName(project.project_name);
+      setEditDesc(project.description);
+      setIsEditModalOpen(true);
+    }
   };
 
   const handleSaveEdit = async () => {
@@ -148,124 +173,42 @@ export const Dashboard: React.FC<DashboardProps> = ({ onProjectSelect }) => {
       loadProjects();
     } catch (err) {
       console.error("Update failed", err);
-      alert("更新项目信息失败");
+      message.error("更新项目信息失败");
     }
   };
 
   const showProgressView = isDeploying && !!currentProjectId;
 
   return (
-    // 修改: p-8 -> p-4 sm:p-8，优化移动端间距
-    <div className="p-4 sm:p-8 max-w-7xl mx-auto h-full overflow-y-auto">
-      <div className="flex justify-between items-center mb-8">
-        <div>
-          <h2 className="text-2xl font-bold text-gray-800 tracking-tight">数据库项目</h2>
-          <p className="text-gray-500 mt-1">管理您的 AI 驱动数据库实例</p>
+    // 优化响应式间距和布局
+    <div className="p-4 sm:p-6 lg:p-8 max-w-7xl mx-auto h-full flex flex-col overflow-hidden">
+      {/* 项目概览标题区域 - 使用与系统公告一致的样式 */}
+      <div className="flex-shrink-0 flex items-center gap-3 mb-6">
+        <div className="p-2 bg-blue-100 text-blue-600 rounded-lg shrink-0">
+          <LayoutDashboard size={20} className="sm:w-6 sm:h-6" />
         </div>
-        <Button variant="primary" icon={<Plus size={16} />} onClick={() => setIsModalOpen(true)}>
-          新建项目
-        </Button>
+        <div className="min-w-0">
+          <h2 className="text-xl sm:text-2xl font-bold text-gray-800 truncate">项目概览</h2>
+          <p className="text-gray-500 text-sm hidden sm:block">管理您的 AI 驱动数据库实例</p>
+        </div>
+        <div className="ml-auto">
+          <Button variant="primary" icon={<Plus size={16} />} onClick={() => setIsModalOpen(true)} className="shrink-0 w-full sm:w-auto">
+            新建项目
+          </Button>
+        </div>
       </div>
 
-      {/* 修改: grid-cols-1 sm:grid-cols-2... -> grid-cols-[repeat(auto-fill,minmax(280px,1fr))] */}
-      {/* 这样可以保证卡片最小宽度 280px，自动填充，不会出现单列巨宽的情况 */}
-      <div className="grid grid-cols-[repeat(auto-fill,minmax(300px,1fr))] gap-6">
-        {projects.map(project => {
-          const createdDate = formatDate(project.created_at);
-          const updatedDate = formatDate(project.updated_at);
-
-          return (
-            <Card
-              key={project.project_id}
-              className="hover:shadow-lg transition-shadow cursor-pointer group border-gray-200 h-full flex flex-col w-full min-w-0"
-              title={
-                <div className="flex items-center gap-2.5 overflow-hidden w-full min-w-0">
-                  <div className="p-2 bg-blue-50 rounded-lg text-primary shrink-0">
-                    <Database size={20} />
-                  </div>
-                  <span className="font-semibold truncate">{project.project_name}</span>
-                </div>
-              }
-              extra={
-                <div className="flex items-center gap-3 shrink-0">
-                  <Tag color={project.project_status === 'active' ? 'green' : 'orange'}>
-                    {project.project_status === 'active' ? '运行中' : '初始化中'}
-                  </Tag>
-                  <div className="flex items-center gap-1 bg-white rounded-md border border-gray-100 shadow-sm p-0.5">
-                    <button
-                      className="p-1.5 text-gray-500 hover:text-primary hover:bg-gray-100 rounded transition-colors"
-                      onClick={(e) => handleEditClick(e, project)}
-                      title="编辑项目"
-                    >
-                      <Edit3 size={16} />
-                    </button>
-                    <button
-                      className="p-1.5 text-gray-500 hover:text-red-500 hover:bg-red-50 rounded transition-colors"
-                      onClick={(e) => handleDeleteClick(e, project)}
-                      title="删除项目"
-                    >
-                      <Trash2 size={16} />
-                    </button>
-                  </div>
-                </div>
-              }
-            >
-              <div className="flex flex-col h-full" onClick={() => {
-                if (project.project_status === 'active') {
-                  onProjectSelect?.(project);
-                } else {
-                  // Resume deployment
-                  setCurrentProjectId(project.project_id);
-                  setIsDeploying(true);
-                  setIsModalOpen(true);
-                }
-              }}>
-                <p className="text-gray-600 text-sm line-clamp-2 h-10 leading-relaxed mb-4">
-                  {project.description}
-                </p>
-
-                <div className="mt-auto">
-                  <div className="flex items-end justify-between text-xs text-gray-400 pt-4 border-t border-gray-50">
-                    {/* 修正：使用 db_type 并格式化展示 */}
-                    <div className="flex items-center gap-1.5 bg-gray-50 px-2 py-1 rounded mb-0.5">
-                      <Server size={12} /> {formatDbType(project.db_type)}
-                    </div>
-                    <div className="flex flex-col items-end gap-1.5">
-                      {createdDate && (
-                        <div className="flex items-center gap-1.5" title="创建时间">
-                          <Clock size={12} /> {createdDate}
-                        </div>
-                      )}
-                      {updatedDate && (
-                        <div className="flex items-center gap-1.5 text-gray-500" title={`最后更新于: ${updatedDate}`}>
-                          <RefreshCw size={12} /> {updatedDate}
-                        </div>
-                      )}
-                      {!createdDate && !updatedDate && (
-                        <div className="text-gray-300 italic">No date info</div>
-                      )}
-                    </div>
-                  </div>
-
-                  <div className="flex justify-end pt-2 opacity-0 group-hover:opacity-100 transition-all duration-300 transform translate-y-2 group-hover:translate-y-0 h-6">
-                    <Button variant="text" className="text-primary text-xs hover:bg-blue-50 px-0" onClick={(e) => {
-                      e.stopPropagation();
-                      if (project.project_status === 'active') {
-                        onProjectSelect?.(project);
-                      } else {
-                        setCurrentProjectId(project.project_id);
-                        setIsDeploying(true);
-                        setIsModalOpen(true);
-                      }
-                    }}>
-                      {project.project_status === 'active' ? '进入工作台' : '继续部署'} <ArrowRight size={12} className="ml-1" />
-                    </Button>
-                  </div>
-                </div>
-              </div>
-            </Card>
-          )
-        })}
+      {/* 使用优化后的项目概览组件 */}
+      <div className="flex-1 min-h-0">
+        <ProjectOverview
+          projects={projects.map(convertProjectDTOToProjectData)}
+          loading={loading}
+          error={error}
+          onCardClick={handleCardClick}
+          onEdit={handleEditClick}
+          onDelete={handleDeleteClick}
+          onRefresh={loadProjects}
+        />
       </div>
 
       <Modal
@@ -299,12 +242,12 @@ export const Dashboard: React.FC<DashboardProps> = ({ onProjectSelect }) => {
               <Input label="项目名称" placeholder="例如：企业级 CRM 客户管理系统" value={newProjectName} onChange={(e) => setNewProjectName(e.target.value)} />
               <div className="flex flex-col gap-2">
                 <label className="text-sm font-medium text-gray-700">数据库类型</label>
-                <div className="grid grid-cols-3 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4">
                   {/* 更新：增加 SQLite 选项 */}
                   {(['MySQL', 'PostgreSQL', 'SQLite'] as const).map(type => (
-                    <div key={type} onClick={() => setNewProjectType(type)} className={`cursor-pointer px-4 py-3 rounded-lg border flex items-center gap-3 transition-all ${newProjectType === type ? 'border-primary bg-blue-50 text-primary ring-1 ring-primary' : 'border-gray-200 hover:border-gray-300 hover:bg-gray-50'}`}>
+                    <div key={type} onClick={() => setNewProjectType(type)} className={`cursor-pointer px-3 sm:px-4 py-2.5 sm:py-3 rounded-lg border flex items-center gap-2 sm:gap-3 transition-all ${newProjectType === type ? 'border-primary bg-blue-50 text-primary ring-1 ring-primary' : 'border-gray-200 hover:border-gray-300 hover:bg-gray-50'}`}>
                       <Database size={18} className={newProjectType === type ? 'text-primary' : 'text-gray-400'} />
-                      <span className="text-sm font-medium">{type === 'MySQL' ? 'MySQL' : type === 'PostgreSQL' ? 'PostgreSQL' : 'SQLite'}</span>
+                      <span className="text-sm font-medium">{type}</span>
                     </div>
                   ))}
                 </div>

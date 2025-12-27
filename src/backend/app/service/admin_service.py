@@ -288,7 +288,28 @@ async def get_admin_list_service(db: AsyncSession, page: int, page_size: int) ->
         AdminListResponse: 管理员分页列表。
     """
     admin_orms, total = await crud_admin_data.get_admin_list(db, page, page_size)
-    items_dto = [AdminListItem.model_validate(orm) for orm in admin_orms]
+    
+    # 手动构建 AdminListItem 对象，使用 Redis 中的在线状态
+    items_dto = []
+    for orm in admin_orms:
+        # 将 datetime 转换为 ISO 格式字符串
+        last_login_str = None
+        if orm.last_login_at:
+            last_login_str = orm.last_login_at.isoformat()
+        
+        # 从 Redis 获取实时在线状态
+        from service.user_service import service_get_user_online_status
+        is_online = await service_get_user_online_status(orm.user_id)
+        
+        item = AdminListItem(
+            user_id=orm.user_id,
+            username=orm.username,
+            email=orm.email,
+            last_login_at=last_login_str,
+            is_online=is_online,  # 使用 Redis 中的实时在线状态
+        )
+        items_dto.append(item)
+    
     return AdminListResponse(total=total, page=page, page_size=page_size, items=items_dto)
 
 

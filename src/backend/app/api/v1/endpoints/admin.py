@@ -1,8 +1,8 @@
 """
 管理员 API 端点。提供用户管理、公告管理、违规记录查看及系统统计看板等管理员专属功能。
 """
-from typing import Optional, Literal, Any
-from fastapi import APIRouter, Depends, Query, Path, status, HTTPException, Body
+from typing import Optional, Literal, Any, List
+from fastapi import APIRouter, Depends, Query, Path, Body
 from sqlalchemy.ext.asyncio import AsyncSession as Session
 
 # 导入 Service 和 Schema
@@ -11,10 +11,11 @@ from schema.admin import (
     AdminUserListResponse, AdminUpdateUserStatusRequest, AdminUpdateUserStatusResponse,
     AdminUpdateUserQuotaRequest, AdminUpdateUserQuotaResponse,
     AnnouncementCreateRequest, AnnouncementUpdateRequest, AnnouncementResponse,
-    AdminListResponse, ViolationLogListResponse, AdminStatsResponse,
+    AdminListResponse, AdminListItem, ViolationLogListResponse, AdminStatsResponse,
     AdminUserDetailResponse
 )
 from schema.user import UserMe
+from schema.unified_response import UnifiedResponse, PageData
 # 导入依赖
 from api.v1.deps import get_db, get_current_admin_user
 from core.exceptions import ItemNotFoundException
@@ -37,7 +38,7 @@ class PaginationParams:
 # ----------------------------------------------------------------------
 # 4.1. 用户管理
 # ----------------------------------------------------------------------
-@router.get("/users", response_model=AdminUserListResponse, summary="4.1.1 获取用户列表")
+@router.get("/users", response_model=UnifiedResponse[PageData[List[AdminUserDetailResponse]]], summary="4.1.1 获取用户列表")
 async def get_user_list(
     db: Session = Depends(get_db),
     admin_user: UserMe = AdminDependency,
@@ -57,22 +58,19 @@ async def get_user_list(
         filter_status (Literal["normal", "banned", "all"]): 按状态筛选用户。
 
     Returns:
-        AdminUserListResponse: 用户列表响应。
-
-    Raises:
-        HTTPException: 内部服务器错误(500)。
+        UnifiedResponse[PageData[List[AdminUserDetailResponse]]]: 用户列表响应。
     """
-    try:
-        # 这里传入 filter_status
-        return await service.get_admin_user_list_service(
-            db, pagination.page, pagination.page_size, search, filter_status
-        )
-    except Exception as e:
-        # 现在这里的 status 引用的是 fastapi.status 模块，不会报错了
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
+    # 这里传入 filter_status
+    result = await service.get_admin_user_list_service(
+        db, pagination.page, pagination.page_size, search, filter_status
+    )
+    page_data = PageData(
+        total=result.total, page=result.page, page_size=result.page_size, items=result.items
+    )
+    return UnifiedResponse.success(data=page_data, message="获取用户列表成功")
 
 
-@router.patch("/users/{user_id}/status", response_model=AdminUpdateUserStatusResponse, summary="4.1.2 修改用户状态 (封禁/解封)")
+@router.patch("/users/{user_id}/status", response_model=UnifiedResponse[AdminUpdateUserStatusResponse], summary="4.1.2 修改用户状态 (封禁/解封)")
 async def update_user_status(
     # 修正：将 data 移到 user_id 之前
     data: AdminUpdateUserStatusRequest,
@@ -90,20 +88,13 @@ async def update_user_status(
         admin_user (UserMe): 当前管理员用户。
 
     Returns:
-        AdminUpdateUserStatusResponse: 更新后的用户状态信息。
-
-    Raises:
-        HTTPException: 用户未找到(404)或内部服务器错误(500)。
+        UnifiedResponse[AdminUpdateUserStatusResponse]: 更新后的用户状态信息。
     """
-    try:
-        return await service.update_user_status_service(db, user_id, data, admin_user.user_id)
-    except ItemNotFoundException as e:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
-    except Exception as e:
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Failed to update user status: {e}")
+    result = await service.update_user_status_service(db, user_id, data, admin_user.user_id)
+    return UnifiedResponse.success(data=result, message="修改用户状态成功")
 
 
-@router.patch("/users/{user_id}/quota", response_model=AdminUpdateUserQuotaResponse, summary="4.1.3 调整用户资源额度")
+@router.patch("/users/{user_id}/quota", response_model=UnifiedResponse[AdminUpdateUserQuotaResponse], summary="4.1.3 调整用户资源额度")
 async def update_user_quota(
     # 修正：将 data 移到 user_id 之前
     data: AdminUpdateUserQuotaRequest,
@@ -121,20 +112,13 @@ async def update_user_quota(
         admin_user (UserMe): 当前管理员用户。
 
     Returns:
-        AdminUpdateUserQuotaResponse: 更新后的用户额度信息。
-
-    Raises:
-        HTTPException: 用户未找到(404)或内部服务器错误(500)。
+        UnifiedResponse[AdminUpdateUserQuotaResponse]: 更新后的用户额度信息。
     """
-    try:
-        return await service.update_user_quota_service(db, user_id, data)
-    except ItemNotFoundException as e:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
-    except Exception as e:
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Failed to adjust quota: {e}")
+    result = await service.update_user_quota_service(db, user_id, data)
+    return UnifiedResponse.success(data=result, message="调整用户资源额度成功")
 
 
-@router.get("/users/{user_id}", response_model=AdminUserDetailResponse, summary="4.1.4 获取用户详情")
+@router.get("/users/{user_id}", response_model=UnifiedResponse[AdminUserDetailResponse], summary="4.1.4 获取用户详情")
 async def get_user_detail(
     user_id: int = Path(..., description="目标用户ID"),
     db: Session = Depends(get_db),
@@ -143,23 +127,16 @@ async def get_user_detail(
     login_limit: int = Query(20, ge=0, le=200, description="返回的登录历史条目数量上限"),
 ) -> Any:
     """管理员查看用户详情：额度、项目列表、登录历史。"""
-    try:
-        return await service.get_admin_user_detail_service(
-            db, user_id=user_id, project_limit=project_limit, login_limit=login_limit
-        )
-    except ItemNotFoundException as e:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
-    except Exception as e:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to get user detail: {e}",
-        )
+    result = await service.get_admin_user_detail_service(
+        db, user_id=user_id, project_limit=project_limit, login_limit=login_limit
+    )
+    return UnifiedResponse.success(data=result, message="获取用户详情成功")
 
 # ----------------------------------------------------------------------
 # 4.2. 公告管理
 # ----------------------------------------------------------------------
 
-@router.post("/announcements", response_model=AnnouncementResponse, status_code=status.HTTP_201_CREATED, summary="4.2.1 创建公告")
+@router.post("/announcements", response_model=UnifiedResponse[AnnouncementResponse], summary="4.2.1 创建公告")
 async def create_announcement(
     data: AnnouncementCreateRequest,
     db: Session = Depends(get_db),
@@ -174,18 +151,13 @@ async def create_announcement(
         current_admin (UserMe): 当前管理员用户。
 
     Returns:
-        AnnouncementResponse: 创建后的公告信息。
-
-    Raises:
-        HTTPException: 内部服务器错误(500)。
+        UnifiedResponse[AnnouncementResponse]: 创建后的公告信息。
     """
-    try:
-        return await service.create_announcement_service(db, data, current_admin.user_id)
-    except Exception as e:
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Failed to create announcement: {e}")
+    result = await service.create_announcement_service(db, data, current_admin.user_id)
+    return UnifiedResponse.success(data=result, message="创建公告成功")
 
 
-@router.put("/announcements/{announcement_id}", response_model=AnnouncementResponse, summary="4.2.2 更新公告")
+@router.put("/announcements/{announcement_id}", response_model=UnifiedResponse[AnnouncementResponse], summary="4.2.2 更新公告")
 async def update_announcement(
     # 修正：将 data 移到 announcement_id 之前
     data: AnnouncementUpdateRequest,
@@ -203,25 +175,18 @@ async def update_announcement(
         admin_user (UserMe): 当前管理员用户。
 
     Returns:
-        AnnouncementResponse: 更新后的公告信息。
-
-    Raises:
-        HTTPException: 公告未找到(404)或内部服务器错误(500)。
+        UnifiedResponse[AnnouncementResponse]: 更新后的公告信息。
     """
-    try:
-        return await service.update_announcement_service(db, announcement_id, data)
-    except ItemNotFoundException as e:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Announcement not found.")
-    except Exception as e:
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Failed to update announcement: {e}")
+    result = await service.update_announcement_service(db, announcement_id, data)
+    return UnifiedResponse.success(data=result, message="更新公告成功")
 
 
-@router.delete("/announcements/{announcement_id}", status_code=status.HTTP_204_NO_CONTENT, summary="4.2.3 删除公告")
+@router.delete("/announcements/{announcement_id}", response_model=UnifiedResponse[None], summary="4.2.3 删除公告")
 async def delete_announcement(
     announcement_id: int = Path(..., description="公告ID"),
     db: Session = Depends(get_db),
     admin_user: UserMe = AdminDependency,
-) -> None:
+) -> Any:
     """
     删除指定的公告。
 
@@ -231,24 +196,16 @@ async def delete_announcement(
         admin_user (UserMe): 当前管理员用户。
 
     Returns:
-        None: 无返回内容。
-
-    Raises:
-        HTTPException: 公告未找到(404)或内部服务器错误(500)。
+        UnifiedResponse[None]: 删除结果响应。
     """
-    try:
-        await service.delete_announcement_service(db, announcement_id)
-        return
-    except ItemNotFoundException as e:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Announcement not found.")
-    except Exception as e:
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Failed to delete announcement: {e}")
+    await service.delete_announcement_service(db, announcement_id)
+    return UnifiedResponse.success(message="删除公告成功")
 
 # ----------------------------------------------------------------------
 # 4.3. 管理员状态 / 4.4. 违规记录与统计
 # ----------------------------------------------------------------------
 
-@router.get("/admins", response_model=AdminListResponse, summary="4.3.1 获取管理员列表")
+@router.get("/admins", response_model=UnifiedResponse[PageData[List[AdminListItem]]], summary="4.3.1 获取管理员列表")
 async def get_admin_list(
     db: Session = Depends(get_db),
     admin_user: UserMe = AdminDependency,
@@ -263,18 +220,16 @@ async def get_admin_list(
         pagination (PaginationParams): 分页参数。
 
     Returns:
-        AdminListResponse: 管理员列表响应。
-
-    Raises:
-        HTTPException: 内部服务器错误(500)。
+        UnifiedResponse[PageData[List[AdminListItem]]]: 管理员列表响应。
     """
-    try:
-        return await service.get_admin_list_service(db, pagination.page, pagination.page_size)
-    except Exception as e:
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Failed to fetch admin list: {e}")
+    result = await service.get_admin_list_service(db, pagination.page, pagination.page_size)
+    page_data = PageData(
+        total=result.total, page=result.page, page_size=result.page_size, items=result.items
+    )
+    return UnifiedResponse.success(data=page_data, message="获取管理员列表成功")
 
 
-@router.get("/violations", response_model=ViolationLogListResponse, summary="4.4.2 获取违规记录列表")
+@router.get("/violations", response_model=UnifiedResponse[PageData[List[Any]]], summary="4.4.2 获取违规记录列表")
 async def get_violation_logs(
     db: Session = Depends(get_db),
     admin_user: UserMe = AdminDependency,
@@ -293,20 +248,18 @@ async def get_violation_logs(
         resolution_status (Optional[Literal["pending", "in_progress", "resolved", "ignored"]]): 处理状态筛选。
 
     Returns:
-        ViolationLogListResponse: 违规记录列表响应。
-
-    Raises:
-        HTTPException: 内部服务器错误(500)。
+        UnifiedResponse[PageData[List[Any]]]: 违规记录列表响应。
     """
-    try:
-        return await service.get_violation_logs_service(
-            db, pagination.page, pagination.page_size, risk_level, resolution_status
-        )
-    except Exception as e:
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Failed to fetch violations: {e}")
+    result = await service.get_violation_logs_service(
+        db, pagination.page, pagination.page_size, risk_level, resolution_status
+    )
+    page_data = PageData(
+        total=result.total, page=result.page, page_size=result.page_size, items=result.items
+    )
+    return UnifiedResponse.success(data=page_data, message="获取违规记录列表成功")
 
 
-@router.get("/dashboard/stats", response_model=AdminStatsResponse, summary="4.4.1 获取系统统计看板")
+@router.get("/dashboard/stats", response_model=UnifiedResponse[AdminStatsResponse], summary="4.4.1 获取系统统计看板")
 async def get_system_stats(
     db: Session = Depends(get_db),
     admin_user: UserMe = AdminDependency,
@@ -319,12 +272,7 @@ async def get_system_stats(
         admin_user (UserMe): 当前管理员用户。
 
     Returns:
-        AdminStatsResponse: 系统统计响应。
-
-    Raises:
-        HTTPException: 内部服务器错误(500)。
+        UnifiedResponse[AdminStatsResponse]: 系统统计响应。
     """
-    try:
-        return await service.get_admin_stats_service(db)
-    except Exception as e:
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Failed to fetch stats: {e}")
+    result = await service.get_admin_stats_service(db)
+    return UnifiedResponse.success(data=result, message="获取系统统计数据成功")

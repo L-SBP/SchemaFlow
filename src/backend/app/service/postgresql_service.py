@@ -218,7 +218,7 @@ async def create_postgresql_user_and_setup(
 
         # 3. 初始化用户引擎
         if not await init_user_engine(db_username, db_password, db_name, instance_id):
-            raise Exception("Failed to initialize user engine")
+            raise Exception("无法初始化用户引擎")
 
         log.info(f"[PostgreSQL] User setup completed for {db_username}")
 
@@ -338,7 +338,7 @@ async def execute_postgres_sql_with_user_check(
     try:
         # 1. 确保用户和引擎已准备好
         if not await ensure_user_and_engine(instance_obj.db_name, instance_obj.db_username, instance_obj.db_password, instance_obj.instance_id):
-            raise Exception(f"Failed to ensure user {instance_obj.db_username} and engine for instance {instance_obj.instance_id}")
+            raise Exception(f"无法确保用户 {instance_obj.db_username} 和实例 {instance_obj.instance_id} 的引擎")
 
         # 2. 执行 SQL
         if sql_type == "SELECT":

@@ -60,7 +60,7 @@ export interface ChatSession {
   id: string;
   name: string;
   messages: Message[];
-  updatedAt: number;
+  updated_at: number;
 }
 
 export interface Announcement {
@@ -77,18 +77,18 @@ export type ReportType = 'bar' | 'line' | 'pie' | 'scatter';
 
 export interface Report {
   id: string;
-  projectId: string;
+  project_id: string;
   name: string;
   type: ReportType;
   description: string;
   data: any[];
-  chartConfig: {
-    xAxisKey: string;
-    yAxisKey: string;
+  chart_config: {
+    x_axis_key: string;
+    y_axis_key: string;
   };
-  sourceQueryId: string;
-  sourceQueryText: string;
-  updatedAt: string;
+  source_query_id: string;
+  source_query_text: string;
+  updated_at: string;
 }
 
 // 旧的 RiskEvent 接口，保留以防有遗留引用，但主要使用 ViolationLogListItem
@@ -102,11 +102,64 @@ export interface RiskEvent {
   status: 'pending' | 'blocked' | 'ignored';
 }
 
-export interface ApiResponse<T = any> {
+// Unified Response Structure (replacing ApiResponse)
+export interface UnifiedResponse<T = any> {
   code: number;
   message: string;
-  data: T;
+  data: T | null;
 }
+
+// Pagination Data Structure
+export interface PageData<T = any> {
+  total: number;
+  page: number;
+  page_size: number;
+  items: T;
+}
+
+// Business Status Code Enumeration
+export enum BusinessCode {
+  SUCCESS = 0,
+  VALIDATION_ERROR = 10000,
+  BUSINESS_ERROR = 20000,
+  PERMISSION_ERROR = 30000,
+  SYSTEM_ERROR = 50000
+}
+
+// Business Error Class
+export class BusinessError extends Error {
+  constructor(
+    public code: number,
+    message: string,
+    public details?: any
+  ) {
+    super(message);
+    this.name = 'BusinessError';
+  }
+
+  isValidationError(): boolean {
+    return this.code >= 10000 && this.code < 20000;
+  }
+
+  isBusinessError(): boolean {
+    return this.code >= 20000 && this.code < 30000;
+  }
+
+  isPermissionError(): boolean {
+    return this.code >= 30000 && this.code < 40000;
+  }
+
+  isSystemError(): boolean {
+    return this.code >= 50000 || (this.code >= 40000 && this.code < 50000);
+  }
+
+  isHttpError(): boolean {
+    return this.code >= 400 && this.code < 600;
+  }
+}
+
+// Legacy alias for backward compatibility
+export interface ApiResponse<T = any> extends UnifiedResponse<T> { }
 
 export interface CreateProjectParams {
   name: string;
@@ -141,7 +194,6 @@ export interface ProjectDTO {
   created_at: string;
   updated_at?: string;
   creation_stage?: CreationStageEnum;
-  progress_percentage?: number;
   schema_definition?: Record<string, any>;
   ddl_statement?: string;
   er_diagram_code?: string;
@@ -287,10 +339,50 @@ export interface ChatRequest {
 
 export interface ChatResponse {
   message_id: number;
+  session_id?: number;
+  message_type: 'user' | 'assistant';
   content: string;
-  message_type: 'user' | 'assistant' | 'system';
-  sql_text?: string | null;
-  sql_type?: string;
-  requires_confirmation: boolean;
-  data?: any[] | null;
+  sql_text?: string;              // 与后端一致
+  sql_type: string;               // 新增字段
+  requires_confirmation: boolean; // 新增字段
+  data?: Array<Record<string, any>>; // 与后端一致，替代query_result
+  created_at?: string;
+}
+
+// Session API Types
+export interface SessionItem {
+  session_id: number;
+  session_name: string;
+  project_id: number;
+  created_at: string;
+  last_activity: string | null;
+}
+
+// User API Types
+export interface UserMe {
+  user_id: number;
+  username: string;
+  email: string;
+  status: 'normal' | 'suspended' | 'banned';
+  used_databases: number;
+  max_databases: number;
+  avatar_url: string | null;
+  is_admin: boolean;
+  last_login_at: string | null;
+  created_at: string;
+}
+
+export interface LoginData {
+  access_token: string;
+  token_type: string;
+  user: UserMe;
+}
+
+export interface LoginHistoryItem {
+  login_id: number;
+  login_time: string;
+  logout_time: string | null;
+  ip_address: string;
+  user_agent: string | null;
+  login_status: 'success' | 'failed' | 'expired' | 'forced_logout';
 }

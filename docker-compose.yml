@@ -94,8 +94,8 @@ services:
       - DB__PASSWORD=secure_2025
       - DB__DATABASE=auto_db_deployment
 
-      # 覆盖 config.yaml 中的 redis 部分
-      - REDIS__HOST=redis
+      # 覆盖 config.yaml 中的 redis_client 部分
+      - REDIS__HOST=redis_client
       - REDIS__PORT=6379
 
       # 覆盖 config.yaml 中的 app 部分
@@ -105,7 +105,7 @@ services:
       - POSTGRES_SERVER=postgres-meta
       - POSTGRES_USER=admin
       - POSTGRES_PASSWORD=secure_2025
-      - REDIS_HOST=redis
+      - REDIS_HOST=redis_client
     command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
     depends_on:
       - postgres-meta
@@ -126,11 +126,11 @@ services:
       - DB__USERNAME=admin
       - DB__PASSWORD=secure_2025
       - DB__DATABASE=auto_db_deployment
-      - REDIS__HOST=redis
+      - REDIS__HOST=redis_client
       - REDIS__PORT=6379
       # 显式覆盖 Celery Broker URL (以防代码没读配置)
-      - CELERY_BROKER_URL=redis://redis:6379/0
-      - CELERY_RESULT_BACKEND=redis://redis:6379/0
+      - CELERY_BROKER_URL=redis_client://redis_client:6379/0
+      - CELERY_RESULT_BACKEND=redis_client://redis_client:6379/0
     # 启动命令
     command: celery -A app.celery_app worker --loglevel=info
     depends_on:
