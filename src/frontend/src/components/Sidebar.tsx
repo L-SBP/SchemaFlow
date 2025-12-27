@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { LayoutDashboard, BarChart2, Users, Book, Bell, X, PanelLeftClose, PanelLeftOpen, User as UserIcon, Settings, LogOut, Database } from 'lucide-react';
+import { LayoutDashboard, BarChart2, Users, Book, Bell, X, PanelLeftClose, PanelLeftOpen, User as UserIcon, Settings, LogOut, Database, Bot } from 'lucide-react';
 import { UserRole } from '../types'; // 修复: 移除 .ts 后缀
 
 /**
@@ -66,6 +66,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ role, user, selectedProject, a
     const menuItems = role === UserRole.ADMIN ? [
         { id: 'admin_users', label: '用户管理', icon: <Users size={18} /> },
         { id: 'admin_announcements', label: '公告管理', icon: <Bell size={18} /> },
+        { id: 'admin_ai_models', label: 'AI模型配置', icon: <Bot size={18} /> },
         { id: 'admin_status', label: '系统状态', icon: <LayoutDashboard size={18} /> },
     ] : [
         { id: 'dashboard', label: '项目概览', icon: <LayoutDashboard size={18} /> },

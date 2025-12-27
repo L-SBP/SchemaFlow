@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Project, Message, QueryResult, ChatSession, ChatResponse } from '../types';
+import { Project, Message, QueryResult, ChatSession, ChatResponse, AIModelOption } from '../types';
 import { Button, message as GlobalMessage, Modal, ConfirmDialog } from '../components/UI';
 import { Send, Plus, MessageSquare, Edit2, Trash2, Check, X, ChevronLeft, Loader2, Sparkles, AlertTriangle, Play, Ban, Table as TableIcon, Info, Bot, Database, PanelLeftClose, PanelLeftOpen, PanelRightClose, PanelRightOpen } from 'lucide-react';
 import { sessionApi } from '../api/session';
@@ -343,7 +343,8 @@ export const Workspace: React.FC<WorkspaceProps> = ({ project, onBack }) => {
   const [inputValue, setInputValue] = useState('');
   const [isSending, setIsSending] = useState(false); // 发送中/思考中
   const [isTyping, setIsTyping] = useState(false);   // 打字机效果进行中
-  const [selectedModel, setSelectedModel] = useState<string>('xiyan-sql'); // 模型选择
+  const [selectedModel, setSelectedModel] = useState<string>(''); // 模型选择
+  const [availableModels, setAvailableModels] = useState<AIModelOption[]>([]); // 可用模型列表
 
   const messagesContainerRef = useRef<HTMLDivElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -360,6 +361,26 @@ export const Workspace: React.FC<WorkspaceProps> = ({ project, onBack }) => {
   const scrollToBottom = (behavior: ScrollBehavior) => {
     messagesEndRef.current?.scrollIntoView({ behavior });
   };
+
+  // 加载可用的 AI 模型列表
+  useEffect(() => {
+    const loadModels = async () => {
+      try {
+        const res = await sessionApi.getAIModelOptions();
+        if (res.items && res.items.length > 0) {
+          setAvailableModels(res.items);
+          // 默认选择第一个模型
+          setSelectedModel(prev => prev || res.items[0].model_name);
+        }
+      } catch (error) {
+        console.error('Failed to load AI models:', error);
+        // 如果加载失败，使用后备选项
+        setAvailableModels([{ model_name: '默认模型', model_type: 'general_llm' }]);
+        setSelectedModel(prev => prev || '默认模型');
+      }
+    };
+    loadModels();
+  }, []);
 
   useEffect(() => {
     // 切换会话时，重置首次滚动标记
@@ -1057,9 +1078,11 @@ export const Workspace: React.FC<WorkspaceProps> = ({ project, onBack }) => {
                       }`}
                     title={`当前模型: ${selectedModel}`}
                   >
-                    <option value="xiyan-sql" title="xiyan-sql">xiyan-sql</option>
-                    <option value="deepseek-v3" title="DeepSeek V3.1">DeepSeek V3.1</option>
-                    <option value="my-finetuned-sql" title="my-finetuned-sql">my-finetuned-sql</option>
+                    {availableModels.map((model) => (
+                      <option key={model.model_name} value={model.model_name} title={model.model_name}>
+                        {model.model_name}
+                      </option>
+                    ))}
                   </select>
                 </div>
 

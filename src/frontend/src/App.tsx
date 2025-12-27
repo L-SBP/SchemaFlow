@@ -12,6 +12,7 @@ import { Reports } from './pages/Reports.tsx';
 import { Glossary } from './pages/Glossary.tsx';
 import { Profile } from './pages/Profile.tsx';
 import { AdminStatus } from './pages/AdminStatus.tsx';
+import { AdminAIModels } from './pages/AdminAIModels.tsx';
 import { Announcements } from './pages/Announcements.tsx';
 import { UserRole, Project, User } from './types.ts';
 import { authApi } from './api/auth.ts';
@@ -180,6 +181,7 @@ const App: React.FC = () => {
             />
           ) : <AdminPanel onViewUser={handleViewUser} />;
         case 'admin_announcements': return <AdminAnnouncements />;
+        case 'admin_ai_models': return <AdminAIModels />;
         case 'admin_status': return <AdminStatus />;
         case 'profile': return <Profile user={currentUser} onLogout={handleLogout} />;
         default: return <AdminPanel onViewUser={handleViewUser} />;
