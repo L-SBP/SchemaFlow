@@ -47,6 +47,9 @@ from models.message import Message as MessageModel
 from models.project import Project as ProjectModel
 from models.domain_knowledge import DomainKnowledge
 
+# RAG 服务导入
+from service.rag_service import rag_service, retrieve_chat_context, index_new_message
+
 
 # =========================================================
 # 1. 模型配置注册表（后备配置，当数据库无配置时使用）
@@ -214,6 +217,100 @@ async def _update_session_model(
     if session_obj.current_model != new_model:
         session_obj.current_model = new_model
         db.add(session_obj)
+
+
+# =========================================================
+# 3.1 RAG 结果转换辅助函数
+# =========================================================
+
+async def _convert_rag_history_to_messages(
+    db: AsyncSession,
+    rag_results: List[Dict[str, Any]]
+) -> List[MessageModel]:
+    """
+    将 RAG 检索的历史结果转换为 MessageModel 兼容格式。
+    
+    Args:
+        db: 数据库会话
+        rag_results: RAG 检索结果列表
+        
+    Returns:
+        List[MessageModel]: 消息列表
+    """
+    if not rag_results:
+        return []
+    
+    # 从 RAG 结果中提取 message_id
+    message_ids = []
+    for result in rag_results:
+        metadata = result.get("metadata", {})
+        msg_id = metadata.get("message_id")
+        if msg_id:
+            message_ids.append(msg_id)
+    
+    if not message_ids:
+        return []
+    
+    # 从数据库获取完整的消息对象
+    from sqlalchemy import select
+    stmt = select(MessageModel).where(MessageModel.message_id.in_(message_ids))
+    result = await db.execute(stmt)
+    messages = result.scalars().all()
+    
+    # 按 RAG 相关性顺序排序（保持检索顺序）
+    message_map = {msg.message_id: msg for msg in messages}
+    ordered_messages = []
+    for result in rag_results:
+        msg_id = result.get("metadata", {}).get("message_id")
+        if msg_id and msg_id in message_map:
+            ordered_messages.append(message_map[msg_id])
+    
+    return ordered_messages
+
+
+async def _convert_rag_knowledge_to_domain(
+    db: AsyncSession,
+    rag_results: List[Dict[str, Any]]
+) -> List[DomainKnowledge]:
+    """
+    将 RAG 检索的知识结果转换为 DomainKnowledge 兼容格式。
+    
+    Args:
+        db: 数据库会话
+        rag_results: RAG 检索结果列表
+        
+    Returns:
+        List[DomainKnowledge]: 领域知识列表
+    """
+    if not rag_results:
+        return []
+    
+    # 从 RAG 结果中提取 knowledge_id
+    knowledge_ids = []
+    for result in rag_results:
+        metadata = result.get("metadata", {})
+        k_id = metadata.get("knowledge_id")
+        if k_id:
+            knowledge_ids.append(k_id)
+    
+    if not knowledge_ids:
+        return []
+    
+    # 从数据库获取完整的知识对象
+    from sqlalchemy import select
+    stmt = select(DomainKnowledge).where(DomainKnowledge.knowledge_id.in_(knowledge_ids))
+    result = await db.execute(stmt)
+    knowledge_items = result.scalars().all()
+    
+    # 按 RAG 相关性顺序排序
+    knowledge_map = {k.knowledge_id: k for k in knowledge_items}
+    ordered_knowledge = []
+    for result in rag_results:
+        k_id = result.get("metadata", {}).get("knowledge_id")
+        if k_id and k_id in knowledge_map:
+            ordered_knowledge.append(knowledge_map[k_id])
+    
+    return ordered_knowledge
 
 
 # =========================================================
@@ -433,7 +530,7 @@ async def _execute_sql_by_type(sql: str, sql_type: str, instance: Any, user_id: 
 
 
 # =========================================================
-# 6. 消息持久化（独立事务）
+# 6. 消息持久化（独立事务）+ RAG 索引
 # =========================================================
 
 async def _save_user_message(
@@ -441,8 +538,26 @@ async def _save_user_message(
     session_id: int,
     content: str
 ) -> MessageModel:
-    """保存用户消息（独立事务）。"""
-    return await crud_message.create_message(db, session_id, content, role="user")
+    """保存用户消息（独立事务），并异步触发向量索引。"""
+    message = await crud_message.create_message(db, session_id, content, role="user")
+    
+    # 异步触发消息向量索引（不阻塞主流程）
+    try:
+        import asyncio
+        asyncio.create_task(
+            index_new_message(
+                session_id=session_id,
+                message_id=message.message_id,
+                content=content,
+                role="user"
+            )
+        )
+    except Exception as e:
+        # 索引失败不影响主流程
+        log.warning(f"Failed to trigger message indexing: {e}")
+    
+    return message
+
 
 
 async def _save_ai_response(
@@ -455,7 +570,7 @@ async def _save_ai_response(
     data: List[Dict]
 ) -> Tuple[MessageModel, AIGeneratedStatement]:
     """
-    保存 AI 响应和执行结果（独立事务）。
+    保存 AI 响应和执行结果（独立事务），并异步触发向量索引。
     """
     # 确保sql_text是干净的，不包含前缀
     clean_sql_text = sql_text
@@ -474,6 +589,20 @@ async def _save_ai_response(
     # 构建回复内容，确保只有一个前缀
     reply_content = f"已生成SQL语句：\n{clean_sql_text}"
     ai_message = await crud_message.create_message(db, session_id, reply_content, role="assistant")
+    
+    # 异步触发 AI 回复的向量索引
+    try:
+        import asyncio
+        asyncio.create_task(
+            index_new_message(
+                session_id=session_id,
+                message_id=ai_message.message_id,
+                content=reply_content,
+                role="assistant"
+            )
+        )
+    except Exception as e:
+        log.warning(f"Failed to trigger AI response indexing: {e}")
     
     if requires_confirm:
         ai_message.requires_confirmation = True
@@ -533,32 +662,47 @@ async def process_chat(
     await _update_session_model(db, session_obj, final_model_key)
     log.info("Session {} using model: {}", session_id, final_model_key)
     
-    # 获取历史和领域知识
-    # TODO: [RAG] 历史对话检索优化
-    # 当前实现：简单获取最近 20 条消息
-    # 后续优化：
+    # 获取历史和领域知识（使用 RAG 检索优化）
+    # RAG 优化已实现：
     #   1. 将历史消息向量化存储（Embedding）
     #   2. 根据当前 user_input 进行语义相似度检索
     #   3. 只召回与当前问题相关的历史对话（Top-K）
-    #   4. 考虑时间衰减因子，近期对话权重更高
-    # TODO: [Celery] 向量索引后台更新
-    #   1. 消息保存后，异步触发 Embedding 生成任务
-    #   2. 使用 Celery 任务将向量写入向量数据库（Milvus/Qdrant）
-    #   3. 支持批量向量化，减少 API 调用次数
-    history_context = await crud_message.get_recent_messages(db, session_id, limit=20)
+    #   4. 领域知识也通过向量检索获取相关条目
     
-    # TODO: [RAG] 领域知识检索优化
-    # 当前实现：全量获取项目下所有领域知识
-    # 后续优化：
-    #   1. 将领域知识（term + definition）向量化存储
-    #   2. 根据 user_input 语义检索相关术语（Top-K）
-    #   3. 避免 Context 溢出，只注入相关知识
-    #   4. 支持知识库的增量更新和索引重建
-    # TODO: [Celery] 知识库向量化后台任务
-    #   1. 知识条目创建/更新时，异步触发 Embedding 生成
-    #   2. 支持批量导入知识时的后台向量化
-    #   3. 知识库索引重建任务（切换 Embedding 模型时）
-    knowledge_context = await crud_knowledge.get_all_by_project(db, project_id)
+    # 尝试使用 RAG 检索，失败时降级为传统方式
+    history_context = []
+    knowledge_context = []
+    
+    try:
+        # 使用 RAG 检索相关上下文
+        rag_context = await retrieve_chat_context(
+            query=user_input,
+            project_id=project_id,
+            session_id=session_id,
+            history_top_k=5,
+            knowledge_top_k=5
+        )
+        
+        # 将 RAG 检索结果转换为兼容格式
+        # 历史对话：从向量检索结果构建 MessageModel 兼容对象
+        if rag_context.relevant_history:
+            history_context = await _convert_rag_history_to_messages(
+                db, rag_context.relevant_history
+            )
+        
+        # 领域知识：从向量检索结果构建 DomainKnowledge 兼容对象  
+        if rag_context.relevant_knowledge:
+            knowledge_context = await _convert_rag_knowledge_to_domain(
+                db, rag_context.relevant_knowledge
+            )
+        
+        log.info(f"RAG retrieved {len(history_context)} history, {len(knowledge_context)} knowledge")
+        
+    except Exception as e:
+        # RAG 检索失败，降级为传统方式
+        log.warning(f"RAG retrieval failed, falling back to traditional method: {e}")
+        history_context = await crud_message.get_recent_messages(db, session_id, limit=20)
+        knowledge_context = await crud_knowledge.get_all_by_project(db, project_id)
     
     # 保存用户消息
     await _save_user_message(db, session_id, user_input)

@@ -150,6 +150,32 @@ class AIConfig(BaseSettings):
     modelscope_api_key: str = "dummy_key"
     mermaid_api_key: str = ""
 
+
+class ChromaConfig(BaseSettings):
+    """
+    ChromaDB 向量数据库配置
+    """
+    # ChromaDB 服务主机（Docker 模式下为服务名，本地开发为 localhost）
+    host: str = "localhost"
+    # ChromaDB 服务端口
+    port: int = 8100
+    # 是否使用 HTTP 客户端模式（True: 连接远程服务，False: 内嵌模式）
+    use_http_client: bool = True
+    # 内嵌模式下的持久化目录（相对于项目根目录）
+    persist_directory: str = "data/chroma_db"
+
+
+class EmbeddingConfig(BaseSettings):
+    """
+    Embedding 服务配置（阿里云百炼）
+    """
+    # API Key（在 config.yaml 中配置，本地开发可使用环境变量 EMBEDDING_API_KEY）
+    api_key: str = ""
+    base_url: str = "https://dashscope.aliyuncs.com/compatible-mode/v1"
+    model: str = "text-embedding-v4"
+    dimensions: int = 1024
+
+
 class MySQLConfig(BaseSettings):
     """
     MySQL数据库配置
@@ -288,6 +314,10 @@ class BaseConfig(BaseSettings):
     jwt: JWTConfig
     # SMTP配置
     smtp: SMTP
+    # ChromaDB 向量数据库配置
+    chroma: ChromaConfig = ChromaConfig()
+    # Embedding 服务配置
+    embedding: EmbeddingConfig = EmbeddingConfig()
 
     # 前端基础地址（用于拼接邮件内的密码重置链接）
     frontend_base_url: str = "http://localhost:5173/"

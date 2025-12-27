@@ -22,6 +22,10 @@ from schema import knowledge as schemas
 from core.exceptions import ItemNotFoundException, ValidationException, \
     OperationNotPermittedException
 from core.config import config # 用于获取base_url
+from core.log import log
+
+# RAG 服务导入
+from service.rag_service import rag_service
 
 # 导出目录（确保存在）
 EXPORT_DIR = "static/exports"
@@ -64,6 +68,21 @@ async def create_knowledge_service(
 
     # 3. 创建
     new_term = await crud_knowledge.create(db, project_id=project_id, **data.model_dump())
+    
+    # 4. 异步触发向量索引（不阻塞主流程）
+    try:
+        import asyncio
+        asyncio.create_task(
+            rag_service.index_knowledge(
+                project_id=project_id,
+                knowledge_id=new_term.knowledge_id,
+                term=new_term.term,
+                definition=new_term.definition
+            )
+        )
+    except Exception as e:
+        log.warning(f"Failed to trigger knowledge indexing: {e}")
+    
     return schemas.KnowledgeResponse.model_validate(new_term)
 
 # ----------------------------------------------------------------------
@@ -110,6 +129,21 @@ async def update_knowledge_service(
 
     # 4. 更新
     updated_obj = await crud_knowledge.update(db, db_obj, update_data.model_dump(exclude_unset=True))
+    
+    # 5. 异步更新向量索引
+    try:
+        import asyncio
+        asyncio.create_task(
+            rag_service.index_knowledge(
+                project_id=project_id,
+                knowledge_id=updated_obj.knowledge_id,
+                term=updated_obj.term,
+                definition=updated_obj.definition
+            )
+        )
+    except Exception as e:
+        log.warning(f"Failed to trigger knowledge re-indexing: {e}")
+    
     return schemas.KnowledgeResponse.model_validate(updated_obj)
 
 
@@ -143,6 +177,17 @@ async def batch_delete_knowledge_service(
         raise OperationNotPermittedException("访问被拒绝")
 
     count = await crud_knowledge.remove_multi(db, project_id, knowledge_ids)
+    
+    # 异步删除向量索引
+    try:
+        import asyncio
+        for k_id in knowledge_ids:
+            asyncio.create_task(
+                rag_service.delete_knowledge_item(k_id)
+            )
+    except Exception as e:
+        log.warning(f"Failed to trigger knowledge vector deletion: {e}")
+    
     return count
 
 

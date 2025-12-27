@@ -38,6 +38,7 @@ from core.utils import generate_meaningful_db_name
 
 from service.ai_service import AIService
 from service.db_executor_service import DBExecutorService
+from service.rag_service import rag_service
 
 # Celery 任务导入
 from tasks.ai_generation_tasks import (
@@ -380,7 +381,7 @@ async def _update_deployment_success(
     final_ddl: str,
     confirmed_schema: Optional[str]
 ) -> Any:
-    """更新部署成功后的状态。"""
+    """更新部署成功后的状态，并异步触发 DDL 向量化。"""
     update_data = {
         "project_status": "active",
         "creation_stage": schemas.CreationStageEnum.COMPLETED.value,
@@ -394,6 +395,19 @@ async def _update_deployment_success(
 
     await crud_project.update(db, project.project_id, **update_data)
     await crud_database_instance.update(db, instance, status='active')
+    
+    # 异步触发 DDL 向量化（不阻塞主流程）
+    try:
+        asyncio.create_task(
+            rag_service.index_ddl(
+                project_id=project.project_id,
+                ddl_text=final_ddl
+            )
+        )
+        log.info(f"[RAG] Triggered DDL indexing for project {project.project_id}")
+    except Exception as e:
+        # 向量化失败不影响主流程
+        log.warning(f"[RAG] Failed to trigger DDL indexing: {e}")
     
     return await crud_project.get(db, project.project_id)
 
