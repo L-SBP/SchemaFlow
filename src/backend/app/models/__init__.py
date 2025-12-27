@@ -14,6 +14,7 @@ from .user_account import UserAccount
 from .user_login_history import UserLoginHistory
 from .project import Project
 from .database_instance import DatabaseInstance
+from .ai_model_config import AIModelConfig
 
 # 2. Session（很多表依赖它，如 Message, OperationLog）
 from .session import Session

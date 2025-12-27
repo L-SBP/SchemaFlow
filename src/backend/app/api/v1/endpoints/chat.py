@@ -122,3 +122,40 @@ async def confirm_message_execution(
         return UnifiedResponse.success(data=result, message="SQL 执行失败")
     else:
         return UnifiedResponse.success(data=result, message="SQL 执行成功")
+
+
+# ----------------------------------------------------------------------
+# AI 模型选项（供用户选择模型使用）
+# ----------------------------------------------------------------------
+
+from schema.ai_model_config import AIModelOption, AIModelOptionsResponse
+from crud.crud_ai_model_config import crud_ai_model_config
+
+
+@router.get("/ai-models/options", response_model=UnifiedResponse[AIModelOptionsResponse])
+async def get_ai_model_options(
+    db: AsyncSession = Depends(get_db),
+    current_user: UserMe = Depends(get_current_active_user)
+):
+    """
+    获取可用的 AI 模型选项列表（供前端下拉框使用）。
+
+    Args:
+        db (AsyncSession): 数据库会话。
+        current_user (UserMe): 当前登录用户。
+
+    Returns:
+        UnifiedResponse[AIModelOptionsResponse]: 模型选项列表。
+    """
+    configs = await crud_ai_model_config.get_all(db)
+    
+    items = [
+        AIModelOption(
+            model_name=config.model_name,
+            model_type=config.model_type
+        )
+        for config in configs
+    ]
+    
+    result = AIModelOptionsResponse(items=items)
+    return UnifiedResponse.success(data=result, message="获取 AI 模型选项成功")

@@ -19,6 +19,7 @@ from schema.unified_response import UnifiedResponse, PageData
 # 导入依赖
 from api.v1.deps import get_db, get_current_admin_user
 from core.exceptions import ItemNotFoundException
+from core.exceptions import ValidationException
 
 router = APIRouter()
 
@@ -276,3 +277,164 @@ async def get_system_stats(
     """
     result = await service.get_admin_stats_service(db)
     return UnifiedResponse.success(data=result, message="获取系统统计数据成功")
+
+
+# ----------------------------------------------------------------------
+# 4.5. AI 模型配置管理
+# ----------------------------------------------------------------------
+
+from schema.ai_model_config import (
+    AIModelConfigCreate, AIModelConfigUpdate, AIModelConfigResponse,
+    AIModelConfigDetailResponse, AIModelConfigListResponse, AIModelOptionsResponse
+)
+from crud.crud_ai_model_config import crud_ai_model_config
+
+
+@router.get("/ai-models", response_model=UnifiedResponse[AIModelConfigListResponse], summary="4.5.1 获取 AI 模型配置列表")
+async def get_ai_model_configs(
+    db: Session = Depends(get_db),
+    admin_user: UserMe = AdminDependency,
+    page: int = Query(1, ge=1, description="页码"),
+    page_size: int = Query(20, ge=1, le=100, description="每页大小"),
+) -> Any:
+    """
+    获取 AI 模型配置列表。
+
+    Args:
+        db (Session): 数据库会话。
+        admin_user (UserMe): 当前管理员用户。
+        page (int): 页码。
+        page_size (int): 每页大小。
+
+    Returns:
+        UnifiedResponse[AIModelConfigListResponse]: 模型配置列表响应。
+    """
+    skip = (page - 1) * page_size
+    configs = await crud_ai_model_config.get_all(db, skip=skip, limit=page_size)
+    total = await crud_ai_model_config.get_count(db)
+    
+    items = [AIModelConfigResponse.model_validate(config) for config in configs]
+    result = AIModelConfigListResponse(total=total, items=items)
+    return UnifiedResponse.success(data=result, message="获取 AI 模型配置列表成功")
+
+
+@router.get("/ai-models/{config_id}", response_model=UnifiedResponse[AIModelConfigDetailResponse], summary="4.5.2 获取 AI 模型配置详情")
+async def get_ai_model_config(
+    config_id: int = Path(..., description="配置ID"),
+    db: Session = Depends(get_db),
+    admin_user: UserMe = AdminDependency,
+) -> Any:
+    """
+    获取指定 AI 模型配置的详细信息。
+
+    Args:
+        config_id (int): 配置ID。
+        db (Session): 数据库会话。
+        admin_user (UserMe): 当前管理员用户。
+
+    Returns:
+        UnifiedResponse[AIModelConfigDetailResponse]: 模型配置详情响应。
+    """
+    config = await crud_ai_model_config.get(db, config_id)
+    if not config:
+        raise ItemNotFoundException("AI 模型配置")
+    
+    # 脱敏 API Key：只显示前4位和后4位
+    api_key = config.api_key
+    if len(api_key) > 8:
+        api_key_masked = api_key[:4] + "*" * (len(api_key) - 8) + api_key[-4:]
+    else:
+        api_key_masked = "*" * len(api_key)
+    
+    result = AIModelConfigDetailResponse(
+        config_id=config.config_id,
+        model_name=config.model_name,
+        api_url=config.api_url,
+        model_id=config.model_id,
+        model_type=config.model_type,
+        created_at=config.created_at,
+        updated_at=config.updated_at,
+        api_key_masked=api_key_masked
+    )
+    return UnifiedResponse.success(data=result, message="获取 AI 模型配置详情成功")
+
+
+@router.post("/ai-models", response_model=UnifiedResponse[AIModelConfigResponse], summary="4.5.3 创建 AI 模型配置")
+async def create_ai_model_config(
+    data: AIModelConfigCreate,
+    db: Session = Depends(get_db),
+    admin_user: UserMe = AdminDependency,
+) -> Any:
+    """
+    创建新的 AI 模型配置。
+
+    Args:
+        data (AIModelConfigCreate): 创建请求数据。
+        db (Session): 数据库会话。
+        admin_user (UserMe): 当前管理员用户。
+
+    Returns:
+        UnifiedResponse[AIModelConfigResponse]: 创建的模型配置响应。
+    """
+    # 检查 model_name 是否已存在
+    if await crud_ai_model_config.check_name_exists(db, data.model_name):
+        raise ValidationException(f"模型名称 '{data.model_name}' 已存在")
+    
+    config = await crud_ai_model_config.create(db, data)
+    result = AIModelConfigResponse.model_validate(config)
+    return UnifiedResponse.success(data=result, message="创建 AI 模型配置成功")
+
+
+@router.put("/ai-models/{config_id}", response_model=UnifiedResponse[AIModelConfigResponse], summary="4.5.4 更新 AI 模型配置")
+async def update_ai_model_config(
+    data: AIModelConfigUpdate,
+    config_id: int = Path(..., description="配置ID"),
+    db: Session = Depends(get_db),
+    admin_user: UserMe = AdminDependency,
+) -> Any:
+    """
+    更新指定的 AI 模型配置。
+
+    Args:
+        data (AIModelConfigUpdate): 更新请求数据。
+        config_id (int): 配置ID。
+        db (Session): 数据库会话。
+        admin_user (UserMe): 当前管理员用户。
+
+    Returns:
+        UnifiedResponse[AIModelConfigResponse]: 更新后的模型配置响应。
+    """
+    # 检查配置是否存在
+    existing = await crud_ai_model_config.get(db, config_id)
+    if not existing:
+        raise ItemNotFoundException("AI 模型配置")
+    
+    config = await crud_ai_model_config.update(db, config_id, data)
+    result = AIModelConfigResponse.model_validate(config)
+    return UnifiedResponse.success(data=result, message="更新 AI 模型配置成功")
+
+
+@router.delete("/ai-models/{config_id}", response_model=UnifiedResponse[None], summary="4.5.5 删除 AI 模型配置")
+async def delete_ai_model_config(
+    config_id: int = Path(..., description="配置ID"),
+    db: Session = Depends(get_db),
+    admin_user: UserMe = AdminDependency,
+) -> Any:
+    """
+    删除指定的 AI 模型配置。
+
+    Args:
+        config_id (int): 配置ID。
+        db (Session): 数据库会话。
+        admin_user (UserMe): 当前管理员用户。
+
+    Returns:
+        UnifiedResponse[None]: 删除成功响应。
+    """
+    # 检查配置是否存在
+    existing = await crud_ai_model_config.get(db, config_id)
+    if not existing:
+        raise ItemNotFoundException("AI 模型配置")
+    
+    await crud_ai_model_config.delete(db, config_id)
+    return UnifiedResponse.success(message="删除 AI 模型配置成功")
