@@ -114,7 +114,7 @@ async def confirm_message_execution(
     db: AsyncSession = Depends(get_db),
     current_user: UserMe = Depends(get_current_active_user)
 ):
-    log.info(f"User {current_user.user_id} confirming message {message_id}")
+    log.info("User {} confirming message {}", current_user.user_id, message_id)
     result = await confirm_and_execute_sql(db, message_id, current_user.user_id)
     
     # 根据执行结果返回不同的消息

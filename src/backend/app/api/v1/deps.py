@@ -1,7 +1,8 @@
 # backend/app/api/v1/deps.py
 
-from fastapi import Depends, HTTPException, status
+from fastapi import Depends
 from sqlalchemy.ext.asyncio import AsyncSession
+from core.exceptions import ForbiddenException, ItemNotFoundException
 from core.deps import get_db, oauth2_scheme # 从 core.deps 导入 oauth2_scheme
 from core.auth import decode_jwt_token # 导入刚才纯净版的工具函数
 from crud.crud_user_account import crud_user_account
@@ -21,7 +22,7 @@ async def get_current_user_id(token: str = Depends(get_token_str)) -> int:
     if redis:
         is_valid = await redis.get(redis_key_manager.get_token_key(token))
         if not is_valid:
-            raise HTTPException(status_code=401, detail="令牌已被撤销")
+            raise ForbiddenException(message="令牌已被撤销")
     
     # 解码
     return decode_jwt_token(token)
@@ -33,9 +34,9 @@ async def get_current_active_user(
 ) -> UserMe:
     user_orm = await crud_user_account.get(db, user_id)
     if not user_orm:
-        raise HTTPException(status_code=404, detail="用户未找到")
+        raise ItemNotFoundException(message="用户未找到")
     if user_orm.status != "normal":
-        raise HTTPException(status_code=403, detail="用户未激活")
+        raise ForbiddenException(message="用户未激活")
     return UserMe.model_validate(user_orm)
 
 
@@ -45,8 +46,5 @@ async def get_current_admin_user(user: UserMe = Depends(get_current_active_user)
     """
     # 假设 UserMe DTO (或底层的 ORM) 包含 is_admin 字段
     if not user.is_admin:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="操作禁止：需要管理员权限"
-        )
+        raise ForbiddenException(message="操作禁止：需要管理员权限")
     return user

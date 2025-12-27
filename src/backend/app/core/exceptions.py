@@ -165,3 +165,9 @@ class SQLOperationFailedException(AppException):
             super().__init__(code=500, detail=f"SQL {operation} 失败: {detail}")
         else:
             super().__init__(code=500, detail=f"SQL {operation} 失败")
+
+
+class SQLConversionException(BusinessException):
+    """SQL 转换异常。"""
+    def __init__(self, message: str = "SQL转换失败"):
+        super().__init__(code=500, message=message)

@@ -10,10 +10,49 @@ from fastapi.exceptions import RequestValidationError
 from pydantic import ValidationError
 from sqlalchemy.exc import SQLAlchemyError
 
-from .exceptions import BusinessException, AppException
+# 第三方库异常导入
+import redis.exceptions as redis_exceptions
+import jose.exceptions as jose_exceptions
+import httpx
+import aiohttp
+import celery.exceptions as celery_exceptions
+
+from .exceptions import BusinessException, AppException, SQLConversionException
 from .log import log
 from schema.unified_response import UnifiedResponse
 
+
+# 错误代码常量定义
+class ErrorCodes:
+    """错误代码常量类"""
+    # 参数验证错误
+    PARAM_VALIDATION_ERROR = 10001
+    DATA_VALIDATION_ERROR = 10002
+    
+    # 数据库错误
+    DATABASE_OPERATION_ERROR = 20001
+    SQL_CONVERSION_ERROR = 20007
+    
+    # 系统内部错误
+    SYSTEM_INTERNAL_ERROR = 20002
+    IO_OPERATION_ERROR = 20003
+    TIMEOUT_ERROR = 20004
+    TYPE_ERROR = 20005
+    VALUE_ERROR = 20006
+    KEY_ATTRIBUTE_ERROR = 20009
+    
+    # 第三方服务错误
+    REDIS_OPERATION_ERROR = 20008
+    CELERY_TASK_ERROR = 20010
+    HTTP_REQUEST_ERROR = 20011
+    
+    # 认证错误
+    AUTHENTICATION_ERROR = 401
+
+
+# ======================
+# 自定义异常处理器
+# ======================
 
 async def business_exception_handler(request: Request, exc: BusinessException) -> JSONResponse:
     """
@@ -26,15 +65,14 @@ async def business_exception_handler(request: Request, exc: BusinessException) -
     Returns:
         JSONResponse: 标准化的错误响应
     """
-    log.warning(f"BusinessException: {exc.message}", extra={"path": request.url.path, "method": request.method})
-    response = UnifiedResponse.error(
-        code=exc.code,
-        message=exc.message,
-        data=None
-    )
+    log.warning("BusinessException: {}", exc.message, extra={"path": request.url.path, "method": request.method})
     return JSONResponse(
         status_code=status.HTTP_200_OK,
-        content=response.dict()
+        content=UnifiedResponse.error(
+            code=exc.code,
+            message=exc.message,
+            data=None
+        ).dict()
     )
 
 
@@ -49,17 +87,20 @@ async def app_exception_handler(request: Request, exc: AppException) -> JSONResp
     Returns:
         JSONResponse: 标准化的错误响应
     """
-    log.error(f"AppException: {exc.detail}", extra={"path": request.url.path, "method": request.method}, exc_info=True)
-    response = UnifiedResponse.error(
-        code=exc.code,
-        message=exc.message or "系统处理失败",
-        data=None
-    )
+    log.error("AppException: {}", exc.detail, extra={"path": request.url.path, "method": request.method}, exc_info=True)
     return JSONResponse(
         status_code=status.HTTP_200_OK,
-        content=response.dict()
+        content=UnifiedResponse.error(
+            code=exc.code,
+            message=exc.message or "系统处理失败",
+            data=None
+        ).dict()
     )
 
+
+# ======================
+# 验证异常处理器
+# ======================
 
 async def validation_exception_handler(request: Request, exc: RequestValidationError) -> JSONResponse:
     """
@@ -73,7 +114,6 @@ async def validation_exception_handler(request: Request, exc: RequestValidationE
         JSONResponse: 标准化的错误响应
     """
     error_info = exc.errors()
-    # 避免直接使用f-string格式化包含特殊字符的内容
     log.warning("ValidationError: {}", error_info, extra={"path": request.url.path, "method": request.method})
     
     # 提取验证错误信息
@@ -84,14 +124,13 @@ async def validation_exception_handler(request: Request, exc: RequestValidationE
             msg = msg.split(', ', 1)[1]
         error_details.append(f"{msg}")
     
-    response = UnifiedResponse.error(
-        code=10001,  # 参数错误业务代码
-        message=". ".join(error_details),
-        data=None
-    )
     return JSONResponse(
         status_code=status.HTTP_200_OK,
-        content=response.dict()
+        content=UnifiedResponse.error(
+            code=ErrorCodes.PARAM_VALIDATION_ERROR,
+            message=". ".join(error_details),
+            data=None
+        ).dict()
     )
 
 
@@ -107,7 +146,6 @@ async def pydantic_validation_exception_handler(request: Request, exc: Validatio
         JSONResponse: 标准化的错误响应
     """
     error_info = exc.errors()
-    # 避免直接使用f-string格式化包含特殊字符的内容
     log.warning("PydanticValidationError: {}", error_info, extra={"path": request.url.path, "method": request.method})
     
     # 提取验证错误信息
@@ -119,16 +157,19 @@ async def pydantic_validation_exception_handler(request: Request, exc: Validatio
             msg = msg.split(', ', 1)[1]
         error_details.append(f"{msg}")
     
-    response = UnifiedResponse.error(
-        code=10002,  # 数据验证错误业务代码
-        message=". ".join(error_details),
-        data=None
-    )
     return JSONResponse(
         status_code=status.HTTP_200_OK,
-        content=response.dict()
+        content=UnifiedResponse.error(
+            code=ErrorCodes.DATA_VALIDATION_ERROR,
+            message=". ".join(error_details),
+            data=None
+        ).dict()
     )
 
+
+# ======================
+# 数据库异常处理器
+# ======================
 
 async def sqlalchemy_exception_handler(request: Request, exc: SQLAlchemyError) -> JSONResponse:
     """
@@ -141,17 +182,183 @@ async def sqlalchemy_exception_handler(request: Request, exc: SQLAlchemyError) -
     Returns:
         JSONResponse: 标准化的错误响应
     """
-    log.error(f"SQLAlchemyError: {str(exc)}", extra={"path": request.url.path, "method": request.method}, exc_info=True)
-    response = UnifiedResponse.error(
-        code=20001,  # 数据库操作错误业务代码
-        message="数据库操作失败",
-        data=None
-    )
+    log.error("SQLAlchemyError: {}", str(exc), extra={"path": request.url.path, "method": request.method}, exc_info=True)
     return JSONResponse(
         status_code=status.HTTP_200_OK,
-        content=response.dict()
+        content=UnifiedResponse.error(
+            code=ErrorCodes.DATABASE_OPERATION_ERROR,
+            message="数据库操作失败",
+            data=None
+        ).dict()
     )
 
+
+async def sql_conversion_exception_handler(request: Request, exc: SQLConversionException) -> JSONResponse:
+    """
+    处理SQL转换异常。
+    
+    Args:
+        request (Request): HTTP请求对象
+        exc (SQLConversionException): SQL转换异常实例
+        
+    Returns:
+        JSONResponse: 标准化的错误响应
+    """
+    log.warning("SQLConversionException: {}", exc.message, extra={"path": request.url.path, "method": request.method})
+    return JSONResponse(
+        status_code=status.HTTP_200_OK,
+        content=UnifiedResponse.error(
+            code=exc.code,
+            message=exc.message,
+            data=None
+        ).dict()
+    )
+
+
+# ======================
+# 内置异常处理器
+# ======================
+
+async def io_exception_handler(request: Request, exc: IOError | FileNotFoundError) -> JSONResponse:
+    """
+    处理IO异常，如文件操作失败等。
+    
+    Args:
+        request (Request): HTTP请求对象
+        exc (IOError | FileNotFoundError): IO异常实例
+        
+    Returns:
+        JSONResponse: 标准化的错误响应
+    """
+    error_message = f"文件操作失败: {str(exc)}"
+    log.error("IOError: {}", error_message, extra={"path": request.url.path, "method": request.method}, exc_info=True)
+    return JSONResponse(
+        status_code=status.HTTP_200_OK,
+        content=UnifiedResponse.error(
+            code=ErrorCodes.IO_OPERATION_ERROR,
+            message=error_message,
+            data=None
+        ).dict()
+    )
+
+
+async def timeout_exception_handler(request: Request, exc: TimeoutError) -> JSONResponse:
+    """
+    处理超时异常，如网络请求超时等。
+    
+    Args:
+        request (Request): HTTP请求对象
+        exc (TimeoutError): 超时异常实例
+        
+    Returns:
+        JSONResponse: 标准化的错误响应
+    """
+    log.error("TimeoutError: {}", str(exc), extra={"path": request.url.path, "method": request.method}, exc_info=True)
+    return JSONResponse(
+        status_code=status.HTTP_200_OK,
+        content=UnifiedResponse.error(
+            code=ErrorCodes.TIMEOUT_ERROR,
+            message="请求超时，请稍后重试",
+            data=None
+        ).dict()
+    )
+
+
+async def type_exception_handler(request: Request, exc: TypeError) -> JSONResponse:
+    """
+    处理类型错误异常。
+    
+    Args:
+        request (Request): HTTP请求对象
+        exc (TypeError): 类型错误异常实例
+        
+    Returns:
+        JSONResponse: 标准化的错误响应
+    """
+    log.error("TypeError: {}", str(exc), extra={"path": request.url.path, "method": request.method}, exc_info=True)
+    return JSONResponse(
+        status_code=status.HTTP_200_OK,
+        content=UnifiedResponse.error(
+            code=ErrorCodes.TYPE_ERROR,
+            message="系统内部类型错误",
+            data=None
+        ).dict()
+    )
+
+
+async def value_exception_handler(request: Request, exc: ValueError) -> JSONResponse:
+    """
+    处理值错误异常。
+    
+    Args:
+        request (Request): HTTP请求对象
+        exc (ValueError): 值错误异常实例
+        
+    Returns:
+        JSONResponse: 标准化的错误响应
+    """
+    log.error("ValueError: {}", str(exc), extra={"path": request.url.path, "method": request.method}, exc_info=True)
+    return JSONResponse(
+        status_code=status.HTTP_200_OK,
+        content=UnifiedResponse.error(
+            code=ErrorCodes.VALUE_ERROR,
+            message="系统内部值错误",
+            data=None
+        ).dict()
+    )
+
+
+async def key_exception_handler(request: Request, exc: KeyError | AttributeError) -> JSONResponse:
+    """
+    处理键错误和属性错误异常。
+    
+    Args:
+        request (Request): HTTP请求对象
+        exc (KeyError | AttributeError): 键错误或属性错误异常实例
+        
+    Returns:
+        JSONResponse: 标准化的错误响应
+    """
+    log.error("Key/AttributeError: {}", str(exc), extra={"path": request.url.path, "method": request.method}, exc_info=True)
+    return JSONResponse(
+        status_code=status.HTTP_200_OK,
+        content=UnifiedResponse.error(
+            code=ErrorCodes.KEY_ATTRIBUTE_ERROR,
+            message="系统内部数据访问错误",
+            data=None
+        ).dict()
+    )
+
+
+# ======================
+# 第三方库异常处理器
+# ======================
+
+async def jwt_exception_handler(request: Request, exc: jose_exceptions.JWTError) -> JSONResponse:
+    """
+    处理JWT相关异常。
+    
+    Args:
+        request (Request): HTTP请求对象
+        exc (jose_exceptions.JWTError): JWT异常实例
+        
+    Returns:
+        JSONResponse: 标准化的错误响应
+    """
+    log.error("JWTError: {}", str(exc), extra={"path": request.url.path, "method": request.method}, exc_info=True)
+    return JSONResponse(
+        status_code=status.HTTP_200_OK,
+        content=UnifiedResponse.error(
+            code=ErrorCodes.AUTHENTICATION_ERROR,
+            message="令牌无效或已过期",
+            data=None
+        ).dict()
+    )
+
+
+# ======================
+# 兜底异常处理器
+# ======================
 
 async def general_exception_handler(request: Request, exc: Exception) -> JSONResponse:
     """
@@ -164,13 +371,12 @@ async def general_exception_handler(request: Request, exc: Exception) -> JSONRes
     Returns:
         JSONResponse: 标准化的错误响应
     """
-    log.error(f"UnexpectedException: {str(exc)}", extra={"path": request.url.path, "method": request.method}, exc_info=True)
-    response = UnifiedResponse.error(
-        code=20002,  # 系统内部错误业务代码
-        message="系统处理失败",
-        data=None
-    )
+    log.error("UnexpectedException: {}", str(exc), extra={"path": request.url.path, "method": request.method}, exc_info=True)
     return JSONResponse(
         status_code=status.HTTP_200_OK,
-        content=response.dict()
+        content=UnifiedResponse.error(
+            code=ErrorCodes.SYSTEM_INTERNAL_ERROR,
+            message="系统处理失败",
+            data=None
+        ).dict()
     )

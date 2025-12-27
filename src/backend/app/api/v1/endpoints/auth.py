@@ -125,7 +125,7 @@ async def register(
         code=payload.verification_code
     )
 
-    log.info(f"Registered user {new_user.username}")
+    log.info("Registered user {}", new_user.username)
     return UnifiedResponse.success(
         data={
             "user_id": new_user.user_id,
@@ -161,11 +161,11 @@ async def login(
     client_ip = request.client.host
     user_agent = request.headers.get("User-Agent", "")
     device_info = request.headers.get("X-Device-Info", "")
-    log.info(f"Login request: client_ip={client_ip}, user_agent={user_agent}, device_infp={device_info}")
+    log.info("Login request: client_ip={}, user_agent={}, device_infp={}", client_ip, user_agent, device_info)
 
     exist_user = await service_login(db, payload.username, payload.password)
 
-    log.info(f"start to record the login log")
+    log.info("start to record the login log")
     await create_login_record(
         db=db,
         user_id=exist_user.user_id,

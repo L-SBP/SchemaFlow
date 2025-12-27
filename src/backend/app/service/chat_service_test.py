@@ -9,7 +9,7 @@
 import json
 import httpx
 import sqlparse
-from fastapi import HTTPException
+from core.exceptions import ItemNotFoundException
 from sqlalchemy.future import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -52,7 +52,7 @@ async def get_project_id_by_session(db: AsyncSession, session_id: int) -> int:
     session = result.scalar_one_or_none()
 
     if not session:
-        raise HTTPException(404, "Session not found")
+        raise ItemNotFoundException(message="Session not found")
 
     return session.project_id
 

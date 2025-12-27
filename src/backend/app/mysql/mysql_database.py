@@ -89,7 +89,7 @@ class MysqlHelper:
             "ssl": mysql_config.ssl
         }
 
-        log.info(f"init user engine: {user_database_url}")
+        log.info("init user engine: {}", user_database_url)
         cls._user_engine[instance_id] = create_async_engine(
             user_database_url,
             connect_args=connect_args,
@@ -122,7 +122,7 @@ class MysqlHelper:
         """
         await cls._user_engine[database_instance.instance_id].dispose()
         del cls._user_engine[database_instance.instance_id]
-        log.info(f"close user engine: {database_instance.instance_id}")
+        log.info("close user engine: {}", database_instance.instance_id)
 
     @classmethod
     async def close_all_engine(cls):
@@ -158,7 +158,7 @@ class MysqlHelper:
         if database_instance.instance_id not in cls._user_engine:
             raise InvalidOperationException("请先初始化用户引擎")
 
-        log.info(f"get user engine: {database_instance.instance_id}")
+        log.info("get user engine: {}", database_instance.instance_id)
         return cls._user_engine[database_instance.instance_id]
 
     @classmethod
@@ -201,7 +201,7 @@ class MysqlHelper:
                 )
                 return result.mappings().fetchone() is not None
         except Exception as e:
-            log.error(f"检查用户是否存在失败: {e}")
+            log.error("检查用户是否存在失败: {}", e)
             return False
 
     @classmethod
@@ -250,7 +250,7 @@ class MysqlHelper:
                 has_write_read_priv = not required_privileges.isdisjoint(user_privileges)
                 return has_write_read_priv
         except Exception as e:
-            log.error(f"检查用户[{db_username}]对数据库[{db_name}]的权限时出错: {e}", exc_info=True)
+            log.error("检查用户[{}]对数据库[{}]的权限时出错: {}", db_username, db_name, e, exc_info=True)
             return False
 
     @classmethod
@@ -278,7 +278,7 @@ class MysqlHelper:
                 )
                 async with cls.get_root_engine() as conn:
                         await conn.execute(text(grant_sql))
-                log.info(f"[MySQL] 成功为用户 '{db_username}'@{host} 授予数据库 '{db_name}' 的所有权限")
+                log.info("[MySQL] 成功为用户 '{}'@{} 授予数据库 '{}' 的所有权限", db_username, host, db_name)
             except Exception as e:
                 raise RuntimeError(
                     f"为用户 '{db_username}'@{host} 授予数据库 '{db_name}' 权限失败: {str(e)}"

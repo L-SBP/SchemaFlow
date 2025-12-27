@@ -4,7 +4,7 @@
 管理项目的业务术语，包括增删改查、批量导入导出等操作。
 """
 
-from fastapi import APIRouter, Depends, HTTPException, status, Query, UploadFile, File, Path
+from fastapi import APIRouter, Depends, Query, UploadFile, File, Path
 from sqlalchemy.ext.asyncio import AsyncSession as Session
 from typing import Any, Optional, List
 

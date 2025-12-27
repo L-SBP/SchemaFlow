@@ -25,6 +25,7 @@ from sqlalchemy.future import select
 from sqlalchemy.orm import selectinload
 from sqlalchemy.ext.asyncio import AsyncSession
 from fastapi.encoders import jsonable_encoder
+from core.exceptions import ForbiddenException, ItemNotFoundException, InvalidOperationException
 
 from core.config import settings
 from core.log import log
@@ -98,14 +99,14 @@ async def _verify_session_ownership(db: AsyncSession, session_id: int, user_id: 
     session = result.scalar_one_or_none()
 
     if not session:
-        raise HTTPException(status_code=404, detail="会话未找到")
+        raise ItemNotFoundException(message="会话未找到")
     
     if not session.project:
-        raise HTTPException(status_code=404, detail="此会话的项目未找到")
+        raise ItemNotFoundException(message="此会话的项目未找到")
 
     if session.project.user_id != user_id:
-        log.warning(f"Security Alert: User {user_id} tried to access session {session_id}")
-        raise HTTPException(status_code=403, detail="权限拒绝")
+        log.warning("Security Alert: User {} tried to access session {}", user_id, session_id)
+        raise ForbiddenException(message="权限拒绝")
 
     return session.project_id
 
@@ -116,7 +117,7 @@ async def _get_session_obj(db: AsyncSession, session_id: int) -> SessionModel:
     result = await db.execute(stmt)
     session_obj = result.scalar_one_or_none()
     if not session_obj:
-        raise HTTPException(status_code=404, detail="会话已丢失")
+        raise ItemNotFoundException(message="会话已丢失")
     return session_obj
 
 
@@ -214,7 +215,7 @@ async def call_ai_agent(
         model_key = DEFAULT_MODEL
     
     config = MODEL_REGISTRY[model_key]
-    log.info(f"Using AI Model: {config['name']} ({config['model_id']})")
+    log.info("Using AI Model: {} ({})", config['name'], config['model_id'])
 
     messages = build_ai_messages(
         model_type=config["type"],
@@ -255,7 +256,7 @@ async def call_ai_agent(
         return _clean_ai_response(content)
 
     except Exception as e:
-        log.error(f"AI Call Error ({model_key}): {e}")
+        log.error("AI Call Error ({}): {}", model_key, e)
         return f"-- AI Service Error: {str(e)}"
 
 
@@ -310,7 +311,7 @@ def _parse_sql_type(sql_text: str) -> str:
                     sql_type = "TRUNCATE"
                     
     except Exception as e:
-        log.warning(f"SQL parsing failed for: {sql_text[:100]}..., error: {e}")
+        log.warning("SQL parsing failed for: {}..., error: {}", sql_text[:100], e)
         
     return sql_type
 
@@ -351,7 +352,7 @@ async def _execute_sql_by_type(sql: str, sql_type: str, instance: Any, user_id: 
     elif instance.db_type == 'sqlite':
         return await execute_sqlite(sql, sql_type, instance, user_id)
     else:
-        raise HTTPException(status_code=400, detail=f"不支持的数据库类型: {instance.db_type}")
+        raise InvalidOperationException(message=f"不支持的数据库类型: {instance.db_type}")
 
 
 # =========================================================
@@ -453,7 +454,7 @@ async def process_chat(
     # 解析模型
     final_model_key = _resolve_model_key(selected_model, session_obj.current_model)
     await _update_session_model(db, session_obj, final_model_key)
-    log.info(f"Session {session_id} using model: {final_model_key}")
+    log.info("Session {} using model: {}", session_id, final_model_key)
     
     # 获取历史和领域知识
     # TODO: [RAG] 历史对话检索优化
@@ -600,7 +601,7 @@ async def _try_execute_sql(
         
         return data, "success"
     except Exception as e:
-        log.error(f"SQL Execution Error: {str(e)}")
+        log.error("SQL Execution Error: {}", str(e))
         return [], "failed"
 
 
@@ -617,19 +618,19 @@ async def _get_message_context(
     result = await db.execute(stmt)
     message = result.scalar_one_or_none()
     if not message:
-        raise HTTPException(status_code=404, detail="消息未找到")
+        raise ItemNotFoundException(message="消息未找到")
 
     stmt_session = select(SessionModel).where(SessionModel.session_id == message.session_id)
     result_session = await db.execute(stmt_session)
     session_obj = result_session.scalar_one_or_none()
     if not session_obj:
-        raise HTTPException(status_code=404, detail="Session not found")
+        raise ItemNotFoundException(message="Session not found")
 
     stmt_project = select(ProjectModel).where(ProjectModel.project_id == session_obj.project_id)
     result_project = await db.execute(stmt_project)
     project = result_project.scalar_one_or_none()
     if not project:
-        raise HTTPException(status_code=404, detail="项目未找到")
+        raise ItemNotFoundException(message="项目未找到")
 
     return message, session_obj, project
 
@@ -637,11 +638,11 @@ async def _get_message_context(
 def _validate_confirmation(message: MessageModel, project: ProjectModel, user_id: int) -> None:
     """验证确认操作的合法性。"""
     if project.user_id != user_id:
-        raise HTTPException(status_code=403, detail="访问拒绝")
+        raise ForbiddenException(message="访问拒绝")
     if not message.requires_confirmation:
-        raise HTTPException(status_code=400, detail="此消息不需要确认")
+        raise InvalidOperationException(message="此消息不需要确认")
     if message.user_confirmed:
-        raise HTTPException(status_code=400, detail="已确认/执行")
+        raise InvalidOperationException(message="已确认/执行")
 
 
 def _extract_sql_from_content(content: str) -> str:
@@ -745,10 +746,10 @@ async def confirm_and_execute_sql(
         await _update_statement_result(db, message_id, execute_res)
         await db.commit()
         
-        log.info(f"User {user_id} executed DML and persisted results.")
+        log.info("User {} executed DML and persisted results.", user_id)
         
     except Exception as e:
-        log.error(f"Execution failed: {e}")
+        log.error("Execution failed: {}", e)
         return await _handle_execution_error(db, message_id, e)
 
     return ChatResponse(
