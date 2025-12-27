@@ -39,6 +39,14 @@ from core.utils import generate_meaningful_db_name
 from service.ai_service import AIService
 from service.db_executor_service import DBExecutorService
 
+# Celery 任务导入
+from tasks.ai_generation_tasks import (
+    schema_er_pipeline_task,
+    ddl_er_parallel_task,
+    generate_er_task,
+    get_task_status,
+)
+
 
 # =========================================================
 # 配额与权限校验
@@ -110,171 +118,79 @@ def _get_db_host_port(db_type: str) -> tuple:
 
 
 # =========================================================
-# 后台任务：Schema 生成
+# Celery 任务调度辅助函数
 # =========================================================
 
-# TODO: [Celery] Schema 生成任务迁移
-# 当前实现：FastAPI BackgroundTasks
-# 后续优化：
-#   1. 迁移到 Celery 异步任务，支持任务重试、超时控制
-#   2. 添加任务状态跟踪（pending/running/success/failed）
-#   3. 支持任务取消和进度查询 API
-#   4. 配置独立的 AI 任务队列，避免阻塞其他任务
-#   5. 设置合理的任务超时时间（建议 5 分钟）
-
-async def _generate_and_save_schema(
+def _dispatch_schema_er_task(
     project_id: int,
     requirements: str,
     db_name: str,
     db_type: str,
     ai_model: str
-) -> Optional[str]:
+) -> str:
     """
-    执行 AI Schema 生成并保存到数据库。
+    调度 Schema + ER 生成任务。
     
-    【重要】此函数在后台任务中执行，使用独立的数据库会话。
+    Returns:
+        task_id: Celery 任务 ID
     """
-    log.info(f"[Task] Starting SCHEMA GENERATION for Project {project_id}...")
-    loop = asyncio.get_event_loop()
-
-    schema_res = await loop.run_in_executor(
-        None, AIService.generate_schema, requirements, db_name, "mysql", ai_model
+    task = schema_er_pipeline_task.delay(
+        project_id=project_id,
+        requirements=requirements,
+        db_name=db_name,
+        db_type=db_type,
+        ai_model=ai_model
     )
-
-    if not schema_res:
-        log.error(f"[Task-Schema] Failed to generate schema for Project {project_id}")
-        return None
-
-    # 使用独立会话保存结果
-    temp_engine = PsqlHelper._get_async_engine(config.db)
-    async with PsqlHelper.get_session(temp_engine) as session:
-        async with session.begin():
-            project = await crud_project.get(session, project_id)
-            if project:
-                current_def = project.schema_definition or {}
-                current_def['schema'] = schema_res
-                current_def['generated_db_name'] = db_name
-                project.schema_definition = current_def
-                project.creation_stage = schemas.CreationStageEnum.SCHEMA_GENERATED.value
-                session.add(project)
-                log.info(f"[Task-Schema] SUCCESS for Project {project_id}. Saved to DB.")
-    
-    await temp_engine.dispose()
-    return schema_res
+    log.info(f"[Celery] Dispatched schema_er_pipeline_task for Project {project_id}, task_id={task.id}")
+    return task.id
 
 
-# TODO: [Celery] ER 图生成任务迁移
-# 当前实现：与 Schema 生成串联执行
-# 业务约束：
-#   - 必须在 Schema 生成成功后才能执行
-#   - 与 DDL 生成互不依赖，可并行
-# 后续优化：
-#   1. 拆分为独立的 Celery 任务
-#   2. 使用 Celery group 与 DDL 生成并行执行
-#   3. ER 图生成失败不影响主流程，记录失败状态即可
-#   4. 支持手动触发重新生成
-
-async def _generate_and_save_er(project_id: int, schema_text: str, ai_model: str) -> None:
-    """
-    生成 ER 图并保存。错误不影响整体流程。
-    """
-    log.info(f"[Task-ER] Starting for Project {project_id}")
-    loop = asyncio.get_event_loop()
-
-    try:
-        er_code = await loop.run_in_executor(
-            None, AIService.generate_mermaid_code, schema_text, ai_model
-        )
-        if not er_code:
-            raise InvalidOperationException(message="生成的ER图代码为空")
-
-        temp_engine = PsqlHelper._get_async_engine(config.db)
-        async with PsqlHelper.get_session(temp_engine) as session:
-            await crud_project.update(session, project_id, er_diagram_code=er_code)
-        await temp_engine.dispose()
-        log.info(f"[Task-ER] SUCCESS for Project {project_id}")
-    except Exception as e:
-        log.error(f"[Task-ER] FAILED for Project {project_id}: {e}")
-
-
-# TODO: [Celery] 任务编排优化
-# 当前实现：Schema -> ER 串联执行
-# 业务约束：
-#   - Schema 是前置依赖，必须先成功生成 Schema
-#   - ER 图和 DDL 都依赖 Schema，但互不依赖
-#   - 用户修改 Schema 后必须重新生成 DDL
-# 后续优化：
-#   1. 使用 Celery canvas 组合任务：
-#      chain(generate_schema.s(), group(generate_er.s(), generate_ddl.s()))
-#   2. Schema 完成后 -> ER 和 DDL 可并行执行
-#   3. 添加任务依赖关系管理
-#   4. 支持任务失败后的回调通知（WebSocket/邮件）
-
-async def task_pipeline_schema_flow(
-    project_id: int,
-    requirements: str,
-    db_name: str,
-    db_type: str,
-    ai_model: str
-) -> None:
-    """串联 Schema 和 ER 生成流程。"""
-    schema_text = await _generate_and_save_schema(
-        project_id, requirements, db_name, db_type, ai_model
-    )
-    if schema_text:
-        await _generate_and_save_er(project_id, schema_text, ai_model)
-
-
-# =========================================================
-# 后台任务：DDL 生成
-# =========================================================
-
-# TODO: [Celery] DDL 生成任务迁移
-# 当前实现：FastAPI BackgroundTasks
-# 业务约束：
-#   - 必须在 Schema 生成/确认后才能执行
-#   - 与 ER 图生成互不依赖，可并行
-#   - 用户修改 Schema 后必须重新生成 DDL
-# 后续优化：
-#   1. 迁移到 Celery 异步任务
-#   2. 支持任务重试机制（指数退避）
-#   3. 添加任务进度回调（可通过 WebSocket 推送前端）
-#   4. 配置任务优先级，用户付费项目可优先处理
-
-async def task_generate_ddl_only(
+def _dispatch_ddl_er_task(
     project_id: int,
     schema_text: str,
     requirements: str,
     db_type: str,
     db_name: str,
-    ai_model: str = "gpt4"
-) -> None:
-    """后台任务：生成 DDL 语句。"""
-    log.info(f"[Task] Starting DDL GENERATION for Project {project_id}...")
-    loop = asyncio.get_event_loop()
+    ai_model: str = "gpt4",
+    regenerate_er: bool = True
+) -> str:
+    """
+    调度 DDL + ER 并行生成任务。
 
-    ddl_res = await loop.run_in_executor(
-        None, AIService.generate_ddl, schema_text, requirements, db_type, ai_model
+    Returns:
+        task_id: Celery 任务 ID
+    """
+    task = ddl_er_parallel_task.delay(
+        project_id=project_id,
+        schema_text=schema_text,
+        requirements=requirements,
+        db_type=db_type,
+        db_name=db_name,
+        ai_model=ai_model,
+        regenerate_er=regenerate_er
     )
-
-    full_ddl = _build_full_ddl(ddl_res, db_type, db_name)
-
-    temp_engine = PsqlHelper._get_async_engine(config.db)
-    async with PsqlHelper.get_session(temp_engine) as session:
-        await crud_project.update(
-            session, project_id,
-            ddl_statement=full_ddl,
-            creation_stage=schemas.CreationStageEnum.DDL_GENERATED.value,
-            project_status=schemas.ProjectStatusEnum.PENDING_CONFIRMATION.value
-        )
-    await temp_engine.dispose()
+    log.info(f"[Celery] Dispatched ddl_er_parallel_task for Project {project_id}, task_id={task.id}")
+    return task.id
 
 
-def _build_full_ddl(ddl_res: str, db_type: str, db_name: str) -> str:
-    """根据数据库类型构建完整 DDL。"""
-    if db_type == 'mysql':
-        return f"CREATE DATABASE IF NOT EXISTS `{db_name}`;\nUSE `{db_name}`;\n\n{ddl_res}"
-    return ddl_res
+def _dispatch_er_only_task(
+    project_id: int,
+    schema_text: str,
+    ai_model: str = "gpt4"
+) -> str:
+    """
+    调度仅 ER 图生成任务。
+
+    Returns:
+        task_id: Celery 任务 ID
+    """
+    task = generate_er_task.delay(
+        project_id=project_id,
+        schema_text=schema_text,
+        ai_model=ai_model
+    )
+    log.info(f"[Celery] Dispatched generate_er_task for Project {project_id}, task_id={task.id}")
+    return task.id
 
 
 # =========================================================
@@ -321,10 +237,16 @@ async def create_project_service(
     db: Session,
     project_in: schemas.ProjectCreate,
     user_id: int,
-    background_tasks: BackgroundTasks
+    background_tasks: BackgroundTasks = None  # 保留参数以兼容旧接口
 ) -> schemas.ProjectAsyncResponse:
     """
-    创建项目并异步生成 Schema/DDL。
+    创建项目并异步生成 Schema/ER 图。
+
+    流程：
+    1. 检查用户配额
+    2. 创建项目记录
+    3. 调度 Celery 任务生成 Schema + ER 图
+    4. 返回项目信息和任务 ID
     """
     # 1. 检查用户配额
     user = await _check_user_quota(db, user_id)
@@ -345,16 +267,8 @@ async def create_project_service(
     # 5. 创建项目记录
     db_obj = await _create_project_record(db, project_data, user_id, new_instance.instance_id)
 
-    # 6. 调度后台任务
-    # TODO: [Celery] 替换为 Celery 任务调度
-    # 当前实现：background_tasks.add_task()
-    # 后续优化：
-    #   1. 使用 task_pipeline_schema_flow.delay() 或 .apply_async()
-    #   2. 保存 task_id 到项目记录，便于状态查询
-    #   3. 支持任务取消：revoke(task_id, terminate=True)
-    #   4. 返回 task_id 给前端，用于轮询或 WebSocket 订阅
-    background_tasks.add_task(
-        task_pipeline_schema_flow,
+    # 6. 调度 Celery 任务：Schema + ER 生成流水线
+    task_id = _dispatch_schema_er_task(
         project_id=db_obj.project_id,
         requirements=requirements_text,
         db_name=temp_db_name,
@@ -365,7 +279,11 @@ async def create_project_service(
     # 7. 更新用户配额
     await crud_user_account.update(db, user, used_databases=user.used_databases + 1)
 
-    return schemas.ProjectAsyncResponse.model_validate(db_obj)
+    # 8. 返回项目信息（包含 task_id 供前端查询状态）
+    response = schemas.ProjectAsyncResponse.model_validate(db_obj)
+    response.task_id = task_id
+    response.message = "项目创建成功，正在生成 Schema..."
+    return response
 
 
 # =========================================================
@@ -377,10 +295,22 @@ async def request_ddl_generation_service(
     project_id: int,
     user_id: int,
     data: schemas.GenerateDDLRequest,
-    background_tasks: BackgroundTasks
+    background_tasks: BackgroundTasks = None  # 保留参数以兼容旧接口
 ) -> schemas.ProjectAsyncResponse:
-    """用户确认 Schema，后端触发 DDL 生成任务。"""
+    """
+    用户确认 Schema，后端触发 DDL 生成任务。
+
+    流程：
+    1. 保存用户确认/修改的 Schema
+    2. 调度 Celery 任务生成 DDL
+    3. 如果 Schema 有修改，同时重新生成 ER 图
+    """
     project = await _verify_project_ownership(db, project_id, user_id)
+
+    # 检查 Schema 是否有变化（用于决定是否重新生成 ER 图）
+    old_schema = (project.schema_definition or {}).get('schema', '')
+    new_schema = data.confirmed_schema
+    schema_changed = old_schema != new_schema
 
     # 更新需求描述（如果有）
     if data.requirements:
@@ -388,7 +318,7 @@ async def request_ddl_generation_service(
 
     # 更新 Schema
     current_def = project.schema_definition or {}
-    current_def['schema'] = data.confirmed_schema
+    current_def['schema'] = new_schema
     project.schema_definition = current_def
     project.creation_stage = schemas.CreationStageEnum.GENERATING_DDL.value
 
@@ -399,24 +329,23 @@ async def request_ddl_generation_service(
     # 获取数据库实例信息
     instance = await crud_database_instance.get(db, project.instance_id)
 
-    # 触发后台任务
-    # TODO: [Celery] 替换为 Celery 任务调度
-    # 同 create_project_service 中的 TODO 注释
-    background_tasks.add_task(
-        task_generate_ddl_only,
+    # 调度 Celery 任务：DDL 生成 + 可选 ER 重新生成
+    task_id = _dispatch_ddl_er_task(
         project_id=project.project_id,
-        schema_text=data.confirmed_schema,
+        schema_text=new_schema,
         requirements=project.description,
         db_type=instance.db_type,
         db_name=instance.db_name,
-        ai_model="gpt4"
+        ai_model="gpt4",
+        regenerate_er=schema_changed  # Schema 有变化时重新生成 ER 图
     )
 
     return schemas.ProjectAsyncResponse(
         project_id=project.project_id,
         project_name=project.project_name,
         status=project.project_status,
-        message="Schema已确认，正在生成DDL并更新ER图..."
+        message="Schema已确认，正在生成DDL..." + ("并更新ER图..." if schema_changed else ""),
+        task_id=task_id
     )
 
 
@@ -648,40 +577,61 @@ async def delete_project_service(
 # 重新生成 ER 图
 # =========================================================
 
-# TODO: [Celery] ER 图重新生成任务
-# 当前实现：同步执行（在线程池中）
-# 后续优化：
-#   1. 迁移到 Celery 任务，立即返回、后台生成
-#   2. 生成完成后通过 WebSocket 通知前端刷新
-#   3. 支持用户查询生成状态
-
 async def regenerate_project_er_service(
     db: Session,
     project_id: int,
     user_id: int,
     schema_text: str,
     ai_model: str = "gpt4"
-) -> schemas.ProjectDetailOut:
-    """更新项目的 Schema 定义，并重新生成 Mermaid ER 代码。"""
+) -> schemas.ProjectAsyncResponse:
+    """
+    更新项目的 Schema 定义，并异步重新生成 Mermaid ER 代码。
+
+    流程：
+    1. 保存新的 Schema 到数据库
+    2. 调度 Celery 任务重新生成 ER 图
+    3. 返回 task_id 供前端查询状态
+    """
     project = await _verify_project_ownership(db, project_id, user_id)
 
-    log.info(f"[RegenER] Regenerating ER for Project {project_id}...")
-    loop = asyncio.get_event_loop()
-    er_code = await loop.run_in_executor(
-        None,
-        AIService.generate_mermaid_code,
-        schema_text,
-        ai_model
-    )
-
+    # 保存新的 Schema
     current_def = project.schema_definition or {}
     current_def['schema'] = schema_text
-
     project.schema_definition = current_def
-    project.er_diagram_code = er_code
 
     db.add(project)
     await db.commit()
     await db.refresh(project)
 
-    return schemas.ProjectDetailOut.model_validate(project)
+    # 调度 Celery 任务重新生成 ER 图
+    task_id = _dispatch_er_only_task(
+        project_id=project_id,
+        schema_text=schema_text,
+        ai_model=ai_model
+    )
+    log.info(f"[RegenER] Dispatched ER regeneration for Project {project_id}, task_id={task_id}")
+
+    return schemas.ProjectAsyncResponse(
+        project_id=project.project_id,
+        project_name=project.project_name,
+        status=project.project_status,
+        message="正在重新生成 ER 图...",
+        task_id=task_id
+    )
+
+
+# =========================================================
+# 任务状态查询服务
+# =========================================================
+
+async def get_task_status_service(task_id: str) -> Dict[str, Any]:
+    """
+    查询 Celery 任务状态。
+
+    Args:
+        task_id: Celery 任务 ID
+
+    Returns:
+        任务状态信息字典
+    """
+    return get_task_status(task_id)

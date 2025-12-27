@@ -2,8 +2,9 @@
 项目 API 端点。
 
 管理项目的全生命周期，包括创建（生成Schema、DDL、部署）、查询、更新和删除。
+支持 Celery 异步任务状态查询。
 """
-from fastapi import APIRouter, Depends, HTTPException, status, Query, Header,BackgroundTasks
+from fastapi import APIRouter, Depends, HTTPException, status, Query, Header, BackgroundTasks
 from sqlalchemy.ext.asyncio import AsyncSession as Session
 from typing import Any, Optional, List
 
@@ -16,60 +17,81 @@ from core.exceptions import ItemNotFoundException, OperationNotPermittedExceptio
 
 router = APIRouter()
 
+
+# =========================================================
+# 任务状态查询接口
+# =========================================================
+@router.get("/tasks/{task_id}", response_model=UnifiedResponse[schemas.TaskStatusResponse])
+async def get_task_status(
+    task_id: str,
+    current_user: Any = Depends(deps.get_current_active_user),
+) -> Any:
+    """
+    查询 Celery 异步任务状态。
+
+    Args:
+        task_id (str): Celery 任务 ID。
+        current_user (Any): 当前登录用户。
+
+    Returns:
+        UnifiedResponse[schemas.TaskStatusResponse]: 任务状态响应。
+    """
+    result = await project_service.get_task_status_service(task_id)
+    return UnifiedResponse.success(data=result, message="获取任务状态成功")
+
+
 # 1. 创建项目 (第一步：只生成 Schema)
 @router.post("/", response_model=UnifiedResponse[schemas.ProjectAsyncResponse])
 async def create_project(
     project_in: schemas.ProjectCreate,
-    background_tasks: BackgroundTasks,
     db: Session = Depends(deps.get_db),
     current_user: Any = Depends(deps.get_current_active_user),
 ) -> Any:
     """
     创建项目第一步：
     1. 创建项目记录。
-    2. 触发后台任务生成 Logical Schema。
-    3. 返回项目ID，用户需轮询状态直到 schema_generated。
+    2. 触发 Celery 后台任务生成 Logical Schema 和 ER 图。
+    3. 返回项目ID和任务ID，用户可通过任务ID查询生成状态。
 
     Args:
         project_in (schemas.ProjectCreate): 项目创建请求体。
-        background_tasks (BackgroundTasks): 后台任务对象。
         db (Session): 数据库会话依赖。
         current_user (Any): 当前登录用户。
 
     Returns:
-        UnifiedResponse[schemas.ProjectAsyncResponse]: 异步响应，包含项目ID。
+        UnifiedResponse[schemas.ProjectAsyncResponse]: 异步响应，包含项目ID和任务ID。
     """
-    result = await project_service.create_project_service(db, project_in, current_user.user_id, background_tasks)
+    result = await project_service.create_project_service(db, project_in, current_user.user_id)
     return UnifiedResponse.success(data=result, message="项目创建请求已提交")
 
+
 # =========================================================
-# 新增接口：生成 DDL (第二步：用户确认 Schema 后调用)
+# 接口：生成 DDL (第二步：用户确认 Schema 后调用)
 # =========================================================
 @router.post("/{project_id}/generate-ddl", response_model=UnifiedResponse[schemas.ProjectAsyncResponse])
 async def generate_ddl(
     project_id: int,
     request_data: schemas.GenerateDDLRequest,
-    background_tasks: BackgroundTasks,
     db: Session = Depends(deps.get_db),
     current_user: Any = Depends(deps.get_current_active_user),
 ) -> Any:
     """
     创建项目第二步：
     1. 接收用户确认/修改后的 Schema。
-    2. 触发后台任务生成 DDL。
+    2. 触发 Celery 后台任务生成 DDL。
+    3. 如果 Schema 有修改，同时重新生成 ER 图。
 
     Args:
         project_id (int): 项目ID。
         request_data (schemas.GenerateDDLRequest): 生成DDL请求体。
-        background_tasks (BackgroundTasks): 后台任务对象。
         db (Session): 数据库会话依赖。
         current_user (Any): 当前登录用户。
 
     Returns:
-        UnifiedResponse[schemas.ProjectAsyncResponse]: 异步响应，包含项目ID。
+        UnifiedResponse[schemas.ProjectAsyncResponse]: 异步响应，包含项目ID和任务ID。
     """
     result = await project_service.request_ddl_generation_service(
-        db, project_id, current_user.user_id, request_data, background_tasks
+        db, project_id, current_user.user_id, request_data
     )
     return UnifiedResponse.success(data=result, message="DDL生成请求已提交")
 
@@ -224,3 +246,34 @@ async def delete_project(
     """
     await project_service.delete_project_service(db, project_id, current_user.user_id, x_confirmation_token)
     return UnifiedResponse.success(data=None, message="项目删除成功")
+
+
+# =========================================================
+# 重新生成 ER 图
+# =========================================================
+@router.post("/{project_id}/regenerate-er", response_model=UnifiedResponse[schemas.ProjectAsyncResponse])
+async def regenerate_er_diagram(
+    project_id: int,
+    request_data: schemas.RegenerateERRequest,
+    db: Session = Depends(deps.get_db),
+    current_user: Any = Depends(deps.get_current_active_user),
+) -> Any:
+    """
+    重新生成项目的 ER 图。
+
+    当用户修改 Schema 后，可以调用此接口异步重新生成 ER 图。
+
+    Args:
+        project_id (int): 项目 ID。
+        request_data (schemas.RegenerateERRequest): 重新生成 ER 图请求体。
+        db (Session): 数据库会话依赖。
+        current_user (Any): 当前登录用户。
+
+    Returns:
+        UnifiedResponse[schemas.ProjectAsyncResponse]: 异步响应，包含任务ID。
+    """
+    result = await project_service.regenerate_project_er_service(
+        db, project_id, current_user.user_id,
+        request_data.schema_text, request_data.ai_model
+    )
+    return UnifiedResponse.success(data=result, message="ER图重新生成请求已提交")
