@@ -184,7 +184,7 @@ api_router.include_router(
 
 ### 添加新的 Celery 任务
 
-详见 [Celery 任务迁移文档](../celery任务迁移文档.md) 中的"开发者指南"部分。
+详见 [Celery 任务迁移文档](celery任务迁移文档.md) 中的"开发者指南"部分。
 
 **基本步骤：**
 
@@ -289,6 +289,6 @@ async with get_session(engine) as session:
 
 ## 相关文档
 
-- [Celery 任务迁移文档](../celery任务迁移文档.md)
+- [Celery 任务迁移文档](celery任务迁移文档.md)
 - [Redis 缓存设计文档](../../doc/project/02-设计文档/redis缓存设计文档.md)
 - [API 接口文档](http://localhost:8000/docs)
