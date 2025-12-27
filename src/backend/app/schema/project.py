@@ -103,6 +103,14 @@ class GenerateDDLRequest(BaseModel):
     requirements: Optional[str] = Field(None, description="可选：修正后的需求描述")
 
 
+class RegenerateERRequest(BaseModel):
+    """
+    重新生成 ER 图的请求体。
+    """
+    schema_text: str = Field(..., description="Schema 内容")
+    ai_model: Literal["gpt4", "deepseek", "chatgpt", "qwen"] = Field("gpt4", description="AI 模型标识")
+
+
 # --- ：部署请求 DTO ---
 class ProjectDeployRequest(BaseModel):
     """
@@ -144,12 +152,14 @@ class ProjectAsyncResponse(BaseModel):
         project_name (str): 项目名称。
         project_status (ProjectStatusEnum): 项目状态。
         message (str): 响应消息。
+        task_id (Optional[str]): Celery 任务 ID，用于查询任务状态。
     """
     project_id: int
     project_name: str
     # 使用 alias="status" 匹配前端期望的 {"status": "..."}
     project_status: ProjectStatusEnum = Field(..., alias="status")
     message: str = "项目创建请求已受理，正在初始化..."
+    task_id: Optional[str] = Field(None, description="Celery 任务 ID，用于查询任务状态")
 
     model_config = ConfigDict(from_attributes=True, populate_by_name=True)
 
@@ -231,3 +241,30 @@ class ConfirmationTokenResponse(BaseModel):
     """
     confirmation_token: str
     expires_at: datetime
+
+
+class TaskStatusResponse(BaseModel):
+    """
+    Celery 任务状态响应体。
+
+    Attributes:
+        task_id (str): 任务 ID。
+        task_status (str): Celery 任务状态 (PENDING, STARTED, SUCCESS, FAILURE, RETRY)。
+        ready (bool): 任务是否完成。
+        successful (Optional[bool]): 任务是否成功（仅当 ready=True 时有值）。
+        result (Optional[Dict[str, Any]]): 任务结果（仅当成功时有值）。
+        error (Optional[str]): 错误信息（仅当失败时有值）。
+        project_id (Optional[int]): 项目 ID。
+        creation_stage (Optional[CreationStageEnum]): 项目创建阶段（业务状态）。
+        project_status (Optional[str]): 项目状态。
+    """
+    task_id: str
+    task_status: str = Field(..., description="Celery 任务状态: PENDING, STARTED, SUCCESS, FAILURE, RETRY")
+    ready: bool = Field(..., description="任务是否完成")
+    successful: Optional[bool] = Field(None, description="任务是否成功（仅当 ready=True 时有值）")
+    result: Optional[Dict[str, Any]] = Field(None, description="任务结果")
+    error: Optional[str] = Field(None, description="错误信息")
+    # 项目业务状态
+    project_id: Optional[int] = Field(None, description="项目 ID")
+    creation_stage: Optional[CreationStageEnum] = Field(None, description="项目创建阶段（业务状态）")
+    project_status: Optional[str] = Field(None, description="项目状态")

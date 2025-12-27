@@ -22,7 +22,7 @@ celery_app = Celery(
     "app",
     broker=CELERY_BROKER_URL,
     backend=CELERY_RESULT_BACKEND,
-    include=["app.tasks"]  # 包含任务模块
+    include=["tasks.ai_generation_tasks"]  # 包含 AI 生成任务模块
 )
 
 # Celery 配置
