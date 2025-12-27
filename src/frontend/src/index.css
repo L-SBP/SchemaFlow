@@ -1,10 +1,10 @@
 /**
- * 全局样式 - 响应式与高缩放适配
- * 支持浏览�?500% 缩放级别
+ * ???? - ???????
+ * ????500% ????
  */
 
 /* ========================================
-   1. 基础重置与缩放适配
+   1. ??????
    ======================================== */
 
 *,
@@ -39,13 +39,13 @@ body {
 }
 
 /* ========================================
-   2. 响应式容器与布局
+   2. CSS????
    ======================================== */
 
-/* 布局相关 CSS 变量 */
+/* ?? CSS ?? */
 :root {
   /* ========================================
-     工作区布局变量
+     ???????
      ======================================== */
 
   --workspace-left-panel-width: 800px;
@@ -54,7 +54,7 @@ body {
   --workspace-left-panel-max-width-percent: 40%;
 
   /* ========================================
-     间距变量
+     ????
      ======================================== */
 
   --workspace-gap: 0px;
@@ -62,24 +62,24 @@ body {
   --header-bar-padding: 1.5rem;
 
   /* ========================================
-     控件尺寸
+     ????
      ======================================== */
 
-  /* 按钮最小尺�?- 保持可访问�?*/
+  /* ?????? - ?????*/
   --button-min-size: 44px;
   --button-min-size-compact: 36px;
 
-  /* 按钮内部尺寸 */
+  /* ????? */
   --button-padding: 0.5rem;
   --button-padding-sm: 0.375rem;
   --button-padding-lg: 0.75rem;
 
-  /* 输入框尺�?*/
+  /* ?????*/
   --input-height: 56px;
   --input-padding: 0.75rem;
 
   /* ========================================
-     字体大小
+     ????
      ======================================== */
 
   --font-size-xs: 0.75rem;
@@ -90,11 +90,11 @@ body {
   --font-size-2xl: 1.5rem;
   --font-size-3xl: 1.875rem;
 
-  /* 最小字体大�?- 确保可读�?*/
+  /* ?????? - ?????*/
   --font-size-min: 12px;
 
   /* ========================================
-     图标尺寸
+     ????
      ======================================== */
 
   --icon-size-xs: 12px;
@@ -104,7 +104,7 @@ body {
   --icon-size-xl: 32px;
 
   /* ========================================
-     边距和内边距
+     ????
      ======================================== */
 
   --spacing-1: 0.25rem;
@@ -118,14 +118,14 @@ body {
   --spacing-12: 3rem;
 
   /* ========================================
-     响应式调�?
+     ????
      ======================================== */
 
   --compact-padding: 0.75rem;
   --compact-button-size: 36px;
 }
 
-/* 主容器自适应 */
+/* ???? */
 .app-container {
   display: flex;
   min-height: 100vh;
@@ -134,17 +134,17 @@ body {
   overflow: hidden;
 }
 
-/* 内容区域弹性布局 */
+/* ?????? */
 .main-content {
   flex: 1;
   display: flex;
   flex-direction: column;
   min-width: 0;
-  /* 防止 flex 子元素溢�?*/
+  /* ?? flex ?????*/
   overflow: hidden;
 }
 
-/* 可滚动内容区 */
+/* ????? */
 .scrollable-content {
   flex: 1;
   overflow-y: auto;
@@ -153,10 +153,10 @@ body {
 }
 
 /* ========================================
-   3. 高缩放级别适配
+   3. ?????
    ======================================== */
 
-/* 小屏幕适配 */
+/* ????? */
 @media screen and (max-width: 400px) {
   html {
     font-size: 14px;
@@ -285,7 +285,7 @@ body {
   }
 }
 
-/* 极小屏幕适配 */
+/* ???? */
 @media screen and (max-width: 150px) {
   html {
     font-size: 9px;
@@ -347,7 +347,7 @@ body {
   }
 }
 
-/* 超小屏幕适配 */
+/* ???? */
 @media screen and (max-width: 120px) {
   html {
     font-size: 8px;
@@ -413,7 +413,7 @@ body {
   }
 }
 
-/* 响应式断点布局变量覆盖 */
+/* ??????????? */
 @media screen and (max-width: 1024px) {
   :root {
     --workspace-left-panel-max-width-percent: 35%;
@@ -449,15 +449,15 @@ body {
 }
 
 /* ========================================
-   优雅降级逻辑
+   ??????
    ======================================== */
 
-/* 极端缩放下隐藏装饰性元素，保留核心功能控件 */
+/* ????????????????????? */
 
-/* 在高缩放级别下隐藏装饰性元�?*/
+/* ???????????????*/
 @media screen and (max-width: 300px) {
 
-  /* 隐藏装饰性图标和标签 */
+  /* ?????????? */
   .decorative-icon,
   .optional-label,
   .status-indicator,
@@ -466,30 +466,30 @@ body {
     display: none !important;
   }
 
-  /* 简化导航元�?*/
+  /* ???????*/
   .nav-text,
   .breadcrumb-separator,
   .dropdown-arrow {
     display: none !important;
   }
 
-  /* 保留核心功能按钮但简化样�?*/
+  /* ??????????????*/
   .core-button {
     padding: 0.25rem !important;
     border-radius: 0.125rem !important;
   }
 
-  /* 简化表单标�?*/
+  /* ???????*/
   label .optional-text,
   label .help-text {
     display: none !important;
   }
 }
 
-/* 在极端缩放下进一步简�?*/
+/* ????????????*/
 @media screen and (max-width: 200px) {
 
-  /* 隐藏更多装饰性元�?*/
+  /* ??????????*/
   .secondary-text,
   .metadata,
   .timestamp,
@@ -498,7 +498,7 @@ body {
     display: none !important;
   }
 
-  /* 隐藏非必要的边框和阴�?*/
+  /* ????????????*/
   .card,
   .panel,
   .modal-content {
@@ -507,13 +507,13 @@ body {
     border-radius: 0 !important;
   }
 
-  /* 简化分页控�?*/
+  /* ???????*/
   .pagination-info,
   .pagination-total-text {
     display: none !important;
   }
 
-  /* 保留核心分页按钮 */
+  /* ???????? */
   .pagination-btn {
     min-width: 24px !important;
     min-height: 24px !important;
@@ -521,10 +521,10 @@ body {
   }
 }
 
-/* 在超极端缩放下最大程度简�?*/
+/* ??????????????*/
 @media screen and (max-width: 150px) {
 
-  /* 隐藏所有非核心文本 */
+  /* ????????? */
   .subtitle,
   .caption,
   .footnote,
@@ -533,21 +533,21 @@ body {
     display: none !important;
   }
 
-  /* 隐藏装饰性间�?*/
+  /* ????????*/
   .spacer,
   .divider,
   .separator {
     display: none !important;
   }
 
-  /* 最小化表格显示 */
+  /* ??????? */
   table th .sort-indicator,
   table .column-resize-handle,
   table .row-actions {
     display: none !important;
   }
 
-  /* 保留核心表格功能 */
+  /* ???????? */
   table {
     border-collapse: collapse !important;
   }
@@ -559,14 +559,14 @@ body {
   }
 }
 
-/* 核心功能控件保护 - 确保在任何缩放级别下都可�?*/
+/* ???????? - ??????????????*/
 .core-functionality {
   display: flex !important;
   min-width: var(--button-min-size-compact) !important;
   min-height: var(--button-min-size-compact) !important;
 }
 
-/* 核心输入控件保护 */
+/* ???????? */
 input[type="text"],
 input[type="email"],
 input[type="password"],
@@ -582,7 +582,7 @@ button[type="submit"],
   font-size: max(0.75rem, var(--font-size-min)) !important;
 }
 
-/* 核心导航控件保护 */
+/* ???????? */
 .main-nav,
 .primary-menu,
 .back-button,
@@ -591,7 +591,7 @@ button[type="submit"],
   display: flex !important;
 }
 
-/* 在降级时平滑隐藏元素 */
+/* ?????????? */
 @media screen and (max-width: 300px) {
   .graceful-degradation.decorative {
     opacity: 0;
@@ -600,17 +600,17 @@ button[type="submit"],
   }
 }
 
-/* 降级模式下的可访问性增�?*/
+/* ?????????????*/
 @media screen and (max-width: 200px) {
 
-  /* 增强焦点指示�?*/
+  /* ????????*/
   :focus-visible {
     outline-width: 3px !important;
     outline-color: #1677ff !important;
     outline-style: solid !important;
   }
 
-  /* 增强按钮对比�?*/
+  /* ????????*/
   button,
   .btn,
   [role="button"] {
@@ -628,10 +628,10 @@ button[type="submit"],
 }
 
 /* ========================================
-   4. 弹性文本与元素
+   4. ?????
    ======================================== */
 
-/* 防止文本溢出 */
+/* ???? */
 .text-truncate {
   overflow: hidden;
   text-overflow: ellipsis;
@@ -642,7 +642,7 @@ button[type="submit"],
   text-wrap: balance;
 }
 
-/* 响应式字体大�?*/
+/* ???????*/
 .text-xs {
   font-size: max(var(--font-size-xs), var(--font-size-min));
 }
@@ -672,10 +672,10 @@ button[type="submit"],
 }
 
 /* ========================================
-   高缩放级别工具类
+   ????????
    ======================================== */
 
-/* 高缩放级别自适应�?*/
+/* ??????????*/
 .high-zoom-adaptive {
   font-size: max(clamp(0.75rem, 2vw, 0.875rem), var(--font-size-min));
 }
@@ -696,7 +696,7 @@ button[type="submit"],
   font-size: max(clamp(0.75rem, 2vw, 0.875rem), var(--font-size-min));
 }
 
-/* 极高缩放级别自适应�?*/
+/* ???????????*/
 .extreme-zoom-adaptive {
   font-size: max(clamp(0.625rem, 1.5vw, 0.75rem), var(--font-size-min));
 }
@@ -717,7 +717,7 @@ button[type="submit"],
   font-size: max(clamp(0.625rem, 1.5vw, 0.75rem), var(--font-size-min));
 }
 
-/* 工作区专用高缩放适配�?*/
+/* ????????????*/
 .workspace-zoom-adaptive .input-bar-container {
   padding: clamp(0.25rem, 0.8vw, 0.75rem);
 }
@@ -736,7 +736,7 @@ button[type="submit"],
   padding: clamp(0.25rem, 0.5vw, 0.5rem);
 }
 
-/* 响应式字体大小工具类 */
+/* ?????????? */
 .text-responsive-sm {
   font-size: max(clamp(0.75rem, 2vw, 0.875rem), var(--font-size-min));
 }
@@ -758,10 +758,10 @@ button[type="submit"],
 }
 
 /* ========================================
-   高缩放级别样式适配
+   ?????????
    ======================================== */
 
-/* 高缩放级别下的响应式字体大小 */
+/* ?????????????? */
 .text-high-zoom-xs {
   font-size: max(clamp(0.625rem, 1.5vw, 0.75rem), var(--font-size-min));
 }
@@ -782,13 +782,13 @@ button[type="submit"],
   font-size: max(clamp(1.125rem, 3.5vw, 1.25rem), var(--font-size-min));
 }
 
-/* 高缩放级别下的控件尺寸适配 */
+/* ????????????? */
 .control-high-zoom {
   padding: clamp(0.25rem, 1vw, 0.75rem);
   font-size: max(clamp(0.75rem, 2vw, 0.875rem), var(--font-size-min));
 }
 
-/* 高缩放级别下的按钮适配 */
+/* ??????????? */
 .btn-high-zoom {
   min-width: var(--button-min-size-compact);
   min-height: var(--button-min-size-compact);
@@ -796,14 +796,14 @@ button[type="submit"],
   font-size: max(clamp(0.75rem, 2vw, 0.875rem), var(--font-size-min));
 }
 
-/* 高缩放级别下的输入框适配 */
+/* ???????????? */
 .input-high-zoom {
   padding: clamp(0.5rem, 1.5vw, 0.75rem);
   font-size: max(clamp(0.875rem, 2.5vw, 1rem), var(--font-size-min));
   min-height: clamp(2rem, 8vw, 3.5rem);
 }
 
-/* 高缩放级别下的间距适配 */
+/* ??????????? */
 .spacing-high-zoom-sm {
   gap: clamp(0.25rem, 0.5vw, 0.5rem);
 }
@@ -816,7 +816,7 @@ button[type="submit"],
   gap: clamp(0.75rem, 1.5vw, 1rem);
 }
 
-/* 高缩放级别下的工作区特定适配 */
+/* ?????????????? */
 .workspace-high-zoom {
   font-size: max(clamp(0.75rem, 2vw, 0.875rem), var(--font-size-min));
 }
@@ -839,7 +839,7 @@ button[type="submit"],
   padding: clamp(0.25rem, 0.5vw, 0.5rem);
 }
 
-/* 高缩放级别下的表格适配 */
+/* ??????????? */
 .table-high-zoom {
   font-size: max(clamp(0.75rem, 1.8vw, 0.875rem), var(--font-size-min));
 }
@@ -849,7 +849,7 @@ button[type="submit"],
   padding: clamp(0.375rem, 0.8vw, 0.75rem);
 }
 
-/* 高缩放级别下的模态框适配 */
+/* ???????????? */
 .modal-high-zoom .modal-content {
   max-width: clamp(280px, 90vw, 600px);
   padding: clamp(1rem, 3vw, 2rem);
@@ -862,7 +862,7 @@ button[type="submit"],
       var(--font-size-min));
 }
 
-/* 高缩放级别下的分页控件适配 */
+/* ????????????? */
 .pagination-high-zoom .pagination-btn {
   min-width: var(--button-min-size-compact);
   min-height: var(--button-min-size-compact);
@@ -875,7 +875,7 @@ button[type="submit"],
       var(--font-size-min));
 }
 
-/* 高缩放级别下的卡片适配 */
+/* ??????????? */
 .card-high-zoom {
   padding: clamp(0.75rem,
       2vw,
@@ -897,11 +897,11 @@ button[type="submit"],
 }
 
 /* ========================================
-   5. 按钮与交互元素适配
+   5. ?????????
    ======================================== */
 
-/* 确保按钮最小可点击区域 (WCAG 2.1 AA: 44x44px) */
-/* 最小可点击区域不受全局缩放影响，保持可访问�?*/
+/* ??????????? (WCAG 2.1 AA: 44x44px) */
+/* ???????????????????????*/
 button,
 [role="button"],
 .btn,
@@ -909,12 +909,12 @@ a.btn {
   min-height: var(--button-min-size);
   min-width: var(--button-min-size);
   touch-action: manipulation;
-  /* 内部内容使用缩放后的尺寸 */
+  /* ???????????? */
   padding: var(--button-padding);
   font-size: var(--font-size-base);
 }
 
-/* 小型按钮例外，但保持可访问�?*/
+/* ???????????????*/
 .btn-sm,
 button.btn-sm {
   min-height: var(--button-min-size-compact);
@@ -923,14 +923,14 @@ button.btn-sm {
   font-size: var(--font-size-sm);
 }
 
-/* 大型按钮 */
+/* ???? */
 .btn-lg,
 button.btn-lg {
   padding: var(--button-padding-lg);
   font-size: var(--font-size-lg);
 }
 
-/* 图标按钮 */
+/* ???? */
 .btn-icon {
   display: inline-flex;
   align-items: center;
@@ -945,19 +945,19 @@ button.btn-lg {
 }
 
 /* ========================================
-   6. 表单元素适配
+   6. ??????
    ======================================== */
 
 input,
 textarea,
 select {
-  /* 防止 iOS 自动缩放 - 使用最小字体大�?*/
+  /* ?? iOS ?? - ????????*/
   font-size: max(var(--font-size-base), var(--font-size-min));
   max-width: 100%;
   padding: var(--input-padding);
 }
 
-/* 响应式输入框 */
+/* ????? */
 .input-responsive {
   width: 100%;
   min-height: var(--input-height);
@@ -965,13 +965,13 @@ select {
   font-size: max(var(--font-size-base), var(--font-size-min));
 }
 
-/* 输入框标�?*/
+/* ????*/
 label {
   font-size: var(--font-size-sm);
   margin-bottom: var(--spacing-2);
 }
 
-/* 表单�?*/
+/* ???*/
 .form-group {
   margin-bottom: var(--spacing-4);
 }
@@ -982,10 +982,10 @@ label {
 }
 
 /* ========================================
-   7. 卡片与容器适配
+   7. ???????
    ======================================== */
 
-/* 响应式卡片网�?*/
+/* ????????*/
 .card-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(min(100%, 280px), 1fr));
@@ -998,7 +998,7 @@ label {
   }
 }
 
-/* 卡片内容防溢�?*/
+/* ????????*/
 .card-content {
   min-width: 0;
   overflow: hidden;
@@ -1015,7 +1015,7 @@ label {
   border-top: 1px solid #e5e7eb;
 }
 
-/* 卡片标题 */
+/* ???? */
 .card-title {
   font-size: var(--font-size-lg);
   font-weight: 600;
@@ -1029,10 +1029,10 @@ label {
 }
 
 /* ========================================
-   8. 模态框适配
+   8. ?????
    ======================================== */
 
-/* 模态框响应�?*/
+/* ???????*/
 .modal-container {
   position: fixed;
   inset: 0;
@@ -1084,117 +1084,206 @@ label {
 }
 
 /* ========================================
-   9. 分页组件样式
+   9. ???? (Pagination) - Modern Refined
    ======================================== */
 
-.pagination {
+/* 1. ??????????? */
+.pagination-container {
+  flex-shrink: 0;
+  background-color: rgba(255, 255, 255, 0.95);
+  /* ??????? */
+  backdrop-filter: blur(8px);
+  /* ????? */
+  padding: 1rem 1.5rem;
+  margin-top: auto;
+
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  width: 100%;
+  z-index: 10;
+
+  /* ??????? */
+  border: 1px solid rgba(229, 231, 235, 0.8);
+  border-radius: 1rem;
+  /* ??????????? */
+  box-shadow:
+    0 4px 6px -1px rgba(0, 0, 0, 0.05),
+    0 10px 15px -3px rgba(0, 0, 0, 0.03);
+  /* ?????? */
+}
+
+@media screen and (min-width: 640px) {
+  .pagination-container {
+    flex-direction: row;
+    align-items: center;
+    justify-content: flex-end;
+  }
+}
+
+/* 2. ?????????? */
+.pagination-info {
+  font-size: 0.875rem;
+  color: #64748b;
+  /* Slate-500: ??????? */
+  font-weight: 500;
+  text-align: center;
+  font-feature-settings: "tnum";
+  /* ?????????????? */
+}
+
+@media screen and (min-width: 640px) {
+  .pagination-info {
+    text-align: left;
+    margin-right: auto;
+  }
+}
+
+/* ?????????? */
+.pagination-info b,
+.pagination-info strong,
+.pagination-info .highlight {
+  color: #0f172a;
+  /* Slate-900: ??????? */
+  font-weight: 800;
+  /* ???? */
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  /* ?????????? */
+}
+
+/* 3. ????????????? */
+.pagination-controls {
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: var(--spacing-2);
-  flex-wrap: wrap;
-  padding: var(--spacing-3) 0;
+  gap: 0.375rem;
+  /* ?????? */
+
+  background-color: #f1f5f9;
+  /* Slate-100 */
+  padding: 0.375rem;
+  border-radius: 9999px;
+  /* ??????? */
+  border: 1px solid rgba(226, 232, 240, 0.8);
+  box-shadow: inset 0 2px 4px 0 rgba(0, 0, 0, 0.02);
+  /* ???????? */
 }
 
+/* 4. ???????????? */
 .pagination-btn {
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  position: relative;
+
+  /* ???? */
   min-width: 2.5rem;
-  min-height: 2.5rem;
-  padding: var(--spacing-2);
-  border-radius: 0.375rem;
-  font-size: var(--font-size-sm);
-  font-weight: 500;
-  transition: all 0.2s;
-  border: 1px solid transparent;
-  /* 保持最小可点击区域 */
-  min-width: var(--button-min-size-compact);
-  min-height: var(--button-min-size-compact);
+  /* 40px: ??????? */
+  height: 2.5rem;
+  /* 40px */
+  padding: 0 0.5rem;
+
+  /* ???? */
+  border-radius: 9999px;
+  /* ??/???? */
+  font-size: 0.9rem;
+  font-weight: 700;
+  /* ???? */
+  font-family: system-ui, -apple-system, sans-serif;
+  color: #475569;
+  /* Slate-600 */
+
+  background-color: transparent;
+  border: 2px solid transparent;
+  /* ????????????? */
+  cursor: pointer;
+
+  /* ?? */
+  transition: all 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
+  /* ?????? */
+  user-select: none;
 }
 
-.pagination-btn:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
+/* ?????? (SVG ? ????) */
+.pagination-btn svg,
+.pagination-btn i {
+  stroke-width: 2.5px;
+  /* ???SVG????? */
+  font-weight: 900;
+  /* ?????????? */
+  font-size: 1rem;
 }
 
+/* ??????? + ?? */
+.pagination-btn:hover:not(:disabled):not(.active) {
+  background-color: #ffffff;
+  color: #2563eb;
+  /* Blue-600 */
+  border-color: rgba(37, 99, 235, 0.1);
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+  transform: translateY(-2px);
+  /* ??????? */
+}
+
+/* ???????? */
+.pagination-btn:active:not(:disabled) {
+  transform: scale(0.92) translateY(0);
+  box-shadow: none;
+}
+
+/* 5. ?????????????? */
+.pagination-btn.active,
 .pagination-btn-active {
-  background-color: #1677ff;
+  background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%);
+  /* ???? */
   color: white;
-  border-color: #1677ff;
+  border-color: transparent;
+
+  /* ???? */
+  box-shadow:
+    0 4px 12px rgba(37, 99, 235, 0.35),
+    inset 0 1px 0 rgba(255, 255, 255, 0.2);
+
+  z-index: 2;
+  transform: scale(1.05);
+  /* ???? */
 }
 
-.pagination-info {
-  font-size: var(--font-size-sm);
-  color: #6b7280;
-  white-space: nowrap;
+/* ???????? */
+.pagination-btn.active:hover,
+.pagination-btn-active:hover {
+  transform: scale(1.05) translateY(-1px);
+  box-shadow: 0 6px 16px rgba(37, 99, 235, 0.4);
 }
 
-/* 分页容器统一样式 */
-.pagination-container {
-  flex-shrink: 0;
-  border-top: 1px solid #e5e7eb;
-  /* border-gray-200 */
-  background-color: white;
-  border-radius: 0 0 0.75rem 0.75rem;
-  /* rounded-b-xl */
-  padding-top: var(--spacing-4);
-  /* pt-4 */
-  margin-top: var(--spacing-4);
-  /* mt-4 */
-  /* ??????????? */
-  box-shadow: 0 2px 4px -1px rgba(0, 0, 0, 0.06), 0 1px 2px -1px rgba(0, 0, 0, 0.04);
+/* 6. ???? */
+.pagination-btn:disabled {
+  color: #cbd5e1;
+  /* Slate-300 */
+  cursor: not-allowed;
+  background-color: transparent;
+  transform: none;
 }
 
-.pagination-wrapper {
-  padding-left: var(--spacing-4);
-  /* px-4 */
-  padding-right: var(--spacing-4);
-}
+/* 7. ???????? */
+.pagination-ellipsis {
+  display: flex;
+  align-items: flex-end;
+  /* ???????????? */
+  justify-content: center;
+  width: 2rem;
+  height: 2rem;
+  padding-bottom: 0.5rem;
 
-/* 响应式分�?*/
-@media screen and (max-width: 480px) {
-  .pagination {
-    gap: var(--spacing-1);
-  }
-
-  .pagination-btn {
-    min-width: 2rem;
-    min-height: 2rem;
-    padding: var(--spacing-1);
-    font-size: var(--font-size-xs);
-    /* 仍保持最小可点击区域 */
-    min-width: 32px;
-    min-height: 32px;
-  }
-
-  .pagination-info {
-    font-size: var(--font-size-xs);
-    width: 100%;
-    text-align: center;
-    order: -1;
-    margin-bottom: var(--spacing-2);
-  }
-
-  .pagination-container {
-    padding-top: var(--spacing-3);
-    /* pt-3 */
-  }
-}
-
-/* 分页总数文字右对�?*/
-.pagination-total-text {
-  text-align: right;
-}
-
-@media screen and (min-width: 640px) {
-  .pagination-total-text {
-    text-align: left;
-  }
+  color: #94a3b8;
+  /* Slate-400 */
+  font-size: 1.5rem;
+  font-weight: 700;
+  letter-spacing: 2px;
 }
 
 /* ========================================
-   10. 表格响应�?
+   10. ??????
    ======================================== */
 
 .table-responsive {
@@ -1208,7 +1297,7 @@ label {
 }
 
 /* ========================================
-   11. 侧边栏适配
+   11. ?????
    ======================================== */
 
 .sidebar {
@@ -1265,7 +1354,7 @@ label {
   flex-shrink: 0;
 }
 
-/* 移动端侧边栏 */
+/* ????? */
 @media screen and (max-width: 768px) {
   .sidebar {
     position: fixed;
@@ -1284,10 +1373,10 @@ label {
 }
 
 /* ========================================
-   12. 滚动条美�?
+   12. ??????
    ======================================== */
 
-/* Webkit 浏览器滚动条 */
+/* Webkit ?????? */
 ::-webkit-scrollbar {
   width: 8px;
   height: 8px;
@@ -1307,17 +1396,17 @@ label {
   background: #a1a1a1;
 }
 
-/* Firefox 滚动�?*/
+/* Firefox ????*/
 * {
   scrollbar-width: thin;
   scrollbar-color: #c1c1c1 #f1f1f1;
 }
 
 /* ========================================
-   13. 动画与过�?
+   13. ??????
    ======================================== */
 
-/* 减少动画（无障碍�?*/
+/* ??????????*/
 @media (prefers-reduced-motion: reduce) {
 
   *,
@@ -1329,7 +1418,7 @@ label {
   }
 }
 
-/* 淡入动画 */
+/* ???? */
 @keyframes fadeIn {
   from {
     opacity: 0;
@@ -1403,7 +1492,7 @@ label {
 }
 
 /* ========================================
-   14. 焦点样式（无障碍�?
+   14. ??????????
    ======================================== */
 
 :focus-visible {
@@ -1411,13 +1500,13 @@ label {
   outline-offset: 2px;
 }
 
-/* 移除默认焦点样式，使用自定义 */
+/* ?????????????? */
 :focus:not(:focus-visible) {
   outline: none;
 }
 
 /* ========================================
-   15. 打印样式
+   15. ????
    ======================================== */
 
 @media print {
@@ -1438,10 +1527,10 @@ label {
 
 
 /* ========================================
-   16. 工作区输入栏响应式布局
+   16. ???????????
    ======================================== */
 
-/* 模型选择器响应式 - 窄屏隐藏标签 */
+/* ???????? - ?????? */
 @media screen and (max-width: 640px) {
   .model-label {
     display: none !important;
@@ -1449,7 +1538,7 @@ label {
 
   .input-bar-controls {
     max-width: 45%;
-    /* 在小屏幕上减少控件区�?*/
+    /* ????????????*/
   }
 
   .model-selector-compact {
@@ -1458,7 +1547,7 @@ label {
   }
 }
 
-/* 极窄屏幕 (<400px) - 模型选择器仅显示图标 */
+/* ???? (<400px) - ?????????? */
 @media screen and (max-width: 400px) {
   .model-selector-compact .model-select {
     max-width: 50px !important;
@@ -1479,12 +1568,12 @@ label {
 
   .input-bar-controls {
     gap: 0.25rem;
-    /* 减少间距 */
+    /* ???? */
     max-width: 40%;
   }
 }
 
-/* 超窄屏幕 (<320px) - 模型选择器极简模式 */
+/* ???? (<320px) - ????????? */
 @media screen and (max-width: 320px) {
   .model-selector-compact .model-select {
     max-width: 40px !important;
@@ -1504,7 +1593,7 @@ label {
   }
 }
 
-/* 输入栏容�?- 使用 flex 布局防止溢出 */
+/* ??????- ?? flex ?????? */
 .input-bar-container {
   display: flex;
   align-items: center;
@@ -1513,13 +1602,13 @@ label {
   position: relative;
 }
 
-/* 输入�?- 弹性收�?*/
+/* ????- ?????*/
 .input-bar-textarea {
   flex: 1;
   min-width: 0;
 }
 
-/* 输入栏控件容�?- 防止溢出 */
+/* ????????- ???? */
 .input-bar-controls {
   display: flex;
   align-items: center;
@@ -1528,10 +1617,10 @@ label {
   flex-shrink: 0;
   min-width: 0;
   max-width: 50%;
-  /* 确保控件不会占用超过50%的空�?*/
+  /* ??????????50%????*/
 }
 
-/* 确保发送按钮最小尺�?*/
+/* ???????????*/
 .send-button {
   min-width: 36px;
   min-height: 36px;
@@ -1539,7 +1628,7 @@ label {
   box-sizing: border-box;
 }
 
-/* 在极小屏幕上稍微减小发送按钮尺寸但保持可用�?*/
+/* ???????????????????????*/
 @media screen and (max-width: 320px) {
   .send-button {
     min-width: 32px;
@@ -1549,12 +1638,12 @@ label {
   }
 }
 
-/* 模型选择器改�?*/
+/* ????????*/
 .model-selector-compact {
   max-width: 120px;
-  /* 设置最大宽度防止过度扩�?*/
+  /* ?????????????*/
   min-width: 60px;
-  /* 设置最小宽度确保可用�?*/
+  /* ????????????*/
 }
 
 .model-selector-compact .model-select {
@@ -1565,7 +1654,7 @@ label {
   white-space: nowrap;
 }
 
-/* 模型选择器选项文本截断 */
+/* ??????????? */
 .model-selector-compact .model-select option {
   text-overflow: ellipsis;
   overflow: hidden;
@@ -1573,10 +1662,10 @@ label {
 }
 
 /* ========================================
-   17. 顶部标题栏响应式布局
+   17. ??????????
    ======================================== */
 
-/* 窄屏时隐藏按钮文字，仅保留图�?*/
+/* ????????????????*/
 @media screen and (max-width: 768px) {
   .header-button-text {
     display: none !important;
@@ -1589,7 +1678,7 @@ label {
   }
 }
 
-/* 极窄屏幕时进一步优�?*/
+/* ???????????*/
 @media screen and (max-width: 480px) {
   .header-button-icon-only {
     padding: 0.375rem !important;
@@ -1599,18 +1688,18 @@ label {
 }
 
 /* ========================================
-   18. 面板切换按钮样式
+   18. ????????
    ======================================== */
 
-/* 面板切换按钮 - 确保最小可点击区域 */
+/* ?????? - ????????? */
 .panel-toggle-button {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  /* 保持最小可点击区域，不受全局缩放影响 */
+  /* ?????????????????? */
   min-width: var(--button-min-size);
   min-height: var(--button-min-size);
-  /* 内部内容使用缩放后的尺寸 */
+  /* ???????????? */
   padding: 0.625rem;
   /* p-2.5 = 10px */
   border-radius: 0.375rem;
@@ -1641,7 +1730,7 @@ label {
   height: var(--icon-size-base);
 }
 
-/* 紧凑模式下的面板切换按钮 */
+/* ???????????? */
 @media screen and (max-width: 768px) {
   .panel-toggle-button {
     min-width: var(--button-min-size-compact);
@@ -1658,10 +1747,10 @@ label {
 }
 
 /* ========================================
-   19. 通用工具类（应用全局缩放�?
+   19. ??????????????
    ======================================== */
 
-/* 间距工具�?*/
+/* ??????*/
 .p-1 {
   padding: var(--spacing-1);
 }
@@ -1807,7 +1896,7 @@ label {
   margin-top: var(--spacing-4);
 }
 
-/* 间隙工具�?*/
+/* ??????*/
 .gap-1 {
   gap: var(--spacing-1);
 }
@@ -1828,7 +1917,7 @@ label {
   gap: var(--spacing-6);
 }
 
-/* 圆角工具�?*/
+/* ??????*/
 .rounded {
   border-radius: 0.25rem;
 }
@@ -1845,7 +1934,7 @@ label {
   border-radius: 0.75rem;
 }
 
-/* 图标尺寸工具�?*/
+/* ????????*/
 .icon-xs {
   width: var(--icon-size-xs);
   height: var(--icon-size-xs);
@@ -1871,7 +1960,7 @@ label {
   height: var(--icon-size-xl);
 }
 
-/* 最小尺寸工具类（不受全局缩放影响，保持可访问性） */
+/* ???????????????????????? */
 .min-touch-target {
   min-width: var(--button-min-size);
   min-height: var(--button-min-size);
@@ -1883,10 +1972,10 @@ label {
 }
 
 /* ========================================
-   20. 全局缩放调试工具（开发环境）
+   20. ???????
    ======================================== */
 
-/* 调试信息显示 */
+/* ???? */
 .debug-zoom-info {
   position: fixed;
   top: var(--spacing-4);
@@ -1906,7 +1995,7 @@ label {
   display: block;
 }
 
-/* 在开发环境中显示缩放边界 */
+/* ???????????? */
 .debug-scale-boundaries * {
   outline: 1px dashed rgba(255, 0, 0, 0.3);
 }
@@ -1916,10 +2005,10 @@ label {
 }
 
 /* ========================================
-   21. 全局字体大小保障（可访问性）
+   21. ??????????????
    ======================================== */
 
-/* 全局字体大小保障 - 确保所有文本元素都有最小字体大�?*/
+/* ???????? - ?????????????????*/
 p,
 span,
 div,
@@ -1939,7 +2028,7 @@ select {
   font-size: max(1em, var(--font-size-min)) !important;
 }
 
-/* 标题元素的最小字体大�?*/
+/* ????????????*/
 h1 {
   font-size: max(var(--font-size-3xl), calc(var(--font-size-min) * 1.5)) !important;
 }
@@ -1964,7 +2053,7 @@ h6 {
   font-size: max(var(--font-size-sm), var(--font-size-min)) !important;
 }
 
-/* 特殊情况下的字体大小保障 */
+/* ???????????? */
 .text-xs {
   font-size: max(var(--font-size-xs), var(--font-size-min)) !important;
 }
@@ -1993,7 +2082,7 @@ h6 {
   font-size: max(var(--font-size-3xl), var(--font-size-min)) !important;
 }
 
-/* 表单控件字体大小保障 */
+/* ?????????? */
 input,
 textarea,
 select,
@@ -2001,14 +2090,14 @@ button {
   font-size: max(var(--font-size-base), var(--font-size-min)) !important;
 }
 
-/* 导航元素字体大小保障 */
+/* ?????????? */
 .sidebar-nav-link,
 .pagination-btn,
 .panel-toggle-button {
   font-size: max(var(--font-size-sm), var(--font-size-min)) !important;
 }
 
-/* 卡片元素字体大小保障 */
+/* ?????????? */
 .card-title {
   font-size: max(var(--font-size-lg), var(--font-size-min)) !important;
 }
@@ -2017,7 +2106,7 @@ button {
   font-size: max(var(--font-size-sm), var(--font-size-min)) !important;
 }
 
-/* 模态框元素字体大小保障 */
+/* ??????????? */
 .modal-title {
   font-size: max(var(--font-size-xl), var(--font-size-min)) !important;
 }
@@ -2027,12 +2116,12 @@ button {
 }
 
 /* ========================================
-   23. 工作区响应式布局�?
+   23. ??????????
    ======================================== */
 
-/* 工作区响应式布局基础�?*/
+/* ????????????*/
 .workspace-mobile {
-  /* 移动端布局优化 */
+  /* ??????? */
   --workspace-header-padding: 0.75rem;
   --workspace-content-padding: 0.75rem;
   --workspace-input-padding: 0.75rem;
@@ -2043,7 +2132,7 @@ button {
 }
 
 .workspace-tablet {
-  /* 平板端布局优化 */
+  /* ??????? */
   --workspace-header-padding: 1rem;
   --workspace-content-padding: 1rem;
   --workspace-input-padding: 1rem;
@@ -2054,7 +2143,7 @@ button {
 }
 
 .workspace-desktop {
-  /* 桌面端布局优化 */
+  /* ??????? */
   --workspace-header-padding: 1.5rem;
   --workspace-content-padding: 1.5rem;
   --workspace-input-padding: 1.5rem;
@@ -2064,53 +2153,53 @@ button {
   --workspace-gap: 0.5rem;
 }
 
-/* 工作区面板响应式行为 */
+/* ?????????? */
 .workspace-mobile .left-panel,
 .workspace-mobile .right-panel {
-  /* 移动端自动隐藏侧边面�?*/
+  /* ????????????*/
   display: none;
 }
 
 .workspace-tablet .left-panel {
-  /* 平板端左侧面板可选显�?*/
+  /* ????????????*/
   max-width: 35vw;
 }
 
 .workspace-tablet .right-panel {
-  /* 平板端右侧面板自动隐�?*/
+  /* ????????????*/
   display: none;
 }
 
 .workspace-desktop .left-panel {
-  /* 桌面端左侧面板正常显�?*/
+  /* ????????????*/
   max-width: 40vw;
 }
 
 .workspace-desktop .right-panel {
-  /* 桌面端右侧面板正常显�?*/
+  /* ????????????*/
   width: 256px;
 }
 
-/* 工作区内容区域响应式调整 */
+/* ???????????? */
 .workspace-mobile .chat-area {
-  /* 移动端对话区占满全宽 */
+  /* ?????????? */
   width: 100%;
   min-width: 320px;
 }
 
 .workspace-tablet .chat-area {
-  /* 平板端对话区弹性布局 */
+  /* ?????????? */
   flex: 1;
   min-width: 400px;
 }
 
 .workspace-desktop .chat-area {
-  /* 桌面端对话区弹性布局 */
+  /* ?????????? */
   flex: 1;
   min-width: 480px;
 }
 
-/* 工作区消息区域响应式间距 */
+/* ???????????? */
 .workspace-mobile .messages-area {
   padding: var(--workspace-content-padding);
   gap: 0.75rem;
@@ -2126,7 +2215,7 @@ button {
   gap: 1.5rem;
 }
 
-/* 工作区输入栏响应式调�?*/
+/* ????????????*/
 .workspace-mobile .input-bar {
   padding: var(--workspace-input-padding);
 }
@@ -2139,7 +2228,7 @@ button {
   padding: var(--workspace-input-padding);
 }
 
-/* 工作区按钮响应式尺寸 */
+/* ?????????? */
 .workspace-mobile button,
 .workspace-mobile .btn {
   min-width: var(--workspace-button-size);
@@ -2161,7 +2250,7 @@ button {
   font-size: max(var(--workspace-font-size), var(--font-size-min));
 }
 
-/* 工作区图标响应式尺寸 */
+/* ?????????? */
 .workspace-mobile svg,
 .workspace-mobile .icon {
   width: var(--workspace-icon-size);
@@ -2180,7 +2269,7 @@ button {
   height: var(--workspace-icon-size);
 }
 
-/* 工作区文本响应式字体大小 */
+/* ???????????? */
 .workspace-mobile {
   font-size: max(var(--workspace-font-size), var(--font-size-min));
 }
@@ -2193,7 +2282,7 @@ button {
   font-size: max(var(--workspace-font-size), var(--font-size-min));
 }
 
-/* 工作区标题响应式调整 */
+/* ?????????? */
 .workspace-mobile h1,
 .workspace-mobile h2,
 .workspace-mobile h3 {
@@ -2212,7 +2301,7 @@ button {
   font-size: max(1.25rem, var(--font-size-min));
 }
 
-/* 工作区面板切换按钮响应式调整 */
+/* ?????????????? */
 .workspace-mobile .panel-toggle-button {
   min-width: 32px;
   min-height: 32px;
@@ -2231,7 +2320,7 @@ button {
   padding: 0.625rem;
 }
 
-/* 工作区会话列表响应式调整 */
+/* ???????????? */
 .workspace-mobile .session-list-item {
   padding: 0.5rem;
   font-size: max(0.75rem, var(--font-size-min));
@@ -2248,167 +2337,167 @@ button {
 }
 
 /* ========================================
-   24. 工作区响应式断点特定样式
+   24. ????????????
    ======================================== */
 
-/* 移动端特定样�?(< 768px) */
+/* ????????(< 768px) */
 @media screen and (max-width: 767px) {
   .workspace-container {
-    /* 移动端强制单列布局 */
+    /* ????????? */
     flex-direction: column;
   }
 
   .workspace-header {
-    /* 移动端标题栏紧凑布局 */
+    /* ?????????? */
     padding: 0.5rem 0.75rem;
     min-height: 48px;
   }
 
   .workspace-input-bar {
-    /* 移动端输入栏紧凑布局 */
+    /* ?????????? */
     padding: 0.75rem;
   }
 
   .workspace-input-controls {
-    /* 移动端输入控件紧凑间�?*/
+    /* ????????????*/
     gap: 0.25rem;
   }
 
   .workspace-model-selector {
-    /* 移动端模型选择器最小化 */
+    /* ??????????? */
     max-width: 60px;
     min-width: 50px;
   }
 
   .workspace-send-button {
-    /* 移动端发送按钮紧凑尺�?*/
+    /* ????????????*/
     min-width: 32px;
     min-height: 32px;
   }
 }
 
-/* 平板端特定样�?(768px - 1023px) */
+/* ????????(768px - 1023px) */
 @media screen and (min-width: 768px) and (max-width: 1023px) {
   .workspace-container {
-    /* 平板端双列布局 */
+    /* ??????? */
     flex-direction: row;
   }
 
   .workspace-left-panel {
-    /* 平板端左侧面板可选显�?*/
+    /* ????????????*/
     max-width: 35vw;
   }
 
   .workspace-right-panel {
-    /* 平板端右侧面板默认隐�?*/
+    /* ????????????*/
     display: none;
   }
 
   .workspace-header {
-    /* 平板端标题栏标准布局 */
+    /* ?????????? */
     padding: 0.75rem 1rem;
     min-height: 52px;
   }
 
   .workspace-input-bar {
-    /* 平板端输入栏标准布局 */
+    /* ?????????? */
     padding: 1rem;
   }
 
   .workspace-input-controls {
-    /* 平板端输入控件标准间�?*/
+    /* ????????????*/
     gap: 0.375rem;
   }
 
   .workspace-model-selector {
-    /* 平板端模型选择器标准尺�?*/
+    /* ?????????????*/
     max-width: 100px;
     min-width: 70px;
   }
 
   .workspace-send-button {
-    /* 平板端发送按钮标准尺�?*/
+    /* ????????????*/
     min-width: 36px;
     min-height: 36px;
   }
 }
 
-/* 桌面端特定样�?(>= 1024px) */
+/* ????????(>= 1024px) */
 @media screen and (min-width: 1024px) {
   .workspace-container {
-    /* 桌面端三列布局 */
+    /* ??????? */
     flex-direction: row;
   }
 
   .workspace-left-panel {
-    /* 桌面端左侧面板正常显�?*/
+    /* ????????????*/
     max-width: 40vw;
   }
 
   .workspace-right-panel {
-    /* 桌面端右侧面板正常显�?*/
+    /* ????????????*/
     width: 256px;
     display: flex;
   }
 
   .workspace-header {
-    /* 桌面端标题栏宽松布局 */
+    /* ?????????? */
     padding: 1rem 1.5rem;
     min-height: 56px;
   }
 
   .workspace-input-bar {
-    /* 桌面端输入栏宽松布局 */
+    /* ?????????? */
     padding: 1rem 1.5rem;
   }
 
   .workspace-input-controls {
-    /* 桌面端输入控件宽松间�?*/
+    /* ????????????*/
     gap: 0.5rem;
   }
 
   .workspace-model-selector {
-    /* 桌面端模型选择器完整尺�?*/
+    /* ?????????????*/
     max-width: 120px;
     min-width: 80px;
   }
 
   .workspace-send-button {
-    /* 桌面端发送按钮完整尺�?*/
+    /* ????????????*/
     min-width: var(--button-min-size);
     min-height: var(--button-min-size);
   }
 }
 
-/* 超大屏幕特定样式 (>= 1440px) */
+/* ???????? (>= 1440px) */
 @media screen and (min-width: 1440px) {
   .workspace-container {
-    /* 超大屏幕三列布局，最大内容宽度限�?*/
+    /* ??????????????????*/
     max-width: 1920px;
     margin: 0 auto;
   }
 
   .workspace-left-panel {
-    /* 超大屏幕左侧面板最大宽�?*/
+    /* ?????????????*/
     max-width: 600px;
   }
 
   .workspace-right-panel {
-    /* 超大屏幕右侧面板固定宽度 */
+    /* ???????????? */
     width: 280px;
   }
 
   .workspace-chat-area {
-    /* 超大屏幕对话区最大宽�?*/
+    /* ????????????*/
     max-width: 1200px;
   }
 }
 
-/* 高对比度模式支持 */
+/* ???????? */
 @media (prefers-contrast: high) {
   :root {
     --font-size-min: 14px;
-    /* 在高对比度模式下增加最小字体大�?*/
+    /* ?????????????????*/
   }
 
   button,
@@ -2418,15 +2507,15 @@ button {
   }
 }
 
-/* 大字体偏好支�?*/
+/* ????????*/
 @media (prefers-reduced-motion: no-preference) and (min-resolution: 2dppx) {
   :root {
     --font-size-min: 13px;
-    /* 在高分辨率屏幕上稍微增加最小字体大�?*/
+    /* ???????????????????*/
   }
 }
 
-/* 强制最小可点击区域（可访问性） */
+/* ??????????????? */
 button,
 [role="button"],
 a,
@@ -2445,14 +2534,14 @@ button.btn-sm,
   min-height: var(--button-min-size-compact) !important;
 }
 
-/* 焦点指示器增�?*/
+/* ????????*/
 :focus-visible {
   outline: 3px solid #1677ff !important;
   outline-offset: 2px !important;
   border-radius: 2px;
 }
 
-/* 确保在极高缩放下仍然可见的焦点指示器 */
+/* ?????????????????? */
 @media screen and (max-width: 300px) {
   :focus-visible {
     outline-width: 2px !important;

@@ -279,7 +279,7 @@ export const ProjectOverview: React.FC<ProjectOverviewProps> = ({
       )}
 
       {/* Project grid */}
-      <div className="flex-1 overflow-y-auto min-h-0">
+      <div className="project-grid-container">
         <ProjectCardGrid
           projects={paginatedProjects}
           onCardClick={handleCardClick}

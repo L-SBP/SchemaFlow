@@ -284,7 +284,7 @@ export const ProjectWizard: React.FC<ProjectWizardProps> = ({ projectId, onCompl
               <span className="text-sm text-gray-500">请审查并在需要时修改生成的 Schema。</span>
             </div>
 
-            <div className={`${displayHeightClass} border rounded-md overflow-hidden`}>
+            <div className={`${displayHeightClass} border rounded-md overflow-y-auto`}>
               <textarea
                 className="w-full h-full p-4 font-mono text-sm resize-none focus:outline-none"
                 value={editedSchema}
@@ -326,7 +326,7 @@ export const ProjectWizard: React.FC<ProjectWizardProps> = ({ projectId, onCompl
               <span className="text-sm text-gray-500">请在部署前审查 SQL 语句。</span>
             </div>
 
-            <div className={`${displayHeightClass} border rounded-md overflow-hidden bg-gray-50`}>
+            <div className={`${displayHeightClass} border rounded-md overflow-y-auto bg-gray-50`}>
               <textarea
                 className="w-full h-full p-4 font-mono text-sm resize-none focus:outline-none bg-transparent"
                 value={editedDDL}
@@ -406,11 +406,10 @@ export const ProjectWizard: React.FC<ProjectWizardProps> = ({ projectId, onCompl
               )}
 
               {activeTab === 'Schema' && (
-                <div className="h-full border rounded-md bg-gray-50" style={{ overflow: 'hidden' }}>
+                <div className="h-full border rounded-md bg-gray-50 overflow-y-auto">
                   <div
-                    className="w-full h-full p-4 font-mono text-sm bg-transparent whitespace-pre-wrap"
+                    className="w-full p-4 font-mono text-sm bg-transparent whitespace-pre-wrap"
                     style={{
-                      overflow: 'hidden',
                       wordBreak: 'break-word',
                       lineHeight: '1.5'
                     }}
@@ -421,11 +420,10 @@ export const ProjectWizard: React.FC<ProjectWizardProps> = ({ projectId, onCompl
               )}
 
               {activeTab === 'DDL' && (
-                <div className="h-full border rounded-md bg-gray-50" style={{ overflow: 'hidden' }}>
+                <div className="h-full border rounded-md bg-gray-50 overflow-y-auto">
                   <div
-                    className="w-full h-full p-4 font-mono text-sm bg-transparent whitespace-pre-wrap"
+                    className="w-full p-4 font-mono text-sm bg-transparent whitespace-pre-wrap"
                     style={{
-                      overflow: 'hidden',
                       wordBreak: 'break-word',
                       lineHeight: '1.5'
                     }}

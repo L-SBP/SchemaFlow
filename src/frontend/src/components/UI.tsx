@@ -291,8 +291,8 @@ export const Modal: React.FC<ModalProps> = ({ isOpen, onClose, title, children, 
                         <X size={14} />
                     </button>
                 </div>
-                {/* Content - 可滚动区域 */}
-                <div className="p-4 sm:p-8 overflow-y-auto bg-white flex-1 min-h-0">
+                {/* Content - 移除整体滚动条 */}
+                <div className="p-4 sm:p-8 bg-white flex-1 min-h-0 overflow-hidden">
                     {children}
                 </div>
                 {/* Footer */}

@@ -208,6 +208,16 @@
   line-height: 1.4;
 }
 
+/* Project grid container - allows hover effects to overflow */
+.project-grid-container {
+  flex: 1;
+  overflow-y: auto;
+  overflow-x: hidden;
+  min-height: 0;
+  padding: 12px 0;
+  /* Add padding to prevent hover effects from being clipped at edges */
+}
+
 /* Responsive Design */
 @media (max-width: 768px) {
   .project-overview {

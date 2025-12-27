@@ -1,8 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import { Announcement } from '../types.ts';
 import { Card, Button, Tag, Input, Modal, message, ConfirmDialog } from '../components/UI.tsx';
+import { Pagination } from '../components/Pagination.tsx';
 import { Plus, Edit, Trash, Megaphone, Loader2 } from 'lucide-react';
 import { announcementApi, CreateAnnouncementParams, UpdateAnnouncementParams } from '../api/announcement.ts';
+
+// 分页配置
+const PAGE_SIZE = 10;
 
 export const AdminAnnouncements: React.FC = () => {
     // --- 状态管理 ---
@@ -10,6 +14,10 @@ export const AdminAnnouncements: React.FC = () => {
     const [isLoading, setIsLoading] = useState(false);
     const [isSaving, setIsSaving] = useState(false);
     const [isModalOpen, setIsModalOpen] = useState(false);
+
+    // 分页状态
+    const [currentPage, setCurrentPage] = useState(1);
+    const [totalAnnouncements, setTotalAnnouncements] = useState(0);
 
     // 当前编辑的公告 ID (null 为新增)
     const [editingId, setEditingId] = useState<number | null>(null);
@@ -24,15 +32,15 @@ export const AdminAnnouncements: React.FC = () => {
     const [announcementToDelete, setAnnouncementToDelete] = useState<number | null>(null);
 
     // --- 数据获取 ---
-    const fetchAnnouncements = async () => {
+    const fetchAnnouncements = async (page: number = currentPage) => {
         setIsLoading(true);
         try {
             // 管理员通常需要看到所有状态的公告
             // 由于后端接口目前通过 status 筛选，这里并发请求 draft 和 published 两种状态并合并
             // 实际生产中建议后端提供一个不带 status 过滤的 "all" 选项或专门的管理员列表接口
             const [publishedRes, draftRes] = await Promise.all([
-                announcementApi.getList(1, 100, 'published'),
-                announcementApi.getList(1, 100, 'draft')
+                announcementApi.getList(page, PAGE_SIZE, 'published'),
+                announcementApi.getList(page, PAGE_SIZE, 'draft')
             ]);
 
             // 合并并按 announcement_id 去重，再按创建时间倒序
@@ -42,6 +50,8 @@ export const AdminAnnouncements: React.FC = () => {
             ).sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
 
             setAnnouncements(uniqueById);
+            // 设置总数（这里简化处理，实际应该从后端获取准确的总数）
+            setTotalAnnouncements(publishedRes.total + draftRes.total);
         } catch (error) {
             console.error("Failed to fetch announcements", error);
         } finally {
@@ -88,7 +98,7 @@ export const AdminAnnouncements: React.FC = () => {
                 await announcementApi.create(createData);
             }
             // 刷新列表并关闭模态框
-            await fetchAnnouncements();
+            await fetchAnnouncements(currentPage);
             setIsModalOpen(false);
         } catch (error) {
             console.error("Failed to save announcement", error);
@@ -110,6 +120,7 @@ export const AdminAnnouncements: React.FC = () => {
             await announcementApi.delete(announcementToDelete);
             // 乐观更新 UI
             setAnnouncements(prev => prev.filter(a => a.announcement_id !== announcementToDelete));
+            setTotalAnnouncements(prev => prev - 1);
             message.success("公告已删除");
         } catch (error) {
             console.error("Delete failed", error);
@@ -117,10 +128,16 @@ export const AdminAnnouncements: React.FC = () => {
         }
     };
 
+    // 分页处理
+    const handlePageChange = (page: number) => {
+        setCurrentPage(page);
+        fetchAnnouncements(page);
+    };
+
     return (
-        <div className="p-8 max-w-7xl mx-auto h-full overflow-y-auto">
+        <div className="p-8 max-w-7xl mx-auto h-full flex flex-col overflow-hidden">
             {/* 顶部操作栏 */}
-            <div className="flex justify-between items-center mb-8">
+            <div className="flex justify-between items-center mb-8 flex-shrink-0">
                 <h2 className="text-2xl font-bold text-gray-800 flex items-center gap-2">
                     <Megaphone className="text-primary" /> 公告管理
                 </h2>
@@ -130,43 +147,61 @@ export const AdminAnnouncements: React.FC = () => {
             </div>
 
             {/* 公告列表 */}
-            {isLoading ? (
-                <div className="flex justify-center items-center h-64">
-                    <Loader2 className="animate-spin text-primary" size={32} />
-                </div>
-            ) : (
-                <div className="space-y-4">
-                    {announcements.map(item => (
-                        <Card key={item.announcement_id} className="hover:shadow-md transition-shadow">
-                            <div className="flex justify-between items-start">
-                                <div className="flex-1 pr-4">
-                                    <div className="flex items-center gap-3 mb-2">
-                                        <h3 className="font-bold text-gray-800 text-lg">{item.title}</h3>
-                                        <Tag color={item.status === 'published' ? 'green' : 'orange'}>
-                                            {item.status === 'published' ? '已发布' : '草稿'}
-                                        </Tag>
-                                        <span className="text-sm text-gray-400">
-                                            {new Date(item.created_at).toLocaleDateString()}
-                                        </span>
+            <div className="flex-1 overflow-y-auto min-h-0">
+                {isLoading ? (
+                    <div className="flex justify-center items-center h-64">
+                        <Loader2 className="animate-spin text-primary" size={32} />
+                    </div>
+                ) : (
+                    <div className="space-y-4 pb-4">
+                        {announcements.map(item => (
+                            <Card key={item.announcement_id} className="hover:shadow-md transition-shadow">
+                                <div className="flex justify-between items-start">
+                                    <div className="flex-1 pr-4">
+                                        <div className="flex items-center gap-3 mb-2">
+                                            <h3 className="font-bold text-gray-800 text-lg">{item.title}</h3>
+                                            <Tag color={item.status === 'published' ? 'green' : 'orange'}>
+                                                {item.status === 'published' ? '已发布' : '草稿'}
+                                            </Tag>
+                                            <span className="text-sm text-gray-400">
+                                                {new Date(item.created_at).toLocaleDateString()}
+                                            </span>
+                                        </div>
+                                        <p className="text-gray-600 text-sm line-clamp-2">{item.content}</p>
                                     </div>
-                                    <p className="text-gray-600 text-sm line-clamp-2">{item.content}</p>
+                                    <div className="flex gap-2 shrink-0">
+                                        <Button variant="text" onClick={() => handleOpenModal(item)}>
+                                            <Edit size={16} className="text-gray-500 hover:text-primary" />
+                                        </Button>
+                                        <Button variant="text" onClick={() => handleDelete(item.announcement_id)}>
+                                            <Trash size={16} className="text-gray-500 hover:text-red-500" />
+                                        </Button>
+                                    </div>
                                 </div>
-                                <div className="flex gap-2 shrink-0">
-                                    <Button variant="text" onClick={() => handleOpenModal(item)}>
-                                        <Edit size={16} className="text-gray-500 hover:text-primary" />
-                                    </Button>
-                                    <Button variant="text" onClick={() => handleDelete(item.announcement_id)}>
-                                        <Trash size={16} className="text-gray-500 hover:text-red-500" />
-                                    </Button>
-                                </div>
+                            </Card>
+                        ))}
+                        {announcements.length === 0 && (
+                            <div className="text-center py-12 text-gray-500 bg-white rounded-lg border border-dashed border-gray-300">
+                                暂无公告，点击右上角发布
                             </div>
-                        </Card>
-                    ))}
-                    {announcements.length === 0 && (
-                        <div className="text-center py-12 text-gray-500 bg-white rounded-lg border border-dashed border-gray-300">
-                            暂无公告，点击右上角发布
-                        </div>
-                    )}
+                        )}
+                    </div>
+                )}
+            </div>
+
+            {/* 分页控件 - 固定在底部，始终显示 */}
+            {totalAnnouncements > 0 && (
+                <div className="pagination-container flex-shrink-0">
+                    <div className="pagination-wrapper">
+                        <Pagination
+                            current={currentPage}
+                            total={totalAnnouncements}
+                            pageSize={PAGE_SIZE}
+                            onChange={handlePageChange}
+                            showTotal={true}
+                            simple={window.innerWidth < 640}
+                        />
+                    </div>
                 </div>
             )}
 
