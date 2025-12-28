@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Card, Tag } from '../components/UI.tsx';
-import { Activity, Server, Users, AlertTriangle, Zap, ShieldAlert } from 'lucide-react';
+import { LayoutDashboard, Server, Users, AlertTriangle, Zap, ShieldAlert } from 'lucide-react';
 import { AdminStats, AdminListItem, ViolationLogListItem } from '../types.ts';
 import { adminApi } from '../api/admin.ts';
 
@@ -45,7 +45,7 @@ export const AdminStatus: React.FC = () => {
         <div className="p-8 max-w-7xl mx-auto h-full overflow-y-auto space-y-8">
             <div className="flex justify-between items-center">
                 <h2 className="text-2xl font-bold text-gray-800 flex items-center gap-2">
-                    <Activity className="text-primary" /> 系统运行状态
+                    <LayoutDashboard className="text-primary" /> 系统状态
                 </h2>
                 <div className="text-sm text-gray-500">
                     数据最后更新: {new Date().toLocaleTimeString()}
