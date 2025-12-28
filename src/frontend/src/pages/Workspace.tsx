@@ -390,7 +390,7 @@ export const Workspace: React.FC<WorkspaceProps> = ({ project, onBack }) => {
     // 切换会话时，重置首次滚动标记
     initialAutoScrollDoneRef.current = false;
     isNearBottomRef.current = true;
-    
+
     // 切换会话时，读取该会话保存的模型
     if (activeSessionId) {
       const session = sessions.find(s => s.id === activeSessionId);
@@ -1165,15 +1165,16 @@ export const Workspace: React.FC<WorkspaceProps> = ({ project, onBack }) => {
             <div
               key={session.id}
               onClick={() => setActiveSessionId(session.id)}
-              className={`group flex items-center gap-3 rounded-lg cursor-pointer transition-colors border border-transparent ${
+              style={{ transform: 'none', minHeight: is.mobile ? '40px' : '44px' }}
+              className={`group flex items-center gap-2 rounded-lg cursor-pointer border bg-white shadow-sm ${
                 // 响应式会话项内边距
-                is.mobile ? 'px-2 py-2' : 'px-3 py-3'
+                is.mobile ? 'px-2 py-2.5' : 'px-3 py-3'
                 } ${
                 // 响应式会话项字体大小
                 is.mobile ? 'text-sm' : 'text-sm'
                 } ${activeSessionId === session.id
-                  ? 'bg-white border-gray-200 shadow-sm text-primary'
-                  : 'text-gray-600 hover:bg-gray-200/50'
+                  ? 'border-gray-200 text-primary'
+                  : 'border-transparent text-gray-600 hover:bg-gray-50'
                 }`}
             >
               <MessageSquare size={is.mobile ? 14 : 16} className="shrink-0" />
@@ -1189,22 +1190,22 @@ export const Workspace: React.FC<WorkspaceProps> = ({ project, onBack }) => {
                     className="w-full px-1 py-0.5 text-xs border border-primary rounded focus:outline-none"
                     autoFocus
                   />
-                  <button onClick={saveRename} className="p-1 hover:bg-green-100 text-green-600 rounded"><Check size={12} /></button>
-                  <button onClick={(e) => { e.stopPropagation(); setEditingSessionId(null); }} className="p-1 hover:bg-red-100 text-red-600 rounded"><X size={12} /></button>
+                  <button onClick={saveRename} className="session-action-btn hover:bg-green-100 text-green-600 rounded"><Check size={12} /></button>
+                  <button onClick={(e) => { e.stopPropagation(); setEditingSessionId(null); }} className="session-action-btn hover:bg-red-100 text-red-600 rounded"><X size={12} /></button>
                 </div>
               ) : (
                 <>
                   <span className="flex-1 truncate">{session.name}</span>
-                  <div className="hidden group-hover:flex items-center gap-1">
+                  <div className="flex items-center gap-0.5">
                     <button
                       onClick={(e) => startRenaming(e, session)}
-                      className="p-1 hover:bg-gray-200 rounded text-gray-400 hover:text-gray-600"
+                      className="session-action-btn hover:bg-gray-200 rounded text-gray-400 hover:text-gray-600"
                     >
                       <Edit2 size={12} />
                     </button>
                     <button
                       onClick={(e) => handleDeleteSession(e, session.id)}
-                      className="p-1 hover:bg-red-50 rounded text-gray-400 hover:text-red-500"
+                      className="session-action-btn hover:bg-red-50 rounded text-gray-400 hover:text-red-500"
                     >
                       <Trash2 size={12} />
                     </button>

@@ -171,8 +171,11 @@ export const AdminAIModels: React.FC = () => {
         <div className="p-8 max-w-7xl mx-auto h-full overflow-y-auto">
             {/* 顶部标题与操作栏 */}
             <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-8 gap-4">
-                <h2 className="text-2xl font-bold text-gray-800 flex items-center gap-2">
-                    <Bot className="text-primary" /> AI 模型配置
+                <h2 className="text-2xl font-bold text-gray-800 flex items-center gap-3">
+                    <div className="p-2 bg-blue-100 text-blue-600 rounded-lg shrink-0">
+                        <Bot size={20} />
+                    </div>
+                    模型配置
                 </h2>
 
                 <div className="flex gap-2">
@@ -203,36 +206,36 @@ export const AdminAIModels: React.FC = () => {
                     </div>
                 ) : (
                     <div className="overflow-x-auto">
-                        <table className="w-full text-left text-sm min-w-[800px]">
+                        <table className="w-full text-left text-sm table-fixed">
                             <thead className="bg-gray-50 border-b border-gray-200">
                                 <tr>
-                                    <th className="px-6 py-4 font-medium text-gray-600 whitespace-nowrap">模型名称</th>
-                                    <th className="px-6 py-4 font-medium text-gray-600 whitespace-nowrap">模型 ID</th>
-                                    <th className="px-6 py-4 font-medium text-gray-600 whitespace-nowrap">类型</th>
-                                    <th className="px-6 py-4 font-medium text-gray-600 whitespace-nowrap">API 地址</th>
-                                    <th className="px-6 py-4 font-medium text-gray-600 whitespace-nowrap">更新时间</th>
-                                    <th className="px-6 py-4 font-medium text-gray-600 text-right whitespace-nowrap">操作</th>
+                                    <th className="px-4 py-4 font-medium text-gray-600 whitespace-nowrap w-[15%]">模型名称</th>
+                                    <th className="px-4 py-4 font-medium text-gray-600 whitespace-nowrap w-[18%]">模型 ID</th>
+                                    <th className="px-4 py-4 font-medium text-gray-600 whitespace-nowrap w-[10%]">类型</th>
+                                    <th className="px-4 py-4 font-medium text-gray-600 whitespace-nowrap w-[27%]">API 地址</th>
+                                    <th className="px-4 py-4 font-medium text-gray-600 whitespace-nowrap w-[18%]">更新时间</th>
+                                    <th className="px-4 py-4 font-medium text-gray-600 text-right whitespace-nowrap w-[12%]">操作</th>
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-gray-100">
                                 {models.map(model => (
                                     <tr key={model.config_id} className="hover:bg-gray-50/50">
-                                        <td className="px-6 py-4 whitespace-nowrap">
+                                        <td className="px-4 py-4 truncate" title={model.model_name}>
                                             <span className="font-medium text-gray-800">{model.model_name}</span>
                                         </td>
-                                        <td className="px-6 py-4 text-gray-600 font-mono text-xs whitespace-nowrap">{model.model_id}</td>
-                                        <td className="px-6 py-4 whitespace-nowrap">
+                                        <td className="px-4 py-4 text-gray-600 font-mono text-xs truncate" title={model.model_id}>{model.model_id}</td>
+                                        <td className="px-4 py-4 whitespace-nowrap">
                                             <Tag color={model.model_type === 'local_finetune' ? 'blue' : 'orange'}>
                                                 {model.model_type === 'local_finetune' ? '本地微调' : '通用LLM'}
                                             </Tag>
                                         </td>
-                                        <td className="px-6 py-4 text-gray-500 text-xs max-w-xs truncate" title={model.api_url}>
+                                        <td className="px-4 py-4 text-gray-500 text-xs truncate" title={model.api_url}>
                                             {model.api_url}
                                         </td>
-                                        <td className="px-6 py-4 text-gray-500 whitespace-nowrap text-xs">
+                                        <td className="px-4 py-4 text-gray-500 whitespace-nowrap text-xs">
                                             {new Date(model.updated_at).toLocaleString()}
                                         </td>
-                                        <td className="px-6 py-4 text-right whitespace-nowrap">
+                                        <td className="px-4 py-4 text-right whitespace-nowrap">
                                             <div className="flex justify-end gap-1">
                                                 <Button
                                                     variant="text"
