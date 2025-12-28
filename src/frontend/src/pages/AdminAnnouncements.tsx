@@ -138,8 +138,11 @@ export const AdminAnnouncements: React.FC = () => {
         <div className="p-8 max-w-7xl mx-auto h-full flex flex-col overflow-hidden">
             {/* 顶部操作栏 */}
             <div className="flex justify-between items-center mb-8 flex-shrink-0">
-                <h2 className="text-2xl font-bold text-gray-800 flex items-center gap-2">
-                    <Bell className="text-primary" /> 公告管理
+                <h2 className="text-2xl font-bold text-gray-800 flex items-center gap-3">
+                    <div className="p-2 bg-blue-100 text-blue-600 rounded-lg shrink-0">
+                        <Bell size={20} />
+                    </div>
+                    公告管理
                 </h2>
                 <Button variant="primary" icon={<Plus size={16} />} onClick={() => handleOpenModal()}>
                     发布新公告

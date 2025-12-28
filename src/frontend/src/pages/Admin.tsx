@@ -167,8 +167,11 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onViewUser }) => {
         <div className="p-8 max-w-7xl mx-auto h-full overflow-y-auto">
             {/* 顶部标题与操作栏 */}
             <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-8 gap-4">
-                <h2 className="text-2xl font-bold text-gray-800 flex items-center gap-2">
-                    <Users className="text-primary" /> 用户管理
+                <h2 className="text-2xl font-bold text-gray-800 flex items-center gap-3">
+                    <div className="p-2 bg-blue-100 text-blue-600 rounded-lg shrink-0">
+                        <Users size={20} />
+                    </div>
+                    用户管理
                 </h2>
 
                 <div className="flex gap-2 w-full md:w-auto">

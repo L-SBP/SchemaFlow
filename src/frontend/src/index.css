@@ -2534,6 +2534,19 @@ button.btn-sm,
   min-height: var(--button-min-size-compact) !important;
 }
 
+/* ????????? - ???????? */
+.session-action-btn {
+  min-width: 24px !important;
+  min-height: 24px !important;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transform: none !important;
+}
+
 /* ????????*/
 :focus-visible {
   outline: 3px solid #1677ff !important;

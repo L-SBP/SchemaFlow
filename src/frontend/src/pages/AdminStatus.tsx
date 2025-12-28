@@ -44,8 +44,11 @@ export const AdminStatus: React.FC = () => {
     return (
         <div className="p-8 max-w-7xl mx-auto h-full overflow-y-auto space-y-8">
             <div className="flex justify-between items-center">
-                <h2 className="text-2xl font-bold text-gray-800 flex items-center gap-2">
-                    <LayoutDashboard className="text-primary" /> 系统状态
+                <h2 className="text-2xl font-bold text-gray-800 flex items-center gap-3">
+                    <div className="p-2 bg-blue-100 text-blue-600 rounded-lg shrink-0">
+                        <LayoutDashboard size={20} />
+                    </div>
+                    系统状态
                 </h2>
                 <div className="text-sm text-gray-500">
                     数据最后更新: {new Date().toLocaleTimeString()}
