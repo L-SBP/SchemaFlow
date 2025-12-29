@@ -57,7 +57,7 @@ from redis_client.cache_service import cache_service
 # 缓存清除辅助函数
 # =========================================================
 
-async def _invalidate_project_cache(project_id: int, user_id: int) -> None:
+async def _invalidate_project_cache(project_id: int, user_id: int = None) -> None:
     """
     清除项目相关的所有缓存。
     
@@ -68,16 +68,22 @@ async def _invalidate_project_cache(project_id: int, user_id: int) -> None:
     try:
         # 1. 清除项目详情缓存
         project_info_key = redis_key_manager.get_project_info_key(project_id)
-        await cache_service.delete(project_info_key)
+        log.info(f"[Cache] Attempting to delete cache key: {project_info_key}")
+        cache_deleted = await cache_service.delete(project_info_key)
+        log.info(f"[Cache] Delete operation result for project info cache {project_info_key}: {cache_deleted}")
         
-        # 2. 清除该用户的所有项目列表缓存
-        project_list_pattern = redis_key_manager.generate_key(
-            redis_key_manager.USER_PREFIX, "projects", str(user_id), "*"
-        )
-        await cache_service.delete_pattern(project_list_pattern)
+        # 2. 如果有 user_id，清除该用户的所有项目列表缓存
+        if user_id:
+            project_list_pattern = redis_key_manager.generate_key(
+                redis_key_manager.USER_PREFIX, "projects", str(user_id), "*"
+            )
+            log.info(f"[Cache] Attempting to delete cache pattern: {project_list_pattern}")
+            pattern_deleted_count = await cache_service.delete_pattern(project_list_pattern)
+            log.info(f"[Cache] Delete pattern operation result for user {user_id} pattern {project_list_pattern}: {pattern_deleted_count} keys deleted")
         
-        log.info(f"[Cache] Invalidated cache for project {project_id}, user {user_id}")
+        log.info(f"[Cache] Completed cache invalidation for project {project_id}, user {user_id}")
     except Exception as e:
+        log.error(f"[Cache] Exception occurred during cache invalidation for project {project_id}: {e}")
         log.warning(f"[Cache] Failed to invalidate cache for project {project_id}: {e}")
 
 
@@ -519,8 +525,8 @@ async def get_projects_list_service(
             items=[schemas.ProjectListOne.model_validate(i) for i in items]
         )
 
-    # 使用缓存服务获取或设置数据，TTL设为300秒
-    cache_result = await cache_service.get_or_set(cache_key, fetch_project_list, ttl=300)
+    # 使用缓存服务获取或设置数据，TTL设为10秒
+    cache_result = await cache_service.get_or_set(cache_key, fetch_project_list, ttl=10)
 
     # 检查缓存结果是否有效（None 或空字符串都视为无效）
     if cache_result.data is None or cache_result.data == "":
@@ -557,8 +563,8 @@ async def get_project_detail_service(
         db_obj = await _verify_project_ownership(db, project_id, user_id)
         return schemas.ProjectDetailOut.model_validate(db_obj)
 
-    # 使用缓存服务获取或设置数据，TTL设为300秒
-    cache_result = await cache_service.get_or_set(cache_key, fetch_project_data, ttl=300)
+    # 使用缓存服务获取或设置数据，TTL设为10秒
+    cache_result = await cache_service.get_or_set(cache_key, fetch_project_data, ttl=10)
 
     # 检查缓存结果是否有效（None 或空字符串都视为无效）
     if cache_result.data is None or cache_result.data == "":
@@ -590,13 +596,7 @@ async def update_project_info_service(
     updated_obj = await crud_project.update(db, project_id, **update_data)
 
     # 清除相关缓存，确保数据一致性
-    # 1. 清除项目详情缓存
-    project_info_key = redis_key_manager.get_project_info_key(project_id)
-    await cache_service.delete(project_info_key)
-
-    # 2. 清除用户的所有项目列表缓存（包含不同分页和搜索条件的所有列表）
-    project_list_pattern = redis_key_manager.generate_key(redis_key_manager.USER_PREFIX, "projects", str(user_id), "*")
-    await cache_service.delete_pattern(project_list_pattern)
+    await _invalidate_project_cache(project_id, user_id)
 
     return schemas.ProjectDetailOut.model_validate(updated_obj)
 
@@ -686,13 +686,7 @@ async def delete_project_service(
     await _release_user_quota(db, user_id)
     
     # 清除相关缓存，确保数据一致性
-    # 1. 清除项目详情缓存
-    project_info_key = redis_key_manager.get_project_info_key(project_id)
-    await cache_service.delete(project_info_key)
-
-    # 2. 清除用户的所有项目列表缓存（包含不同分页和搜索条件的所有列表）
-    project_list_pattern = redis_key_manager.generate_key(redis_key_manager.USER_PREFIX, "projects", str(user_id), "*")
-    await cache_service.delete_pattern(project_list_pattern)
+    await _invalidate_project_cache(project_id, user_id)
 
     return True
 
@@ -726,6 +720,9 @@ async def regenerate_project_er_service(
     db.add(project)
     await db.commit()
     await db.refresh(project)
+
+    # 清除项目缓存，确保前端能立即看到更新
+    await _invalidate_project_cache(project_id, user_id)
 
     # 调度 Celery 任务重新生成 ER 图
     task_id = _dispatch_er_only_task(

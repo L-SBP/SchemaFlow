@@ -57,6 +57,15 @@ class CacheService:
         """
         redis = get_redis()
         if not redis:
+            log.warning("Redis连接未初始化，尝试初始化连接...")
+            from redis_client.redis import init_redis
+            try:
+                await init_redis()
+                redis = get_redis()
+            except Exception as e:
+                log.error(f"Redis初始化失败: {e}")
+                return default
+        if not redis:
             return default
         
         try:
@@ -126,13 +135,24 @@ class CacheService:
         Returns:
             bool: 是否删除成功
         """
+        log.info(f"[CacheService] Attempting to delete cache key: {key}")
         redis = get_redis()
+        if not redis:
+            log.warning("Redis连接未初始化，尝试初始化连接...")
+            from redis_client.redis import init_redis
+            try:
+                await init_redis()
+                redis = get_redis()
+            except Exception as e:
+                log.error(f"Redis初始化失败: {e}")
+                return False
         if not redis:
             return False
         
         try:
-            await redis.delete(key)
-            return True
+            result = await redis.delete(key)
+            log.info(f"[CacheService] Cache key '{key}' deletion result: {result}")
+            return result > 0  # 只有当实际删除了键时才返回True
         except Exception as e:
             log.error(f"删除缓存失败: {e}", exc_info=True)
             return False
@@ -148,14 +168,19 @@ class CacheService:
         Returns:
             int: 删除的缓存数量
         """
+        log.info(f"[CacheService] Attempting to delete cache pattern: {pattern}")
         redis = get_redis()
         if not redis:
             return 0
         
         try:
             keys = await redis.keys(pattern)
+            log.info(f"[CacheService] Found {len(keys) if keys else 0} keys matching pattern '{pattern}'")
             if keys:
-                return await redis.delete(*keys)
+                result = await redis.delete(*keys)
+                log.info(f"[CacheService] Pattern deletion result: {result} keys deleted for pattern '{pattern}'")
+                return result
+            log.info(f"[CacheService] No keys found for pattern '{pattern}'")
             return 0
         except Exception as e:
             log.error(f"根据模式删除缓存失败: {e}", exc_info=True)

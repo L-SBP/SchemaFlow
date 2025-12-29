@@ -21,6 +21,7 @@ from celery.utils.log import get_task_logger
 from celery_app import celery_app
 from core.config import config
 from core.database import PsqlHelper
+from core.log import log
 from crud.crud_project import crud_project
 from schema import project as schemas
 from service.ai_service import AIService
@@ -53,7 +54,11 @@ async def _update_project_field(project_id: int, **update_fields) -> bool:
             user_id = project.user_id if project else None
         
         # 清除项目相关的 Redis 缓存
-        await _invalidate_project_cache(project_id, user_id)
+        if project and user_id:
+            cache_invalidated = await _invalidate_project_cache(project_id, user_id)
+            if not cache_invalidated:
+                log.warning(f"[Cache] Cache invalidation failed for project {project_id} after field update")
+                logger.warning(f"[Task] Cache invalidation failed for project {project_id} after field update")
         
         return True
     except Exception as e:
@@ -63,23 +68,54 @@ async def _update_project_field(project_id: int, **update_fields) -> bool:
         await temp_engine.dispose()
 
 
-async def _invalidate_project_cache(project_id: int, user_id: int = None) -> None:
+async def _invalidate_project_cache(project_id: int, user_id: int = None) -> bool:
     """清除项目相关的所有缓存。"""
     try:
         # 1. 清除项目详情缓存
         project_info_key = redis_key_manager.get_project_info_key(project_id)
-        await cache_service.delete(project_info_key)
-        logger.info(f"[Task] Cleared project info cache for project {project_id}")
+        log.info(f"[Cache] Processing cache invalidation for project {project_id}")
+        
+        # 检查缓存键是否存在
+        key_exists = await cache_service.exists(project_info_key)
+        log.info(f"[Cache] Project info cache key {project_info_key} exists: {key_exists}")
+        
+        if key_exists:
+            log.info(f"[Cache] Attempting to delete cache key: {project_info_key}")
+            cache_deleted = await cache_service.delete(project_info_key)
+            log.info(f"[Cache] Delete operation result for project info cache {project_info_key}: {cache_deleted}")
+            
+            if cache_deleted:
+                logger.info(f"[Task] Successfully cleared project info cache for project {project_id}")
+            else:
+                log.error(f"[Cache] Failed to delete project info cache {project_info_key} despite it existing")
+                logger.error(f"[Task] Failed to clear project info cache for project {project_id}")
+        else:
+            log.info(f"[Cache] Project info cache key {project_info_key} does not exist, no deletion needed")
+            cache_deleted = True  # 键不存在也算删除成功
         
         # 2. 如果有 user_id，清除该用户的所有项目列表缓存
+        list_cache_deleted = True
         if user_id:
             project_list_pattern = redis_key_manager.generate_key(
                 redis_key_manager.USER_PREFIX, "projects", str(user_id), "*"
             )
-            await cache_service.delete_pattern(project_list_pattern)
-            logger.info(f"[Task] Cleared project list cache for user {user_id}")
+            log.info(f"[Cache] Attempting to delete cache pattern: {project_list_pattern}")
+            pattern_deleted_count = await cache_service.delete_pattern(project_list_pattern)
+            log.info(f"[Cache] Delete pattern operation result for user {user_id} pattern {project_list_pattern}: {pattern_deleted_count} keys deleted")
+            
+            if pattern_deleted_count >= 0:
+                logger.info(f"[Task] Cleared project list cache for user {user_id}")
+            else:
+                list_cache_deleted = False
+                log.warning(f"[Cache] Failed to delete project list cache pattern {project_list_pattern}")
+                logger.warning(f"[Task] Failed to clear project list cache for user {user_id}")
+
+        log.info(f"[Cache] Completed cache invalidation for project {project_id}, user {user_id}")
+        return cache_deleted and list_cache_deleted
     except Exception as e:
+        log.error(f"[Cache] Exception occurred during cache invalidation for project {project_id}: {e}")
         logger.warning(f"[Task] Failed to clear cache for project {project_id}: {e}")
+        return False
 
 
 async def _get_project(project_id: int) -> Optional[Dict[str, Any]]:
@@ -176,6 +212,13 @@ def generate_schema_task(
                             project.creation_stage = schemas.CreationStageEnum.SCHEMA_GENERATED.value
                             session.add(project)
                             logger.info(f"[Task-Schema] SUCCESS for Project {project_id}")
+                
+                # 事务提交成功后，重新获取最新的项目信息并清除缓存
+                async with PsqlHelper.get_session(temp_engine) as session:
+                    project = await crud_project.get(session, project_id)
+                    if project:
+                        log.info(f"[Task-Schema] About to invalidate cache for Project {project_id}, user {project.user_id}")
+                        await _invalidate_project_cache(project_id, project.user_id)
             finally:
                 await temp_engine.dispose()
         
@@ -258,6 +301,21 @@ def generate_er_task(
         
         # 保存 ER 图到数据库
         run_async(_update_project_field(project_id, er_diagram_code=er_code))
+        
+        # 清除项目详情缓存，确保前端能立即看到最新数据
+        async def invalidate_cache():
+            temp_engine = PsqlHelper._get_async_engine(config.db)
+            try:
+                async with PsqlHelper.get_session(temp_engine) as session:
+                    db_project = await crud_project.get(session, project_id)
+                    if db_project:
+                        log.info(f"[Task-ER] About to invalidate cache for Project {project_id}, user {db_project.user_id}")
+                        await _invalidate_project_cache(project_id, db_project.user_id)
+                        logger.info(f"[Task-ER] Cache invalidated for Project {project_id}")
+            finally:
+                await temp_engine.dispose()
+        
+        run_async(invalidate_cache())
         
         logger.info(f"[Task-ER] SUCCESS for Project {project_id}")
         return {
@@ -348,6 +406,21 @@ def generate_ddl_task(
             creation_stage=schemas.CreationStageEnum.DDL_GENERATED.value,
             project_status=schemas.ProjectStatusEnum.PENDING_CONFIRMATION.value
         ))
+        
+        # 清除项目详情缓存，确保前端能立即看到最新数据
+        async def invalidate_cache():
+            temp_engine = PsqlHelper._get_async_engine(config.db)
+            try:
+                async with PsqlHelper.get_session(temp_engine) as session:
+                    db_project = await crud_project.get(session, project_id)
+                    if db_project:
+                        log.info(f"[Task-DDL] About to invalidate cache for Project {project_id}, user {db_project.user_id}")
+                        await _invalidate_project_cache(project_id, db_project.user_id)
+                        logger.info(f"[Task-DDL] Cache invalidated for Project {project_id}")
+            finally:
+                await temp_engine.dispose()
+        
+        run_async(invalidate_cache())
         
         logger.info(f"[Task-DDL] SUCCESS for Project {project_id}")
         return {
