@@ -160,7 +160,14 @@ async def update_user_status_service(
     # 2. 业务逻辑：调用 CRUD 修改，传入 db_obj=user_obj
     updated_user = await crud_user_account.update(db, db_obj=user_obj, status=data.status)
 
-    # 3. 业务逻辑：记录到 user_ban_log (占位，可后续实现)
+    # 3. 如果用户被解封（状态变为normal），重置登录失败计数和请求频率
+    if data.status == 'normal':
+        from core.security import login_failure_tracker, freq_limiter
+        await login_failure_tracker.reset_failed_count(user_id)
+        freq_limiter.reset_frequency(user_id)
+        log.info(f"管理员 {admin_user_id} 修改用户 {user_id} 状态为 normal，已重置登录失败计数和请求频率")
+
+    # 4. 业务逻辑：记录到 user_ban_log (占位，可后续实现)
     # await create_ban_log(db, user_id, admin_user_id, reason=data.reason, ...)
 
     return AdminUpdateUserStatusResponse(
@@ -399,7 +406,7 @@ async def ban_user_service(
                 "message": f"用户 {user_id} 已被封禁",
                 "user_id": user_id,
                 "reason": reason,
-                "banned_at": user.banned_at.isoformat() if user.banned_at else None,
+                "status": "banned",
             }
         else:
             return {
@@ -429,7 +436,7 @@ async def unban_user_service(
         包含操作结果的字典
     """
     try:
-        from core.security import BlacklistManager, freq_limiter
+        from core.security import BlacklistManager, freq_limiter, login_failure_tracker
         from models.user_account import UserAccount
         
         # 检查用户是否存在
@@ -442,16 +449,19 @@ async def unban_user_service(
             raise ItemNotFoundException(f"User with ID {user_id} not found")
         
         # 执行解封
-        success = await BlacklistManager.unban_user(db, user_id)
+        success = await BlacklistManager.unban_user(db, user_id, admin_id=admin_id)
         
         if success:
             # 重置请求频率
             freq_limiter.reset_frequency(user_id)
-            log.info(f"管理员 {admin_id} 手动解封用户 {user_id}")
+            # 重置登录失败计数（确保用户解封后可以正常登录）
+            await login_failure_tracker.reset_failed_count(user_id)
+            log.info(f"管理员 {admin_id} 手动解封用户 {user_id}，已重置登录失败计数")
             return {
                 "success": True,
                 "message": f"用户 {user_id} 已被解封",
                 "user_id": user_id,
+                "status": "normal",
             }
         else:
             return {
@@ -482,10 +492,16 @@ async def get_banned_users_service(
     """
     try:
         from models.user_account import UserAccount
+        from sqlalchemy import or_
         
-        # 获取总数
+        # 获取总数（包括 banned 和 suspended 状态的用户）
         count_result = await db.execute(
-            select(UserAccount).where(UserAccount.is_active == False)
+            select(UserAccount).where(
+                or_(
+                    UserAccount.status == 'banned',
+                    UserAccount.status == 'suspended'
+                )
+            )
         )
         total_count = len(count_result.scalars().all())
         
@@ -493,8 +509,13 @@ async def get_banned_users_service(
         offset = (page - 1) * page_size
         result = await db.execute(
             select(UserAccount)
-            .where(UserAccount.is_active == False)
-            .order_by(desc(UserAccount.banned_at))
+            .where(
+                or_(
+                    UserAccount.status == 'banned',
+                    UserAccount.status == 'suspended'
+                )
+            )
+            .order_by(desc(UserAccount.updated_at))
             .offset(offset)
             .limit(page_size)
         )
@@ -509,8 +530,9 @@ async def get_banned_users_service(
                     "user_id": u.user_id,
                     "username": u.username,
                     "email": u.email,
-                    "banned_at": u.banned_at.isoformat() if u.banned_at else None,
-                    "ban_reason": u.ban_reason,
+                    "status": u.status,
+                    "status_desc": "管理员封禁" if u.status == 'banned' else "系统标记异常",
+                    "updated_at": u.updated_at.isoformat() if u.updated_at else None,
                 }
                 for u in users
             ]
@@ -617,9 +639,10 @@ async def get_frequency_limit_status_service(
             "frequency_threshold": 20,
             "time_window_seconds": 10,
             "violation_count_24h": violation_count,
-            "auto_ban_threshold": 3,
-            "is_banned": not user.is_active,
-            "ban_reason": user.ban_reason if not user.is_active else None,
+            "auto_suspend_threshold": 3,
+            "status": user.status,
+            "is_banned": user.status == 'banned',
+            "is_suspended": user.status == 'suspended',
         }
     
     except Exception as e:

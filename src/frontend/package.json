@@ -12,7 +12,7 @@
   "dependencies": {
     "@google/genai": "^1.30.0",
     "axios": "^1.13.2",
-    "html-to-image": "^1.10.11",
+    "html-to-image": "^1.11.13",
     "lucide-react": "^0.554.0",
     "mermaid": "^11.12.2",
     "react": "^19.2.0",

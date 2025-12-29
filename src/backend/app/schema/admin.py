@@ -270,6 +270,8 @@ class ViolationLogListItem(BaseModel):
         violation_id (int): 违规记录 ID。
         user_id (int): 用户 ID。
         username (str): 用户名。
+        event_type (str): 违规事件类型。
+        event_description (str): 事件详细描述。
         risk_level (str): 风险等级。
         resolution_status (str): 处理状态。
         created_at (datetime): 创建时间。
@@ -277,6 +279,8 @@ class ViolationLogListItem(BaseModel):
     violation_id: int
     user_id: int
     username: str
+    event_type: str
+    event_description: str
     risk_level: str
     resolution_status: str
     created_at: datetime

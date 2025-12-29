@@ -102,21 +102,6 @@ class UserAccount(Base):
         server_default=func.now(),
         comment='注册时间'
     )
-    is_active = Column(
-        Boolean,
-        default=True,
-        nullable=False,
-        comment='账户是否活跃（False=被封禁）'
-    )
-    banned_at = Column(
-        DateTime(timezone=True),
-        nullable=True,
-        comment='被封禁的时间'
-    )
-    ban_reason = Column(
-        Text,
-        nullable=True,
-        comment='封禁原因'
-    )
+
     class Config:
         from_attributes = True

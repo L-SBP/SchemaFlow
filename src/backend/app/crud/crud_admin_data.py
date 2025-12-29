@@ -38,7 +38,7 @@ class CRUDAdminData:
             page: int,
             page_size: int,
             search: Optional[str] = None,
-            status: Literal["normal", "banned", "all"] = "all"
+            status: Literal["normal", "suspended", "banned", "all"] = "all"
     ) -> Tuple[List[Dict[str, Any]], int]:
         """
         获取用户列表，包含项目统计和额度。
@@ -50,7 +50,7 @@ class CRUDAdminData:
             page (int): 页码。
             page_size (int): 每页数量。
             search (Optional[str]): 搜索关键字（用户名或邮箱）。
-            status (Literal["normal", "banned", "all"]): 用户状态筛选。
+            status (Literal["normal", "suspended", "banned", "all"]): 用户状态筛选。
 
         Returns:
             Tuple[List[Dict[str, Any]], int]: (用户列表, 总记录数)。
@@ -282,6 +282,8 @@ class CRUDAdminData:
                     "violation_id": log_obj.violation_id,
                     "user_id": log_obj.user_id,
                     "username": username,
+                    "event_type": log_obj.event_type,
+                    "event_description": log_obj.event_description,
                     "risk_level": log_obj.risk_level,
                     "resolution_status": log_obj.resolution_status,
                     "created_at": log_obj.created_at

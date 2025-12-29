@@ -180,6 +180,22 @@ class RedisKeyManager:
         """
         return cls.generate_key(cls.VERIFICATION_PREFIX, email)
     
+    # 登录失败计数相关键生成方法
+    @classmethod
+    def get_login_fail_count_key(cls, user_id: int) -> str:
+        """
+        生成登录失败计数键
+        
+        用于记录用户连续输错密码的次数，24小时后自动过期。
+        
+        Args:
+            user_id: 用户ID
+            
+        Returns:
+            str: 登录失败计数键
+        """
+        return cls.generate_key(cls.USER_PREFIX, "login_fail", str(user_id))
+    
     # 频率限制相关键生成方法
     @classmethod
     def get_frequency_limit_key(cls, user_id: int, action: Optional[str] = None) -> str:
