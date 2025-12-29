@@ -23,6 +23,7 @@ import sqlparse
 from typing import List, Dict, Any, Optional, Tuple
 from fastapi import HTTPException
 from sqlalchemy.future import select
+from sqlalchemy import update
 from sqlalchemy.orm import selectinload
 from sqlalchemy.ext.asyncio import AsyncSession
 from fastapi.encoders import jsonable_encoder
@@ -726,9 +727,9 @@ async def process_chat(
     # 提交事务1，释放数据库连接
     await db.commit()
     
-    # 检查取消指令
+    # 检查取消指令（需要持久化提示消息）
     if user_input.strip() in ["取消", "cancel", "Stop"]:
-        return _build_cancel_response()
+        return await _handle_cancel_response(db, session_id)
     
     # === 阶段2：调用 AI（事务外，长连接） ===
     sql_text = await call_ai_agent(
@@ -771,11 +772,15 @@ async def process_chat(
     )
 
 
-def _build_cancel_response() -> ChatResponse:
-    """构建取消操作的响应。"""
+async def _handle_cancel_response(db: AsyncSession, session_id: int) -> ChatResponse:
+    """持久化并返回取消操作的响应。"""
+    reply_content = "好的，已为您取消当前操作。"
+    ai_message = await crud_message.create_message(db, session_id, reply_content, role="assistant")
+    await db.commit()
+
     return ChatResponse(
-        message_id=0,
-        content="好的，已为您取消当前操作。",
+        message_id=ai_message.message_id,
+        content=reply_content,
         message_type=MessageType.ASSISTANT,
         sql_text=None,
         sql_type="ACTION_CANCEL",
@@ -783,6 +788,66 @@ def _build_cancel_response() -> ChatResponse:
         data=None
     )
 
+
+async def cancel_message(
+    db: AsyncSession,
+    message_id: int,
+    user_id: int
+) -> ChatResponse:
+    """
+    取消需要确认的消息：
+    - 权限校验（会话归属）
+    - 将原消息标记为已确认（用于隐藏前端按钮）
+    - 将其关联的语句执行状态标记为 failed
+    - 更新原消息内容，附加取消提示（与 SQL 语句合并显示）
+    """
+    log.info(f"cancel_message called: message_id={message_id}, user_id={user_id}")
+    
+    # 获取消息与会话信息
+    stmt = select(MessageModel).where(MessageModel.message_id == message_id)
+    result = await db.execute(stmt)
+    message = result.scalar_one_or_none()
+    if not message:
+        log.warning(f"Message not found: message_id={message_id}")
+        raise ItemNotFoundException(message="消息未找到")
+
+    # 权限校验：仅会话所属用户可操作
+    await _verify_session_ownership(db, message.session_id, user_id)
+
+    # 获取关联的 SQL 语句
+    stmt_query = select(AIGeneratedStatement).where(AIGeneratedStatement.message_id == message_id)
+    stmt_result = await db.execute(stmt_query)
+    ai_statement = stmt_result.scalar_one_or_none()
+    
+    sql_text = ai_statement.sql_text if ai_statement else None
+    sql_type = ai_statement.statement_type if ai_statement else "UNKNOWN"
+
+    # 标记原消息为"已确认"（用于隐藏确认/取消按钮）
+    message.user_confirmed = True
+    # 更新原消息内容，附加取消提示
+    message.content = f"{message.content}❌ 已取消执行"
+    db.add(message)
+
+    # 更新关联的语句执行状态为 failed（数据库约束只允许 pending/completed/failed）
+    if ai_statement:
+        await db.execute(
+            update(AIGeneratedStatement)
+            .where(AIGeneratedStatement.message_id == message_id)
+            .values(execution_status="failed")
+        )
+
+    await db.commit()
+
+    # 返回更新后的原消息（不再创建新消息）
+    return ChatResponse(
+        message_id=message.message_id,
+        content=message.content,
+        message_type=MessageType.ASSISTANT,
+        sql_text=sql_text,
+        sql_type=sql_type,
+        requires_confirmation=False,
+        data=None
+    )
 
 async def _handle_meta_sql_response(db: AsyncSession, session_id: int) -> ChatResponse:
     """处理元数据/错误 SQL 的响应。"""

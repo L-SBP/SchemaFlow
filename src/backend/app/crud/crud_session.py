@@ -69,7 +69,7 @@ class CRUDSession:
     @staticmethod
     async def get_by_project(db: AsyncSession, project_id: int, skip: int = 0, limit: int = 100) -> List[Session]:
         """
-        根据项目ID获取会话列表。
+        根据项目ID获取会话列表（按创建时间降序，最新会话在前）。
 
         Args:
             db (AsyncSession): 数据库会话。
@@ -84,7 +84,13 @@ class CRUDSession:
             DatabaseOperationFailedException: 查询失败时抛出。
         """
         try:
-            query = select(Session).where(Session.project_id == project_id).offset(skip).limit(limit)
+            query = (
+                select(Session)
+                .where(Session.project_id == project_id)
+                .order_by(Session.created_at.desc())  # 最新会话在前
+                .offset(skip)
+                .limit(limit)
+            )
             result = await db.execute(query)
             return result.scalars().all()
         except SQLAlchemyError as e:
@@ -93,7 +99,7 @@ class CRUDSession:
     @staticmethod
     async def get_by_user(db: AsyncSession, user_id: int, skip: int = 0, limit: int = 100) -> List[Session]:
         """
-        根据用户ID获取会话列表（通过项目关联）。
+        根据用户ID获取会话列表（通过项目关联，按创建时间降序）。
 
         Args:
             db (AsyncSession): 数据库会话。
@@ -113,6 +119,7 @@ class CRUDSession:
                 select(Session)
                 .join(Project, Session.project_id == Project.project_id)
                 .where(Project.user_id == user_id)
+                .order_by(Session.created_at.desc())  # 最新会话在前
                 .offset(skip)
                 .limit(limit)
             )
