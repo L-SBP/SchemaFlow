@@ -24,6 +24,8 @@ from core.database import PsqlHelper
 from crud.crud_project import crud_project
 from schema import project as schemas
 from service.ai_service import AIService
+from redis_client.redis_keys import redis_key_manager
+from redis_client.cache_service import cache_service
 
 logger = get_task_logger(__name__)
 
@@ -43,17 +45,41 @@ def run_async(coro):
 
 
 async def _update_project_field(project_id: int, **update_fields) -> bool:
-    """更新项目字段的通用方法。"""
+    """更新项目字段的通用方法，同时清除相关缓存。"""
     temp_engine = PsqlHelper._get_async_engine(config.db)
     try:
         async with PsqlHelper.get_session(temp_engine) as session:
-            await crud_project.update(session, project_id, **update_fields)
+            project = await crud_project.update(session, project_id, **update_fields)
+            user_id = project.user_id if project else None
+        
+        # 清除项目相关的 Redis 缓存
+        await _invalidate_project_cache(project_id, user_id)
+        
         return True
     except Exception as e:
         logger.error(f"[Task] Failed to update project {project_id}: {e}")
         return False
     finally:
         await temp_engine.dispose()
+
+
+async def _invalidate_project_cache(project_id: int, user_id: int = None) -> None:
+    """清除项目相关的所有缓存。"""
+    try:
+        # 1. 清除项目详情缓存
+        project_info_key = redis_key_manager.get_project_info_key(project_id)
+        await cache_service.delete(project_info_key)
+        logger.info(f"[Task] Cleared project info cache for project {project_id}")
+        
+        # 2. 如果有 user_id，清除该用户的所有项目列表缓存
+        if user_id:
+            project_list_pattern = redis_key_manager.generate_key(
+                redis_key_manager.USER_PREFIX, "projects", str(user_id), "*"
+            )
+            await cache_service.delete_pattern(project_list_pattern)
+            logger.info(f"[Task] Cleared project list cache for user {user_id}")
+    except Exception as e:
+        logger.warning(f"[Task] Failed to clear cache for project {project_id}: {e}")
 
 
 async def _get_project(project_id: int) -> Optional[Dict[str, Any]]:

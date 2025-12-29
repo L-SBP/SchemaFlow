@@ -54,6 +54,34 @@ from redis_client.cache_service import cache_service
 
 
 # =========================================================
+# 缓存清除辅助函数
+# =========================================================
+
+async def _invalidate_project_cache(project_id: int, user_id: int) -> None:
+    """
+    清除项目相关的所有缓存。
+    
+    Args:
+        project_id: 项目 ID
+        user_id: 用户 ID
+    """
+    try:
+        # 1. 清除项目详情缓存
+        project_info_key = redis_key_manager.get_project_info_key(project_id)
+        await cache_service.delete(project_info_key)
+        
+        # 2. 清除该用户的所有项目列表缓存
+        project_list_pattern = redis_key_manager.generate_key(
+            redis_key_manager.USER_PREFIX, "projects", str(user_id), "*"
+        )
+        await cache_service.delete_pattern(project_list_pattern)
+        
+        log.info(f"[Cache] Invalidated cache for project {project_id}, user {user_id}")
+    except Exception as e:
+        log.warning(f"[Cache] Failed to invalidate cache for project {project_id}: {e}")
+
+
+# =========================================================
 # 配额与权限校验
 # =========================================================
 
@@ -284,7 +312,10 @@ async def create_project_service(
     # 7. 更新用户配额
     await crud_user_account.update(db, user, used_databases=user.used_databases + 1)
 
-    # 8. 返回项目信息（包含 task_id 供前端查询状态）
+    # 8. 清除项目列表缓存，确保前端立即看到新项目
+    await _invalidate_project_cache(db_obj.project_id, user_id)
+
+    # 9. 返回项目信息（包含 task_id 供前端查询状态）
     response = schemas.ProjectAsyncResponse.model_validate(db_obj)
     response.task_id = task_id
     response.message = "项目创建成功，正在生成 Schema..."
@@ -330,6 +361,9 @@ async def request_ddl_generation_service(
     db.add(project)
     await db.commit()
     await db.refresh(project)
+
+    # 清除缓存，确保前端立即看到状态变化
+    await _invalidate_project_cache(project.project_id, user_id)
 
     # 获取数据库实例信息
     instance = await crud_database_instance.get(db, project.instance_id)
@@ -427,6 +461,8 @@ async def deploy_project_service(
         db, project_id,
         creation_stage=schemas.CreationStageEnum.EXECUTING_DDL.value
     )
+    # 清除缓存，确保前端立即看到状态变化
+    await _invalidate_project_cache(project_id, user_id)
 
     instance = await crud_database_instance.get(db, project.instance_id)
     final_ddl = deploy_data.confirmed_ddl or project.ddl_statement
@@ -439,6 +475,8 @@ async def deploy_project_service(
         refreshed_project = await _update_deployment_success(
             db, project, instance, final_ddl, deploy_data.confirmed_schema
         )
+        # 清除缓存，确保前端立即看到完成状态
+        await _invalidate_project_cache(project_id, user_id)
         return schemas.ProjectDetailOut.model_validate(refreshed_project)
 
     except Exception as e:
@@ -447,6 +485,8 @@ async def deploy_project_service(
             db, project_id,
             creation_stage=schemas.CreationStageEnum.DDL_GENERATED.value
         )
+        # 清除缓存，确保前端看到回滚后的状态
+        await _invalidate_project_cache(project_id, user_id)
         raise e
 
 
@@ -482,7 +522,8 @@ async def get_projects_list_service(
     # 使用缓存服务获取或设置数据，TTL设为300秒
     cache_result = await cache_service.get_or_set(cache_key, fetch_project_list, ttl=300)
 
-    if cache_result.data is None:
+    # 检查缓存结果是否有效（None 或空字符串都视为无效）
+    if cache_result.data is None or cache_result.data == "":
         # 如果缓存中没有数据，直接从数据库获取
         return await fetch_project_list()
 
@@ -519,7 +560,8 @@ async def get_project_detail_service(
     # 使用缓存服务获取或设置数据，TTL设为300秒
     cache_result = await cache_service.get_or_set(cache_key, fetch_project_data, ttl=300)
 
-    if cache_result.data is None:
+    # 检查缓存结果是否有效（None 或空字符串都视为无效）
+    if cache_result.data is None or cache_result.data == "":
         raise ItemNotFoundException("项目未找到或访问被拒绝")
 
     # 确保返回的是ProjectDetailOut对象

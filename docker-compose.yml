@@ -155,8 +155,9 @@ services:
       # ChromaDB 配置
       - CHROMA__HOST=chromadb
       - CHROMA__PORT=8000
-    # 启动命令
-    command: celery -A app.celery_app worker --loglevel=info
+    working_dir: /app/app
+    # 启动命令 (添加 -Q celery 确保监听默认队列)
+    command: celery -A celery_app worker --loglevel=info -Q celery,default,ai_tasks
     depends_on:
       - redis
       - backend

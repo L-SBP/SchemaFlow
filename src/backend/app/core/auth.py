@@ -14,7 +14,11 @@ from core.exceptions import TokenInvalidException
 from core.log import log
 
 # 密码哈希上下文
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+# 使用 bcrypt_sha256 以消除 72 字节限制，并兼容历史 bcrypt 哈希
+pwd_context = CryptContext(
+    schemes=["bcrypt_sha256", "bcrypt"],
+    deprecated="auto"
+)
 
 # 1. 密码验证
 def verify_password(plain_password: str, hashed_password: str) -> bool:
@@ -28,7 +32,13 @@ def verify_password(plain_password: str, hashed_password: str) -> bool:
     Returns:
         bool: 如果密码匹配返回 True，否则返回 False。
     """
-    return pwd_context.verify(plain_password, hashed_password)
+    try:
+        return pwd_context.verify(plain_password, hashed_password)
+    except ValueError as e:
+        # 典型场景：bcrypt 对原始口令有 72 字节限制；长口令在旧 bcrypt 哈希上会触发该异常。
+        # 这里吞掉异常并返回 False，让上层统一走密码错误流程。
+        log.warning("Password verify failed: {}", str(e))
+        return False
 
 # 2. 密码加密
 def get_password_hash(password: str) -> str:

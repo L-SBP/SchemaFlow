@@ -54,14 +54,21 @@ async def get_db(request: Request) -> AsyncGenerator[AsyncSession, None]:
     Raises:
         DatabaseOperationFailedException: 获取会话失败时抛出。
     """
+    # 先获取引擎，在 yield 之前处理引擎初始化错误
     try:
         engine = await get_engine(request)
+    except AttributeError:
+        raise DatabaseOperationFailedException("database engine not initialized")
+    
+    if engine is None:
+        raise DatabaseOperationFailedException("database engine not initialized")
+    
+    # 使用会话，不在这里捕获 AttributeError，避免误捕获业务代码中的异常
+    try:
         async with PsqlHelper.get_session(engine) as session:
             yield session
     except SQLAlchemyError as e:
         raise DatabaseOperationFailedException("get database session") from e
-    except AttributeError:
-        raise DatabaseOperationFailedException("database engine not initialized")
 
 
 # 3. 获取当前用户（带黑名单检查）

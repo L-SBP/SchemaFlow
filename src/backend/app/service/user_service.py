@@ -457,7 +457,8 @@ async def get_user_me_service(db: AsyncSession, user_id: int) -> schemas.UserMe:
     # 使用缓存服务获取或设置数据，TTL设为300秒
     cache_result = await cache_service.get_or_set(cache_key, fetch_user_data, ttl=300)
     
-    if cache_result.data is None:
+    # 检查缓存结果是否有效（None 或空字符串都视为无效）
+    if cache_result.data is None or cache_result.data == "":
         raise exceptions.UserNotFoundException()
     
     # 确保返回的是UserMe模型对象

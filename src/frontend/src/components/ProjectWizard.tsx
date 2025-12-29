@@ -62,11 +62,13 @@ export const ProjectWizard: React.FC<ProjectWizardProps> = ({ projectId, onCompl
         const data = await getProjectDetail(projectId);
         setProject(data);
 
-        // Initialize edit states if empty
-        if (data.creation_stage === CreationStageEnum.SCHEMA_GENERATED && !editedSchema && data.schema_definition) {
+        // Initialize edit states if empty - 在任何需要显示的阶段都初始化数据
+        // Schema: 在 SCHEMA_GENERATED, GENERATING_DDL, DDL_GENERATED 等阶段都需要
+        if (!editedSchema && data.schema_definition) {
           setEditedSchema(formatDisplayContent(data.schema_definition));
         }
-        if (data.creation_stage === CreationStageEnum.DDL_GENERATED && !editedDDL && data.ddl_statement) {
+        // DDL: 在 DDL_GENERATED, EXECUTING_DDL, COMPLETED 等阶段需要
+        if (!editedDDL && data.ddl_statement) {
           setEditedDDL(formatDisplayContent(data.ddl_statement));
         }
 
