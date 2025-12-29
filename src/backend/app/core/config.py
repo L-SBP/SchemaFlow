@@ -7,6 +7,7 @@
 # backend/app/core/config.py
 
 import yaml
+import os
 from functools import lru_cache
 
 from config.base import BaseConfig
@@ -39,7 +40,10 @@ def get_config(config_file="config.yaml", env=None) -> BaseConfig:
         yaml_config["env"] = env
         log.info("Use env {}", env)
     else:
-        env = yaml_config.get("env", "dev")
+        # 优先从环境变量获取 APP_ENV
+        env = os.getenv("APP_ENV")
+        if not env:
+            env = yaml_config.get("env", "dev")
         log.info("Use env {}", env)
 
     # 根据环境获取对应的配置

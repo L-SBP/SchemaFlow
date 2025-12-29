@@ -137,12 +137,9 @@ export const AdminStatus: React.FC = () => {
                                                         {log.event_type === 'suspicious_query' && '可疑查询'}
                                                         {log.event_type === 'unauthorized_access_attempt' && '未授权访问'}
                                                         {log.event_type === 'ai_violation_content' && 'AI内容违规'}
-                                                        {log.event_type === 'frequent_remote_login' && '异地频繁登录'}
+                                                        {log.event_type === 'frequent_remote_login' && 'IP频繁变更'}
                                                         {log.event_type === 'multiple_failed_logins' && '多次登录失败'}
                                                         {!['excessive_api_usage', 'sql_injection_attempt', 'suspicious_query', 'unauthorized_access_attempt', 'ai_violation_content', 'frequent_remote_login', 'multiple_failed_logins'].includes(log.event_type) && log.event_type}
-                                                    </span>
-                                                    <span className="text-gray-400 text-xs truncate max-w-[200px]" title={log.event_description}>
-                                                        {log.event_description}
                                                     </span>
                                                 </div>
                                             </td>

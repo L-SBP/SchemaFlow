@@ -179,6 +179,32 @@ async def login(
         device_info=device_info,
     )
 
+    # 异地频繁登录检测已禁用
+    # from core.security import RemoteLoginDetector, ViolationLogger
+    # is_remote_login, remote_login_desc = await RemoteLoginDetector.detect_remote_login(
+    #     db=db,
+    #     user_id=exist_user.user_id,
+    #     current_ip=client_ip
+    # )
+    # 
+    # if is_remote_login:
+    #     # 记录异地频繁登录违规
+    #     try:
+    #         await ViolationLogger.log_violation(
+    #             db=db,
+    #             user_id=exist_user.user_id,
+    #             event_type=ViolationLogger.EVENT_FREQUENT_REMOTE_LOGIN,
+    #             event_description=remote_login_desc,
+    #             risk_level=ViolationLogger.RISK_HIGH,
+    #             ip_address=client_ip,
+    #             client_user_agent=user_agent
+    #         )
+    #         await db.commit()
+    #         log.warning(f"用户 {exist_user.user_id} 因异地频繁登录被标记为异常")
+    #     except Exception as e:
+    #         log.error(f"记录异地登录违规失败: {e}")
+    #         # 记录失败不影响登录流程继续
+
     access_token = create_access_token(data={"sub": f"{exist_user.user_id}"})
     if not await service_save_token_in_redis(access_token):
         log.error("无法在Redis中保存令牌")

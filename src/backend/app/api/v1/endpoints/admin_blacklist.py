@@ -262,16 +262,15 @@ async def get_violation_statistics(
         "time_range_hours": 24,
         "total_violations": 15,
         "risk_level_distribution": {
-            "CRITICAL": 2,
+            "CRITICAL": 0,
             "HIGH": 5,
-            "MEDIUM": 6,
-            "LOW": 2
+            "MEDIUM": 10,
+            "LOW": 0
         },
         "event_type_distribution": {
             "excessive_api_usage": 8,
-            "sql_injection_attempt": 2,
-            "suspicious_query": 3,
-            "unauthorized_access_attempt": 2
+            "multiple_failed_logins": 4,
+            "frequent_remote_login": 3
         },
         "pending_violations": 10
     }
