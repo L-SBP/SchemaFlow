@@ -1,10 +1,56 @@
 /**
- * ???? - ???????
- * ????500% ????
+ * ???? - ???
+ * ???? Ant Design ?????????????????
  */
 
 /* ========================================
-   1. ??????
+   1. CSS ????
+   ======================================== */
+
+:root {
+  /* ??????? */
+  --workspace-left-panel-width: 800px;
+  --workspace-right-panel-width: 256px;
+  --workspace-min-chat-width: 320px;
+  --workspace-left-panel-max-width-percent: 40%;
+
+  /* ???? */
+  --workspace-gap: 0px;
+  --input-bar-padding: 1.5rem;
+  --header-bar-padding: 1.5rem;
+
+  /* ???? - ???????? */
+  --button-min-size: 44px;
+  --button-min-size-compact: 36px;
+
+  /* ???? */
+  --font-size-xs: 0.75rem;
+  --font-size-sm: 0.875rem;
+  --font-size-base: 1rem;
+  --font-size-lg: 1.125rem;
+  --font-size-xl: 1.25rem;
+  --font-size-min: 12px;
+
+  /* ???? */
+  --icon-size-sm: 16px;
+  --icon-size-base: 20px;
+  --icon-size-lg: 24px;
+
+  /* ?? */
+  --spacing-1: 0.25rem;
+  --spacing-2: 0.5rem;
+  --spacing-3: 0.75rem;
+  --spacing-4: 1rem;
+  --spacing-6: 1.5rem;
+  --spacing-8: 2rem;
+
+  /* ???? */
+  --compact-padding: 0.75rem;
+  --compact-button-size: 36px;
+}
+
+/* ========================================
+   2. ????
    ======================================== */
 
 *,
@@ -39,381 +85,329 @@ body {
 }
 
 /* ========================================
-   2. CSS????
-   ======================================== */
-
-/* ?? CSS ?? */
-:root {
-  /* ========================================
-     ???????
-     ======================================== */
-
-  --workspace-left-panel-width: 800px;
-  --workspace-right-panel-width: 256px;
-  --workspace-min-chat-width: 320px;
-  --workspace-left-panel-max-width-percent: 40%;
-
-  /* ========================================
-     ????
-     ======================================== */
-
-  --workspace-gap: 0px;
-  --input-bar-padding: 1.5rem;
-  --header-bar-padding: 1.5rem;
-
-  /* ========================================
-     ????
-     ======================================== */
-
-  /* ?????? - ?????*/
-  --button-min-size: 44px;
-  --button-min-size-compact: 36px;
-
-  /* ????? */
-  --button-padding: 0.5rem;
-  --button-padding-sm: 0.375rem;
-  --button-padding-lg: 0.75rem;
-
-  /* ?????*/
-  --input-height: 56px;
-  --input-padding: 0.75rem;
-
-  /* ========================================
-     ????
-     ======================================== */
-
-  --font-size-xs: 0.75rem;
-  --font-size-sm: 0.875rem;
-  --font-size-base: 1rem;
-  --font-size-lg: 1.125rem;
-  --font-size-xl: 1.25rem;
-  --font-size-2xl: 1.5rem;
-  --font-size-3xl: 1.875rem;
-
-  /* ?????? - ?????*/
-  --font-size-min: 12px;
-
-  /* ========================================
-     ????
-     ======================================== */
-
-  --icon-size-xs: 12px;
-  --icon-size-sm: 16px;
-  --icon-size-base: 20px;
-  --icon-size-lg: 24px;
-  --icon-size-xl: 32px;
-
-  /* ========================================
-     ????
-     ======================================== */
-
-  --spacing-1: 0.25rem;
-  --spacing-2: 0.5rem;
-  --spacing-3: 0.75rem;
-  --spacing-4: 1rem;
-  --spacing-5: 1.25rem;
-  --spacing-6: 1.5rem;
-  --spacing-8: 2rem;
-  --spacing-10: 2.5rem;
-  --spacing-12: 3rem;
-
-  /* ========================================
-     ????
-     ======================================== */
-
-  --compact-padding: 0.75rem;
-  --compact-button-size: 36px;
-}
-
-/* ???? */
-.app-container {
-  display: flex;
-  min-height: 100vh;
-  min-height: 100dvh;
-  width: 100%;
-  overflow: hidden;
-}
-
-/* ?????? */
-.main-content {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  min-width: 0;
-  /* ?? flex ?????*/
-  overflow: hidden;
-}
-
-/* ????? */
-.scrollable-content {
-  flex: 1;
-  overflow-y: auto;
-  overflow-x: hidden;
-  -webkit-overflow-scrolling: touch;
-}
-
-/* ========================================
    3. ?????
    ======================================== */
 
-/* ????? */
-@media screen and (max-width: 400px) {
-  html {
-    font-size: 14px;
-  }
+/* Webkit ?????? */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
 
-  button,
-  .btn,
-  [role="button"] {
-    min-width: var(--button-min-size-compact);
-    min-height: var(--button-min-size-compact);
-    padding: clamp(0.25rem, 0.5vw, 0.5rem);
-    font-size: max(clamp(0.75rem, 2vw, 0.875rem), var(--font-size-min));
-  }
+::-webkit-scrollbar-track {
+  background: #f1f1f1;
+  border-radius: 4px;
+}
 
-  input,
-  textarea,
-  select {
-    padding: clamp(0.375rem, 1vw, 0.75rem);
-    font-size: max(clamp(0.75rem, 2vw, 0.875rem), var(--font-size-min));
-    min-height: clamp(2rem, 6vw, 3rem);
-  }
+::-webkit-scrollbar-thumb {
+  background: #c1c1c1;
+  border-radius: 4px;
+}
 
-  .input-bar-container {
-    padding: clamp(0.375rem, 1vw, 0.75rem);
-  }
+::-webkit-scrollbar-thumb:hover {
+  background: #a1a1a1;
+}
 
-  .model-selector-compact {
-    max-width: clamp(50px, 10vw, 80px);
-    min-width: clamp(40px, 8vw, 60px);
-  }
+/* Firefox ??? */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: #c1c1c1 #f1f1f1;
+}
 
+/* ========================================
+   4. ?????????
+   ======================================== */
+
+:focus-visible {
+  outline: 2px solid #1677ff;
+  outline-offset: 2px;
+}
+
+:focus:not(:focus-visible) {
+  outline: none;
+}
+
+/* ========================================
+   5. ??????
+   ======================================== */
+
+.pagination-container {
+  flex-shrink: 0;
+  background-color: rgba(255, 255, 255, 0.95);
+  backdrop-filter: blur(8px);
+  padding: 1rem 1.5rem;
+  margin-top: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  width: 100%;
+  z-index: 10;
+  border: 1px solid rgba(229, 231, 235, 0.8);
+  border-radius: 1rem;
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 10px 15px -3px rgba(0, 0, 0, 0.03);
+}
+
+@media screen and (min-width: 640px) {
+  .pagination-container {
+    flex-direction: row;
+    align-items: center;
+    justify-content: flex-end;
+  }
+}
+
+.pagination-wrapper {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* ========================================
+   6. ????????
+   ======================================== */
+
+.input-bar-container {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  overflow: hidden;
+  position: relative;
+}
+
+.input-bar-textarea {
+  flex: 1;
+  min-width: 0;
+}
+
+.input-bar-controls {
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+  flex-shrink: 0;
+  min-width: 0;
+  max-width: 50%;
+}
+
+/* ========================================
+   7. ??????
+   ======================================== */
+
+.send-button {
+  min-width: 36px;
+  min-height: 36px;
+  flex-shrink: 0;
+  box-sizing: border-box;
+}
+
+@media screen and (max-width: 320px) {
   .send-button {
-    min-width: var(--button-min-size-compact);
-    min-height: var(--button-min-size-compact);
+    min-width: 32px;
+    min-height: 32px;
+    padding: 0.375rem;
   }
 }
 
-@media screen and (max-width: 300px) {
-  html {
-    font-size: 12px;
+/* ========================================
+   8. ???????
+   ======================================== */
+
+.model-selector-compact {
+  max-width: 120px;
+  min-width: 60px;
+}
+
+.model-selector-compact .model-select {
+  max-width: 80px;
+  min-width: 40px;
+  text-overflow: ellipsis;
+  overflow: hidden;
+  white-space: nowrap;
+}
+
+@media screen and (max-width: 640px) {
+  .model-label {
+    display: none !important;
   }
 
-  button,
-  .btn,
-  [role="button"] {
-    min-width: var(--button-min-size-compact);
-    min-height: var(--button-min-size-compact);
-    padding: clamp(0.25rem, 0.4vw, 0.375rem);
-    font-size: max(clamp(0.625rem, 1.8vw, 0.75rem), var(--font-size-min));
-  }
-
-  input,
-  textarea,
-  select {
-    padding: clamp(0.25rem, 0.8vw, 0.5rem);
-    font-size: max(clamp(0.625rem, 1.8vw, 0.75rem), var(--font-size-min));
-    min-height: clamp(1.75rem, 5vw, 2.5rem);
-  }
-
-  .input-bar-container {
-    padding: clamp(0.25rem, 0.8vw, 0.5rem);
+  .input-bar-controls {
+    max-width: 45%;
   }
 
   .model-selector-compact {
-    max-width: clamp(40px, 8vw, 60px);
-    min-width: clamp(30px, 6vw, 45px);
-    padding: clamp(0.125rem, 0.3vw, 0.25rem);
-  }
-
-  .model-selector-compact .model-select {
-    font-size: max(clamp(0.625rem, 1.5vw, 0.75rem), var(--font-size-min));
-  }
-
-  table {
-    font-size: max(clamp(0.625rem, 1.5vw, 0.75rem), var(--font-size-min));
-  }
-
-  table th,
-  table td {
-    padding: clamp(0.25rem, 0.5vw, 0.375rem);
+    max-width: 80px;
+    min-width: 50px;
   }
 }
 
-@media screen and (max-width: 200px) {
-  html {
+@media screen and (max-width: 400px) {
+  .model-selector-compact .model-select {
+    max-width: 50px !important;
+    min-width: 40px !important;
     font-size: 10px;
   }
 
-  button,
-  .btn,
-  [role="button"] {
-    min-width: var(--button-min-size-compact);
-    min-height: var(--button-min-size-compact);
-    padding: clamp(0.125rem, 0.3vw, 0.25rem);
-    font-size: max(clamp(0.5rem, 1.5vw, 0.625rem), var(--font-size-min));
-  }
-
-  input,
-  textarea,
-  select {
-    padding: clamp(0.125rem, 0.6vw, 0.375rem);
-    font-size: max(clamp(0.5rem, 1.5vw, 0.625rem), var(--font-size-min));
-    min-height: clamp(1.5rem, 4vw, 2rem);
-  }
-
-  .input-bar-container {
-    padding: clamp(0.125rem, 0.5vw, 0.375rem);
-  }
-
   .model-selector-compact {
-    max-width: clamp(30px, 6vw, 45px);
-    min-width: clamp(24px, 5vw, 35px);
-    padding: clamp(0.0625rem, 0.2vw, 0.125rem);
+    padding-left: 0.375rem;
+    padding-right: 0.375rem;
+    max-width: 60px;
+    min-width: 50px;
   }
 
-  .model-selector-compact .model-select {
-    font-size: max(clamp(0.5rem, 1.2vw, 0.625rem), var(--font-size-min));
+  .input-bar-controls {
+    gap: 0.25rem;
+    max-width: 40%;
   }
+}
 
-  .send-button,
-  .panel-toggle-button,
-  .header-button-icon-only {
+/* ========================================
+   9. ????????
+   ======================================== */
+
+.panel-toggle-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: var(--button-min-size);
+  min-height: var(--button-min-size);
+  padding: 0.625rem;
+  border-radius: 0.375rem;
+  background-color: transparent;
+  border: none;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  color: #6b7280;
+  box-sizing: border-box;
+}
+
+.panel-toggle-button:hover {
+  background-color: #f3f4f6;
+  color: #1f2937;
+}
+
+.panel-toggle-button:focus-visible {
+  outline: 2px solid #1677ff;
+  outline-offset: 2px;
+}
+
+.panel-toggle-button svg,
+.panel-toggle-button .icon {
+  width: var(--icon-size-base);
+  height: var(--icon-size-base);
+}
+
+@media screen and (max-width: 768px) {
+  .panel-toggle-button {
     min-width: var(--button-min-size-compact);
     min-height: var(--button-min-size-compact);
-    padding: clamp(0.125rem, 0.3vw, 0.25rem);
+    padding: 0.375rem;
   }
+
+  .panel-toggle-button svg,
+  .panel-toggle-button .icon {
+    width: var(--icon-size-sm);
+    height: var(--icon-size-sm);
+  }
+}
+
+/* ========================================
+   10. ??????
+   ======================================== */
+
+@media screen and (max-width: 768px) {
+  .header-button-text {
+    display: none !important;
+  }
+
+  .header-button-icon-only {
+    padding: 0.5rem !important;
+    min-width: 44px;
+    min-height: 44px;
+  }
+}
+
+@media screen and (max-width: 480px) {
+  .header-button-icon-only {
+    padding: 0.375rem !important;
+    min-width: 36px;
+    min-height: 36px;
+  }
+}
+
+/* ========================================
+   11. ????????
+   ======================================== */
+
+.session-action-btn {
+  min-width: 24px !important;
+  min-height: 24px !important;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transform: none !important;
+}
+
+/* ========================================
+   12. ????????
+   ======================================== */
+
+/* ????? */
+.workspace-mobile {
+  --workspace-header-padding: 0.75rem;
+  --workspace-content-padding: 0.75rem;
+  --workspace-input-padding: 0.75rem;
+  --workspace-button-size: 32px;
+  --workspace-icon-size: 14px;
+  --workspace-font-size: 0.875rem;
+  --workspace-gap: 0.25rem;
 }
 
 /* ???? */
-@media screen and (max-width: 150px) {
-  html {
-    font-size: 9px;
-  }
-
-  :root {
-    --button-min-size-compact: 28px;
-    --input-height: 32px;
-    --spacing-1: 0.125rem;
-    --spacing-2: 0.25rem;
-  }
-
-  button,
-  .btn,
-  [role="button"] {
-    min-width: var(--button-min-size-compact);
-    min-height: var(--button-min-size-compact);
-    padding: clamp(0.0625rem, 0.25vw, 0.125rem);
-    font-size: max(clamp(0.5rem, 1.2vw, 0.625rem), var(--font-size-min));
-  }
-
-  input,
-  textarea,
-  select {
-    padding: clamp(0.0625rem, 0.4vw, 0.25rem);
-    font-size: max(clamp(0.5rem, 1.2vw, 0.625rem), var(--font-size-min));
-    min-height: clamp(1.25rem, 3.5vw, 1.75rem);
-  }
-
-  .input-bar-container {
-    padding: clamp(0.0625rem, 0.3vw, 0.25rem);
-  }
-
-  .model-selector-compact {
-    max-width: clamp(24px, 5vw, 35px);
-    min-width: clamp(20px, 4vw, 28px);
-    padding: clamp(0.03125rem, 0.15vw, 0.0625rem);
-  }
-
-  .model-selector-compact .model-select {
-    font-size: max(clamp(0.4375rem, 1vw, 0.5rem), var(--font-size-min));
-  }
-
-  .send-button,
-  .panel-toggle-button,
-  .header-button-icon-only {
-    min-width: var(--button-min-size-compact);
-    min-height: var(--button-min-size-compact);
-    padding: clamp(0.0625rem, 0.25vw, 0.125rem);
-  }
-
-  table {
-    font-size: max(clamp(0.4375rem, 1vw, 0.5rem), var(--font-size-min));
-  }
-
-  table th,
-  table td {
-    padding: clamp(0.0625rem, 0.25vw, 0.125rem);
-  }
+.workspace-tablet {
+  --workspace-header-padding: 1rem;
+  --workspace-content-padding: 1rem;
+  --workspace-input-padding: 1rem;
+  --workspace-button-size: 36px;
+  --workspace-icon-size: 16px;
+  --workspace-font-size: 1rem;
+  --workspace-gap: 0.375rem;
 }
 
 /* ???? */
-@media screen and (max-width: 120px) {
-  html {
-    font-size: 8px;
-  }
-
-  :root {
-    --button-min-size-compact: 24px;
-    --input-height: 28px;
-  }
-
-  button,
-  .btn,
-  [role="button"] {
-    min-width: var(--button-min-size-compact);
-    min-height: var(--button-min-size-compact);
-    padding: clamp(0.03125rem, 0.2vw, 0.0625rem);
-    font-size: max(clamp(0.4375rem, 0.9vw, 0.5rem), var(--font-size-min));
-  }
-
-  input,
-  textarea,
-  select {
-    padding: clamp(0.03125rem, 0.3vw, 0.125rem);
-    font-size: max(clamp(0.4375rem, 0.9vw, 0.5rem), var(--font-size-min));
-    min-height: clamp(1rem, 3vw, 1.5rem);
-  }
-
-  .input-bar-container {
-    padding: clamp(0.03125rem, 0.2vw, 0.125rem);
-  }
-
-  .model-selector-compact {
-    max-width: clamp(20px, 4vw, 28px);
-    min-width: clamp(16px, 3.5vw, 22px);
-    padding: clamp(0.015625rem, 0.1vw, 0.03125rem);
-  }
-
-  .model-selector-compact .model-select {
-    font-size: max(clamp(0.375rem, 0.8vw, 0.4375rem), var(--font-size-min));
-  }
-
-  .send-button,
-  .panel-toggle-button,
-  .header-button-icon-only {
-    min-width: var(--button-min-size-compact);
-    min-height: var(--button-min-size-compact);
-    padding: clamp(0.03125rem, 0.2vw, 0.0625rem);
-  }
-
-  table {
-    font-size: max(clamp(0.375rem, 0.8vw, 0.4375rem), var(--font-size-min));
-  }
-
-  table th,
-  table td {
-    padding: clamp(0.03125rem, 0.2vw, 0.0625rem);
-  }
-
-  svg,
-  .icon {
-    width: clamp(8px, 2vw, 12px);
-    height: clamp(8px, 2vw, 12px);
-  }
+.workspace-desktop {
+  --workspace-header-padding: 1.5rem;
+  --workspace-content-padding: 1.5rem;
+  --workspace-input-padding: 1.5rem;
+  --workspace-button-size: 44px;
+  --workspace-icon-size: 16px;
+  --workspace-font-size: 1rem;
+  --workspace-gap: 0.5rem;
 }
 
-/* ??????????? */
+/* ????? */
+.workspace-zoom-adaptive .input-bar-container {
+  padding: clamp(0.25rem, 0.8vw, 0.75rem);
+}
+
+.workspace-zoom-adaptive .model-selector-compact {
+  max-width: clamp(40px, 8vw, 80px);
+  min-width: clamp(30px, 6vw, 50px);
+  padding: clamp(0.125rem, 0.4vw, 0.5rem);
+}
+
+.workspace-zoom-adaptive .send-button,
+.workspace-zoom-adaptive .panel-toggle-button,
+.workspace-zoom-adaptive .header-button-icon-only {
+  min-width: var(--button-min-size-compact);
+  min-height: var(--button-min-size-compact);
+  padding: clamp(0.25rem, 0.5vw, 0.5rem);
+}
+
+/* ========================================
+   13. ???????
+   ======================================== */
+
 @media screen and (max-width: 1024px) {
   :root {
     --workspace-left-panel-max-width-percent: 35%;
@@ -440,973 +434,10 @@ body {
   }
 }
 
-@media screen and (max-width: 320px) {
-  :root {
-    --workspace-left-panel-max-width-percent: 20%;
-    --input-bar-padding: 0.5rem;
-    --header-bar-padding: 0.5rem;
-  }
-}
-
 /* ========================================
-   ??????
+   14. ????
    ======================================== */
 
-/* ????????????????????? */
-
-/* ???????????????*/
-@media screen and (max-width: 300px) {
-
-  /* ?????????? */
-  .decorative-icon,
-  .optional-label,
-  .status-indicator,
-  .badge,
-  .tooltip-trigger {
-    display: none !important;
-  }
-
-  /* ???????*/
-  .nav-text,
-  .breadcrumb-separator,
-  .dropdown-arrow {
-    display: none !important;
-  }
-
-  /* ??????????????*/
-  .core-button {
-    padding: 0.25rem !important;
-    border-radius: 0.125rem !important;
-  }
-
-  /* ???????*/
-  label .optional-text,
-  label .help-text {
-    display: none !important;
-  }
-}
-
-/* ????????????*/
-@media screen and (max-width: 200px) {
-
-  /* ??????????*/
-  .secondary-text,
-  .metadata,
-  .timestamp,
-  .author-info,
-  .description-text {
-    display: none !important;
-  }
-
-  /* ????????????*/
-  .card,
-  .panel,
-  .modal-content {
-    border: none !important;
-    box-shadow: none !important;
-    border-radius: 0 !important;
-  }
-
-  /* ???????*/
-  .pagination-info,
-  .pagination-total-text {
-    display: none !important;
-  }
-
-  /* ???????? */
-  .pagination-btn {
-    min-width: 24px !important;
-    min-height: 24px !important;
-    padding: 0.125rem !important;
-  }
-}
-
-/* ??????????????*/
-@media screen and (max-width: 150px) {
-
-  /* ????????? */
-  .subtitle,
-  .caption,
-  .footnote,
-  .legal-text,
-  .version-info {
-    display: none !important;
-  }
-
-  /* ????????*/
-  .spacer,
-  .divider,
-  .separator {
-    display: none !important;
-  }
-
-  /* ??????? */
-  table th .sort-indicator,
-  table .column-resize-handle,
-  table .row-actions {
-    display: none !important;
-  }
-
-  /* ???????? */
-  table {
-    border-collapse: collapse !important;
-  }
-
-  table th,
-  table td {
-    padding: 0.125rem !important;
-    border: 1px solid #e5e7eb !important;
-  }
-}
-
-/* ???????? - ??????????????*/
-.core-functionality {
-  display: flex !important;
-  min-width: var(--button-min-size-compact) !important;
-  min-height: var(--button-min-size-compact) !important;
-}
-
-/* ???????? */
-input[type="text"],
-input[type="email"],
-input[type="password"],
-textarea,
-select,
-button[type="submit"],
-.send-button,
-.save-button,
-.cancel-button {
-  display: block !important;
-  min-width: var(--button-min-size-compact) !important;
-  min-height: var(--button-min-size-compact) !important;
-  font-size: max(0.75rem, var(--font-size-min)) !important;
-}
-
-/* ???????? */
-.main-nav,
-.primary-menu,
-.back-button,
-.home-button,
-.close-button {
-  display: flex !important;
-}
-
-/* ?????????? */
-@media screen and (max-width: 300px) {
-  .graceful-degradation.decorative {
-    opacity: 0;
-    visibility: hidden;
-    transform: scale(0.8);
-  }
-}
-
-/* ?????????????*/
-@media screen and (max-width: 200px) {
-
-  /* ????????*/
-  :focus-visible {
-    outline-width: 3px !important;
-    outline-color: #1677ff !important;
-    outline-style: solid !important;
-  }
-
-  /* ????????*/
-  button,
-  .btn,
-  [role="button"] {
-    background-color: #1677ff !important;
-    color: white !important;
-    border: 2px solid #1677ff !important;
-  }
-
-  button:hover,
-  .btn:hover,
-  [role="button"]:hover {
-    background-color: #0958d9 !important;
-    border-color: #0958d9 !important;
-  }
-}
-
-/* ========================================
-   4. ?????
-   ======================================== */
-
-/* ???? */
-.text-truncate {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.text-wrap-balance {
-  text-wrap: balance;
-}
-
-/* ???????*/
-.text-xs {
-  font-size: max(var(--font-size-xs), var(--font-size-min));
-}
-
-.text-sm {
-  font-size: max(var(--font-size-sm), var(--font-size-min));
-}
-
-.text-base {
-  font-size: max(var(--font-size-base), var(--font-size-min));
-}
-
-.text-lg {
-  font-size: max(var(--font-size-lg), var(--font-size-min));
-}
-
-.text-xl {
-  font-size: max(var(--font-size-xl), var(--font-size-min));
-}
-
-.text-2xl {
-  font-size: max(var(--font-size-2xl), var(--font-size-min));
-}
-
-.text-3xl {
-  font-size: max(var(--font-size-3xl), var(--font-size-min));
-}
-
-/* ========================================
-   ????????
-   ======================================== */
-
-/* ??????????*/
-.high-zoom-adaptive {
-  font-size: max(clamp(0.75rem, 2vw, 0.875rem), var(--font-size-min));
-}
-
-.high-zoom-adaptive button,
-.high-zoom-adaptive .btn,
-.high-zoom-adaptive [role="button"] {
-  min-width: var(--button-min-size-compact);
-  min-height: var(--button-min-size-compact);
-  padding: clamp(0.25rem, 0.5vw, 0.5rem);
-  font-size: max(clamp(0.75rem, 2vw, 0.875rem), var(--font-size-min));
-}
-
-.high-zoom-adaptive input,
-.high-zoom-adaptive textarea,
-.high-zoom-adaptive select {
-  padding: clamp(0.375rem, 1vw, 0.75rem);
-  font-size: max(clamp(0.75rem, 2vw, 0.875rem), var(--font-size-min));
-}
-
-/* ???????????*/
-.extreme-zoom-adaptive {
-  font-size: max(clamp(0.625rem, 1.5vw, 0.75rem), var(--font-size-min));
-}
-
-.extreme-zoom-adaptive button,
-.extreme-zoom-adaptive .btn,
-.extreme-zoom-adaptive [role="button"] {
-  min-width: var(--button-min-size-compact);
-  min-height: var(--button-min-size-compact);
-  padding: clamp(0.125rem, 0.3vw, 0.25rem);
-  font-size: max(clamp(0.625rem, 1.5vw, 0.75rem), var(--font-size-min));
-}
-
-.extreme-zoom-adaptive input,
-.extreme-zoom-adaptive textarea,
-.extreme-zoom-adaptive select {
-  padding: clamp(0.125rem, 0.5vw, 0.375rem);
-  font-size: max(clamp(0.625rem, 1.5vw, 0.75rem), var(--font-size-min));
-}
-
-/* ????????????*/
-.workspace-zoom-adaptive .input-bar-container {
-  padding: clamp(0.25rem, 0.8vw, 0.75rem);
-}
-
-.workspace-zoom-adaptive .model-selector-compact {
-  max-width: clamp(40px, 8vw, 80px);
-  min-width: clamp(30px, 6vw, 50px);
-  padding: clamp(0.125rem, 0.4vw, 0.5rem);
-}
-
-.workspace-zoom-adaptive .send-button,
-.workspace-zoom-adaptive .panel-toggle-button,
-.workspace-zoom-adaptive .header-button-icon-only {
-  min-width: var(--button-min-size-compact);
-  min-height: var(--button-min-size-compact);
-  padding: clamp(0.25rem, 0.5vw, 0.5rem);
-}
-
-/* ?????????? */
-.text-responsive-sm {
-  font-size: max(clamp(0.75rem, 2vw, 0.875rem), var(--font-size-min));
-}
-
-.text-responsive-base {
-  font-size: max(clamp(0.875rem, 2.5vw, 1rem), var(--font-size-min));
-}
-
-.text-responsive-lg {
-  font-size: max(clamp(1rem, 3vw, 1.25rem), var(--font-size-min));
-}
-
-.text-responsive-xl {
-  font-size: max(clamp(1.125rem, 3.5vw, 1.5rem), var(--font-size-min));
-}
-
-.text-responsive-2xl {
-  font-size: max(clamp(1.25rem, 4vw, 1.875rem), var(--font-size-min));
-}
-
-/* ========================================
-   ?????????
-   ======================================== */
-
-/* ?????????????? */
-.text-high-zoom-xs {
-  font-size: max(clamp(0.625rem, 1.5vw, 0.75rem), var(--font-size-min));
-}
-
-.text-high-zoom-sm {
-  font-size: max(clamp(0.75rem, 2vw, 0.875rem), var(--font-size-min));
-}
-
-.text-high-zoom-base {
-  font-size: max(clamp(0.875rem, 2.5vw, 1rem), var(--font-size-min));
-}
-
-.text-high-zoom-lg {
-  font-size: max(clamp(1rem, 3vw, 1.125rem), var(--font-size-min));
-}
-
-.text-high-zoom-xl {
-  font-size: max(clamp(1.125rem, 3.5vw, 1.25rem), var(--font-size-min));
-}
-
-/* ????????????? */
-.control-high-zoom {
-  padding: clamp(0.25rem, 1vw, 0.75rem);
-  font-size: max(clamp(0.75rem, 2vw, 0.875rem), var(--font-size-min));
-}
-
-/* ??????????? */
-.btn-high-zoom {
-  min-width: var(--button-min-size-compact);
-  min-height: var(--button-min-size-compact);
-  padding: clamp(0.375rem, 1vw, 0.5rem);
-  font-size: max(clamp(0.75rem, 2vw, 0.875rem), var(--font-size-min));
-}
-
-/* ???????????? */
-.input-high-zoom {
-  padding: clamp(0.5rem, 1.5vw, 0.75rem);
-  font-size: max(clamp(0.875rem, 2.5vw, 1rem), var(--font-size-min));
-  min-height: clamp(2rem, 8vw, 3.5rem);
-}
-
-/* ??????????? */
-.spacing-high-zoom-sm {
-  gap: clamp(0.25rem, 0.5vw, 0.5rem);
-}
-
-.spacing-high-zoom-md {
-  gap: clamp(0.5rem, 1vw, 0.75rem);
-}
-
-.spacing-high-zoom-lg {
-  gap: clamp(0.75rem, 1.5vw, 1rem);
-}
-
-/* ?????????????? */
-.workspace-high-zoom {
-  font-size: max(clamp(0.75rem, 2vw, 0.875rem), var(--font-size-min));
-}
-
-.workspace-high-zoom .input-bar-container {
-  padding: clamp(0.375rem, 1vw, 0.75rem);
-}
-
-.workspace-high-zoom .model-selector-compact {
-  max-width: clamp(40px, 8vw, 80px);
-  min-width: clamp(30px, 6vw, 50px);
-  padding: clamp(0.25rem, 0.5vw, 0.5rem);
-}
-
-.workspace-high-zoom .send-button,
-.workspace-high-zoom .header-button-icon-only,
-.workspace-high-zoom .panel-toggle-button {
-  min-width: var(--button-min-size-compact);
-  min-height: var(--button-min-size-compact);
-  padding: clamp(0.25rem, 0.5vw, 0.5rem);
-}
-
-/* ??????????? */
-.table-high-zoom {
-  font-size: max(clamp(0.75rem, 1.8vw, 0.875rem), var(--font-size-min));
-}
-
-.table-high-zoom th,
-.table-high-zoom td {
-  padding: clamp(0.375rem, 0.8vw, 0.75rem);
-}
-
-/* ???????????? */
-.modal-high-zoom .modal-content {
-  max-width: clamp(280px, 90vw, 600px);
-  padding: clamp(1rem, 3vw, 2rem);
-}
-
-.modal-high-zoom .modal-title {
-  font-size: max(clamp(1rem,
-        3vw,
-        1.25rem),
-      var(--font-size-min));
-}
-
-/* ????????????? */
-.pagination-high-zoom .pagination-btn {
-  min-width: var(--button-min-size-compact);
-  min-height: var(--button-min-size-compact);
-  padding: clamp(0.25rem,
-      0.5vw,
-      0.5rem);
-  font-size: max(clamp(0.75rem,
-        1.8vw,
-        0.875rem),
-      var(--font-size-min));
-}
-
-/* ??????????? */
-.card-high-zoom {
-  padding: clamp(0.75rem,
-      2vw,
-      1.5rem);
-}
-
-.card-high-zoom .card-title {
-  font-size: max(clamp(1rem,
-        2.5vw,
-        1.125rem),
-      var(--font-size-min));
-}
-
-.card-high-zoom .card-subtitle {
-  font-size: max(clamp(0.75rem,
-        1.8vw,
-        0.875rem),
-      var(--font-size-min));
-}
-
-/* ========================================
-   5. ?????????
-   ======================================== */
-
-/* ??????????? (WCAG 2.1 AA: 44x44px) */
-/* ???????????????????????*/
-button,
-[role="button"],
-.btn,
-a.btn {
-  min-height: var(--button-min-size);
-  min-width: var(--button-min-size);
-  touch-action: manipulation;
-  /* ???????????? */
-  padding: var(--button-padding);
-  font-size: var(--font-size-base);
-}
-
-/* ???????????????*/
-.btn-sm,
-button.btn-sm {
-  min-height: var(--button-min-size-compact);
-  min-width: var(--button-min-size-compact);
-  padding: var(--button-padding-sm);
-  font-size: var(--font-size-sm);
-}
-
-/* ???? */
-.btn-lg,
-button.btn-lg {
-  padding: var(--button-padding-lg);
-  font-size: var(--font-size-lg);
-}
-
-/* ???? */
-.btn-icon {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  padding: var(--button-padding);
-}
-
-.btn-icon svg,
-.btn-icon .icon {
-  width: var(--icon-size-base);
-  height: var(--icon-size-base);
-}
-
-/* ========================================
-   6. ??????
-   ======================================== */
-
-input,
-textarea,
-select {
-  /* ?? iOS ?? - ????????*/
-  font-size: max(var(--font-size-base), var(--font-size-min));
-  max-width: 100%;
-  padding: var(--input-padding);
-}
-
-/* ????? */
-.input-responsive {
-  width: 100%;
-  min-height: var(--input-height);
-  padding: var(--input-padding);
-  font-size: max(var(--font-size-base), var(--font-size-min));
-}
-
-/* ????*/
-label {
-  font-size: var(--font-size-sm);
-  margin-bottom: var(--spacing-2);
-}
-
-/* ???*/
-.form-group {
-  margin-bottom: var(--spacing-4);
-}
-
-.form-group label {
-  display: block;
-  margin-bottom: var(--spacing-2);
-}
-
-/* ========================================
-   7. ???????
-   ======================================== */
-
-/* ????????*/
-.card-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(min(100%, 280px), 1fr));
-  gap: var(--spacing-4);
-}
-
-@media screen and (min-width: 640px) {
-  .card-grid {
-    gap: var(--spacing-6);
-  }
-}
-
-/* ????????*/
-.card-content {
-  min-width: 0;
-  overflow: hidden;
-  padding: var(--spacing-4);
-}
-
-.card-header {
-  padding: var(--spacing-4);
-  border-bottom: 1px solid #e5e7eb;
-}
-
-.card-footer {
-  padding: var(--spacing-4);
-  border-top: 1px solid #e5e7eb;
-}
-
-/* ???? */
-.card-title {
-  font-size: var(--font-size-lg);
-  font-weight: 600;
-  margin-bottom: var(--spacing-2);
-}
-
-.card-subtitle {
-  font-size: var(--font-size-sm);
-  color: #6b7280;
-  margin-bottom: var(--spacing-3);
-}
-
-/* ========================================
-   8. ?????
-   ======================================== */
-
-/* ???????*/
-.modal-container {
-  position: fixed;
-  inset: 0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: var(--spacing-4);
-  overflow-y: auto;
-}
-
-.modal-content {
-  width: 100%;
-  max-width: min(90vw, 32rem);
-  max-height: calc(100vh - 2rem);
-  max-height: calc(100dvh - 2rem);
-  overflow: hidden;
-  display: flex;
-  flex-direction: column;
-  border-radius: 0.5rem;
-  box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
-}
-
-.modal-header {
-  padding: var(--spacing-6);
-  border-bottom: 1px solid #e5e7eb;
-  flex-shrink: 0;
-}
-
-.modal-title {
-  font-size: var(--font-size-xl);
-  font-weight: 600;
-  margin: 0;
-}
-
-.modal-body {
-  flex: 1;
-  overflow-y: auto;
-  -webkit-overflow-scrolling: touch;
-  padding: var(--spacing-6);
-}
-
-.modal-footer {
-  padding: var(--spacing-6);
-  border-top: 1px solid #e5e7eb;
-  flex-shrink: 0;
-  display: flex;
-  justify-content: flex-end;
-  gap: var(--spacing-3);
-}
-
-/* ========================================
-   9. ???? (Pagination) - Modern Refined
-   ======================================== */
-
-/* 1. ??????????? */
-.pagination-container {
-  flex-shrink: 0;
-  background-color: rgba(255, 255, 255, 0.95);
-  /* ??????? */
-  backdrop-filter: blur(8px);
-  /* ????? */
-  padding: 1rem 1.5rem;
-  margin-top: auto;
-
-  display: flex;
-  flex-direction: column;
-  gap: 1rem;
-  width: 100%;
-  z-index: 10;
-
-  /* ??????? */
-  border: 1px solid rgba(229, 231, 235, 0.8);
-  border-radius: 1rem;
-  /* ??????????? */
-  box-shadow:
-    0 4px 6px -1px rgba(0, 0, 0, 0.05),
-    0 10px 15px -3px rgba(0, 0, 0, 0.03);
-  /* ?????? */
-}
-
-@media screen and (min-width: 640px) {
-  .pagination-container {
-    flex-direction: row;
-    align-items: center;
-    justify-content: flex-end;
-  }
-}
-
-/* 2. ?????????? */
-.pagination-info {
-  font-size: 0.875rem;
-  color: #64748b;
-  /* Slate-500: ??????? */
-  font-weight: 500;
-  text-align: center;
-  font-feature-settings: "tnum";
-  /* ?????????????? */
-}
-
-@media screen and (min-width: 640px) {
-  .pagination-info {
-    text-align: left;
-    margin-right: auto;
-  }
-}
-
-/* ?????????? */
-.pagination-info b,
-.pagination-info strong,
-.pagination-info .highlight {
-  color: #0f172a;
-  /* Slate-900: ??????? */
-  font-weight: 800;
-  /* ???? */
-  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
-  /* ?????????? */
-}
-
-/* 3. ????????????? */
-.pagination-controls {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 0.375rem;
-  /* ?????? */
-
-  background-color: #f1f5f9;
-  /* Slate-100 */
-  padding: 0.375rem;
-  border-radius: 9999px;
-  /* ??????? */
-  border: 1px solid rgba(226, 232, 240, 0.8);
-  box-shadow: inset 0 2px 4px 0 rgba(0, 0, 0, 0.02);
-  /* ???????? */
-}
-
-/* 4. ???????????? */
-.pagination-btn {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  position: relative;
-
-  /* ???? */
-  min-width: 2.5rem;
-  /* 40px: ??????? */
-  height: 2.5rem;
-  /* 40px */
-  padding: 0 0.5rem;
-
-  /* ???? */
-  border-radius: 9999px;
-  /* ??/???? */
-  font-size: 0.9rem;
-  font-weight: 700;
-  /* ???? */
-  font-family: system-ui, -apple-system, sans-serif;
-  color: #475569;
-  /* Slate-600 */
-
-  background-color: transparent;
-  border: 2px solid transparent;
-  /* ????????????? */
-  cursor: pointer;
-
-  /* ?? */
-  transition: all 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
-  /* ?????? */
-  user-select: none;
-}
-
-/* ?????? (SVG ? ????) */
-.pagination-btn svg,
-.pagination-btn i {
-  stroke-width: 2.5px;
-  /* ???SVG????? */
-  font-weight: 900;
-  /* ?????????? */
-  font-size: 1rem;
-}
-
-/* ??????? + ?? */
-.pagination-btn:hover:not(:disabled):not(.active) {
-  background-color: #ffffff;
-  color: #2563eb;
-  /* Blue-600 */
-  border-color: rgba(37, 99, 235, 0.1);
-  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
-  transform: translateY(-2px);
-  /* ??????? */
-}
-
-/* ???????? */
-.pagination-btn:active:not(:disabled) {
-  transform: scale(0.92) translateY(0);
-  box-shadow: none;
-}
-
-/* 5. ?????????????? */
-.pagination-btn.active,
-.pagination-btn-active {
-  background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%);
-  /* ???? */
-  color: white;
-  border-color: transparent;
-
-  /* ???? */
-  box-shadow:
-    0 4px 12px rgba(37, 99, 235, 0.35),
-    inset 0 1px 0 rgba(255, 255, 255, 0.2);
-
-  z-index: 2;
-  transform: scale(1.05);
-  /* ???? */
-}
-
-/* ???????? */
-.pagination-btn.active:hover,
-.pagination-btn-active:hover {
-  transform: scale(1.05) translateY(-1px);
-  box-shadow: 0 6px 16px rgba(37, 99, 235, 0.4);
-}
-
-/* 6. ???? */
-.pagination-btn:disabled {
-  color: #cbd5e1;
-  /* Slate-300 */
-  cursor: not-allowed;
-  background-color: transparent;
-  transform: none;
-}
-
-/* 7. ???????? */
-.pagination-ellipsis {
-  display: flex;
-  align-items: flex-end;
-  /* ???????????? */
-  justify-content: center;
-  width: 2rem;
-  height: 2rem;
-  padding-bottom: 0.5rem;
-
-  color: #94a3b8;
-  /* Slate-400 */
-  font-size: 1.5rem;
-  font-weight: 700;
-  letter-spacing: 2px;
-}
-
-/* ========================================
-   10. ??????
-   ======================================== */
-
-.table-responsive {
-  width: 100%;
-  overflow-x: auto;
-  -webkit-overflow-scrolling: touch;
-}
-
-.table-responsive table {
-  min-width: 100%;
-}
-
-/* ========================================
-   11. ?????
-   ======================================== */
-
-.sidebar {
-  flex-shrink: 0;
-  transition: width 0.3s ease, transform 0.3s ease;
-  padding: var(--spacing-4);
-}
-
-.sidebar-header {
-  padding: var(--spacing-4);
-  border-bottom: 1px solid #e5e7eb;
-  margin-bottom: var(--spacing-4);
-}
-
-.sidebar-title {
-  font-size: var(--font-size-lg);
-  font-weight: 600;
-  margin: 0;
-}
-
-.sidebar-nav {
-  list-style: none;
-  padding: 0;
-  margin: 0;
-}
-
-.sidebar-nav-item {
-  margin-bottom: var(--spacing-1);
-}
-
-.sidebar-nav-link {
-  display: flex;
-  align-items: center;
-  padding: var(--spacing-3);
-  border-radius: 0.375rem;
-  font-size: var(--font-size-sm);
-  text-decoration: none;
-  transition: all 0.2s;
-  gap: var(--spacing-3);
-}
-
-.sidebar-nav-link:hover {
-  background-color: #f3f4f6;
-}
-
-.sidebar-nav-link.active {
-  background-color: #1677ff;
-  color: white;
-}
-
-.sidebar-nav-icon {
-  width: var(--icon-size-base);
-  height: var(--icon-size-base);
-  flex-shrink: 0;
-}
-
-/* ????? */
-@media screen and (max-width: 768px) {
-  .sidebar {
-    position: fixed;
-    z-index: 50;
-    height: 100%;
-    height: 100dvh;
-    padding: var(--spacing-3);
-  }
-
-  .sidebar-overlay {
-    position: fixed;
-    inset: 0;
-    background-color: rgba(0, 0, 0, 0.5);
-    z-index: 40;
-  }
-}
-
-/* ========================================
-   12. ??????
-   ======================================== */
-
-/* Webkit ?????? */
-::-webkit-scrollbar {
-  width: 8px;
-  height: 8px;
-}
-
-::-webkit-scrollbar-track {
-  background: #f1f1f1;
-  border-radius: 4px;
-}
-
-::-webkit-scrollbar-thumb {
-  background: #c1c1c1;
-  border-radius: 4px;
-}
-
-::-webkit-scrollbar-thumb:hover {
-  background: #a1a1a1;
-}
-
-/* Firefox ????*/
-* {
-  scrollbar-width: thin;
-  scrollbar-color: #c1c1c1 #f1f1f1;
-}
-
-/* ========================================
-   13. ??????
-   ======================================== */
-
-/* ??????????*/
 @media (prefers-reduced-motion: reduce) {
 
   *,
@@ -1418,7 +449,6 @@ label {
   }
 }
 
-/* ???? */
 @keyframes fadeIn {
   from {
     opacity: 0;
@@ -1441,68 +471,12 @@ label {
   }
 }
 
-@keyframes slideInRight {
-  from {
-    opacity: 0;
-    transform: translateX(10px);
-  }
-
-  to {
-    opacity: 1;
-    transform: translateX(0);
-  }
-}
-
-@keyframes zoomIn {
-  from {
-    opacity: 0;
-    transform: scale(0.95);
-  }
-
-  to {
-    opacity: 1;
-    transform: scale(1);
-  }
-}
-
 .animate-fade-in {
   animation: fadeIn 0.2s ease-out;
 }
 
 .animate-slide-up {
   animation: slideInUp 0.2s ease-out;
-}
-
-.animate-slide-right {
-  animation: slideInRight 0.2s ease-out;
-}
-
-.animate-in {
-  animation-duration: 0.3s;
-  animation-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
-  animation-fill-mode: both;
-}
-
-.zoom-in-95 {
-  animation-name: zoomIn;
-}
-
-.fade-in {
-  animation-name: fadeIn;
-}
-
-/* ========================================
-   14. ??????????
-   ======================================== */
-
-:focus-visible {
-  outline: 2px solid #1677ff;
-  outline-offset: 2px;
-}
-
-/* ?????????????? */
-:focus:not(:focus-visible) {
-  outline: none;
 }
 
 /* ========================================
@@ -1513,1051 +487,14 @@ label {
   .no-print {
     display: none !important;
   }
-
-  .sidebar,
-  header,
-  .pagination {
-    display: none !important;
-  }
-
-  body {
-    font-size: 12pt;
-  }
 }
-
 
 /* ========================================
-   16. ???????????
+   16. ???????
    ======================================== */
 
-/* ???????? - ?????? */
-@media screen and (max-width: 640px) {
-  .model-label {
-    display: none !important;
-  }
-
-  .input-bar-controls {
-    max-width: 45%;
-    /* ????????????*/
-  }
-
-  .model-selector-compact {
-    max-width: 80px;
-    min-width: 50px;
-  }
-}
-
-/* ???? (<400px) - ?????????? */
-@media screen and (max-width: 400px) {
-  .model-selector-compact .model-select {
-    max-width: 50px !important;
-    min-width: 40px !important;
-    font-size: 10px;
-  }
-
-  .model-selector-compact .model-label {
-    display: none !important;
-  }
-
-  .model-selector-compact {
-    padding-left: 0.375rem;
-    padding-right: 0.375rem;
-    max-width: 60px;
-    min-width: 50px;
-  }
-
-  .input-bar-controls {
-    gap: 0.25rem;
-    /* ???? */
-    max-width: 40%;
-  }
-}
-
-/* ???? (<320px) - ????????? */
-@media screen and (max-width: 320px) {
-  .model-selector-compact .model-select {
-    max-width: 40px !important;
-    min-width: 35px !important;
-    font-size: 9px;
-  }
-
-  .model-selector-compact {
-    max-width: 50px;
-    min-width: 45px;
-    padding-left: 0.25rem;
-    padding-right: 0.25rem;
-  }
-
-  .input-bar-controls {
-    max-width: 35%;
-  }
-}
-
-/* ??????- ?? flex ?????? */
-.input-bar-container {
-  display: flex;
-  align-items: center;
-  min-width: 0;
+.text-truncate {
   overflow: hidden;
-  position: relative;
-}
-
-/* ????- ?????*/
-.input-bar-textarea {
-  flex: 1;
-  min-width: 0;
-}
-
-/* ????????- ???? */
-.input-bar-controls {
-  display: flex;
-  align-items: center;
-  gap: 0.375rem;
-  /* gap-1.5 */
-  flex-shrink: 0;
-  min-width: 0;
-  max-width: 50%;
-  /* ??????????50%????*/
-}
-
-/* ???????????*/
-.send-button {
-  min-width: 36px;
-  min-height: 36px;
-  flex-shrink: 0;
-  box-sizing: border-box;
-}
-
-/* ???????????????????????*/
-@media screen and (max-width: 320px) {
-  .send-button {
-    min-width: 32px;
-    min-height: 32px;
-    padding: 0.375rem;
-    /* 6px */
-  }
-}
-
-/* ????????*/
-.model-selector-compact {
-  max-width: 120px;
-  /* ?????????????*/
-  min-width: 60px;
-  /* ????????????*/
-}
-
-.model-selector-compact .model-select {
-  max-width: 80px;
-  min-width: 40px;
   text-overflow: ellipsis;
-  overflow: hidden;
   white-space: nowrap;
-}
-
-/* ??????????? */
-.model-selector-compact .model-select option {
-  text-overflow: ellipsis;
-  overflow: hidden;
-  white-space: nowrap;
-}
-
-/* ========================================
-   17. ??????????
-   ======================================== */
-
-/* ????????????????*/
-@media screen and (max-width: 768px) {
-  .header-button-text {
-    display: none !important;
-  }
-
-  .header-button-icon-only {
-    padding: 0.5rem !important;
-    min-width: 44px;
-    min-height: 44px;
-  }
-}
-
-/* ???????????*/
-@media screen and (max-width: 480px) {
-  .header-button-icon-only {
-    padding: 0.375rem !important;
-    min-width: 36px;
-    min-height: 36px;
-  }
-}
-
-/* ========================================
-   18. ????????
-   ======================================== */
-
-/* ?????? - ????????? */
-.panel-toggle-button {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  /* ?????????????????? */
-  min-width: var(--button-min-size);
-  min-height: var(--button-min-size);
-  /* ???????????? */
-  padding: 0.625rem;
-  /* p-2.5 = 10px */
-  border-radius: 0.375rem;
-  background-color: transparent;
-  border: none;
-  cursor: pointer;
-  transition: all 0.2s ease;
-  color: #6b7280;
-  /* text-gray-500 */
-  box-sizing: border-box;
-}
-
-.panel-toggle-button:hover {
-  background-color: #f3f4f6;
-  /* hover:bg-gray-100 */
-  color: #1f2937;
-  /* hover:text-gray-800 */
-}
-
-.panel-toggle-button:focus-visible {
-  outline: 2px solid #1677ff;
-  outline-offset: 2px;
-}
-
-.panel-toggle-button svg,
-.panel-toggle-button .icon {
-  width: var(--icon-size-base);
-  height: var(--icon-size-base);
-}
-
-/* ???????????? */
-@media screen and (max-width: 768px) {
-  .panel-toggle-button {
-    min-width: var(--button-min-size-compact);
-    min-height: var(--button-min-size-compact);
-    padding: 0.375rem;
-    /* p-1.5 = 6px */
-  }
-
-  .panel-toggle-button svg,
-  .panel-toggle-button .icon {
-    width: var(--icon-size-sm);
-    height: var(--icon-size-sm);
-  }
-}
-
-/* ========================================
-   19. ??????????????
-   ======================================== */
-
-/* ??????*/
-.p-1 {
-  padding: var(--spacing-1);
-}
-
-.p-2 {
-  padding: var(--spacing-2);
-}
-
-.p-3 {
-  padding: var(--spacing-3);
-}
-
-.p-4 {
-  padding: var(--spacing-4);
-}
-
-.p-5 {
-  padding: var(--spacing-5);
-}
-
-.p-6 {
-  padding: var(--spacing-6);
-}
-
-.p-8 {
-  padding: var(--spacing-8);
-}
-
-.px-1 {
-  padding-left: var(--spacing-1);
-  padding-right: var(--spacing-1);
-}
-
-.px-2 {
-  padding-left: var(--spacing-2);
-  padding-right: var(--spacing-2);
-}
-
-.px-3 {
-  padding-left: var(--spacing-3);
-  padding-right: var(--spacing-3);
-}
-
-.px-4 {
-  padding-left: var(--spacing-4);
-  padding-right: var(--spacing-4);
-}
-
-.px-6 {
-  padding-left: var(--spacing-6);
-  padding-right: var(--spacing-6);
-}
-
-.py-1 {
-  padding-top: var(--spacing-1);
-  padding-bottom: var(--spacing-1);
-}
-
-.py-2 {
-  padding-top: var(--spacing-2);
-  padding-bottom: var(--spacing-2);
-}
-
-.py-3 {
-  padding-top: var(--spacing-3);
-  padding-bottom: var(--spacing-3);
-}
-
-.py-4 {
-  padding-top: var(--spacing-4);
-  padding-bottom: var(--spacing-4);
-}
-
-.py-6 {
-  padding-top: var(--spacing-6);
-  padding-bottom: var(--spacing-6);
-}
-
-.m-1 {
-  margin: var(--spacing-1);
-}
-
-.m-2 {
-  margin: var(--spacing-2);
-}
-
-.m-3 {
-  margin: var(--spacing-3);
-}
-
-.m-4 {
-  margin: var(--spacing-4);
-}
-
-.m-6 {
-  margin: var(--spacing-6);
-}
-
-.mx-1 {
-  margin-left: var(--spacing-1);
-  margin-right: var(--spacing-1);
-}
-
-.mx-2 {
-  margin-left: var(--spacing-2);
-  margin-right: var(--spacing-2);
-}
-
-.mx-4 {
-  margin-left: var(--spacing-4);
-  margin-right: var(--spacing-4);
-}
-
-.mx-auto {
-  margin-left: auto;
-  margin-right: auto;
-}
-
-.my-1 {
-  margin-top: var(--spacing-1);
-  margin-bottom: var(--spacing-1);
-}
-
-.my-2 {
-  margin-top: var(--spacing-2);
-  margin-bottom: var(--spacing-2);
-}
-
-.my-4 {
-  margin-top: var(--spacing-4);
-  margin-bottom: var(--spacing-4);
-}
-
-.mb-2 {
-  margin-bottom: var(--spacing-2);
-}
-
-.mb-4 {
-  margin-bottom: var(--spacing-4);
-}
-
-.mt-4 {
-  margin-top: var(--spacing-4);
-}
-
-/* ??????*/
-.gap-1 {
-  gap: var(--spacing-1);
-}
-
-.gap-2 {
-  gap: var(--spacing-2);
-}
-
-.gap-3 {
-  gap: var(--spacing-3);
-}
-
-.gap-4 {
-  gap: var(--spacing-4);
-}
-
-.gap-6 {
-  gap: var(--spacing-6);
-}
-
-/* ??????*/
-.rounded {
-  border-radius: 0.25rem;
-}
-
-.rounded-md {
-  border-radius: 0.375rem;
-}
-
-.rounded-lg {
-  border-radius: 0.5rem;
-}
-
-.rounded-xl {
-  border-radius: 0.75rem;
-}
-
-/* ????????*/
-.icon-xs {
-  width: var(--icon-size-xs);
-  height: var(--icon-size-xs);
-}
-
-.icon-sm {
-  width: var(--icon-size-sm);
-  height: var(--icon-size-sm);
-}
-
-.icon-base {
-  width: var(--icon-size-base);
-  height: var(--icon-size-base);
-}
-
-.icon-lg {
-  width: var(--icon-size-lg);
-  height: var(--icon-size-lg);
-}
-
-.icon-xl {
-  width: var(--icon-size-xl);
-  height: var(--icon-size-xl);
-}
-
-/* ???????????????????????? */
-.min-touch-target {
-  min-width: var(--button-min-size);
-  min-height: var(--button-min-size);
-}
-
-.min-touch-target-sm {
-  min-width: var(--button-min-size-compact);
-  min-height: var(--button-min-size-compact);
-}
-
-/* ========================================
-   20. ???????
-   ======================================== */
-
-/* ???? */
-.debug-zoom-info {
-  position: fixed;
-  top: var(--spacing-4);
-  right: var(--spacing-4);
-  background: rgba(0, 0, 0, 0.8);
-  color: white;
-  padding: var(--spacing-2);
-  border-radius: var(--spacing-1);
-  font-size: var(--font-size-xs);
-  font-family: monospace;
-  z-index: 9999;
-  pointer-events: none;
-}
-
-.debug-zoom-info::before {
-  content: "Scale: " attr(data-scale-factor);
-  display: block;
-}
-
-/* ???????????? */
-.debug-scale-boundaries * {
-  outline: 1px dashed rgba(255, 0, 0, 0.3);
-}
-
-.debug-scale-boundaries *:hover {
-  outline-color: rgba(255, 0, 0, 0.8);
-}
-
-/* ========================================
-   21. ??????????????
-   ======================================== */
-
-/* ???????? - ?????????????????*/
-p,
-span,
-div,
-h1,
-h2,
-h3,
-h4,
-h5,
-h6,
-label,
-a,
-li,
-button,
-input,
-textarea,
-select {
-  font-size: max(1em, var(--font-size-min)) !important;
-}
-
-/* ????????????*/
-h1 {
-  font-size: max(var(--font-size-3xl), calc(var(--font-size-min) * 1.5)) !important;
-}
-
-h2 {
-  font-size: max(var(--font-size-2xl), calc(var(--font-size-min) * 1.3)) !important;
-}
-
-h3 {
-  font-size: max(var(--font-size-xl), calc(var(--font-size-min) * 1.2)) !important;
-}
-
-h4 {
-  font-size: max(var(--font-size-lg), var(--font-size-min)) !important;
-}
-
-h5 {
-  font-size: max(var(--font-size-base), var(--font-size-min)) !important;
-}
-
-h6 {
-  font-size: max(var(--font-size-sm), var(--font-size-min)) !important;
-}
-
-/* ???????????? */
-.text-xs {
-  font-size: max(var(--font-size-xs), var(--font-size-min)) !important;
-}
-
-.text-sm {
-  font-size: max(var(--font-size-sm), var(--font-size-min)) !important;
-}
-
-.text-base {
-  font-size: max(var(--font-size-base), var(--font-size-min)) !important;
-}
-
-.text-lg {
-  font-size: max(var(--font-size-lg), var(--font-size-min)) !important;
-}
-
-.text-xl {
-  font-size: max(var(--font-size-xl), var(--font-size-min)) !important;
-}
-
-.text-2xl {
-  font-size: max(var(--font-size-2xl), var(--font-size-min)) !important;
-}
-
-.text-3xl {
-  font-size: max(var(--font-size-3xl), var(--font-size-min)) !important;
-}
-
-/* ?????????? */
-input,
-textarea,
-select,
-button {
-  font-size: max(var(--font-size-base), var(--font-size-min)) !important;
-}
-
-/* ?????????? */
-.sidebar-nav-link,
-.pagination-btn,
-.panel-toggle-button {
-  font-size: max(var(--font-size-sm), var(--font-size-min)) !important;
-}
-
-/* ?????????? */
-.card-title {
-  font-size: max(var(--font-size-lg), var(--font-size-min)) !important;
-}
-
-.card-subtitle {
-  font-size: max(var(--font-size-sm), var(--font-size-min)) !important;
-}
-
-/* ??????????? */
-.modal-title {
-  font-size: max(var(--font-size-xl), var(--font-size-min)) !important;
-}
-
-.modal-body {
-  font-size: max(var(--font-size-base), var(--font-size-min)) !important;
-}
-
-/* ========================================
-   23. ??????????
-   ======================================== */
-
-/* ????????????*/
-.workspace-mobile {
-  /* ??????? */
-  --workspace-header-padding: 0.75rem;
-  --workspace-content-padding: 0.75rem;
-  --workspace-input-padding: 0.75rem;
-  --workspace-button-size: 32px;
-  --workspace-icon-size: 14px;
-  --workspace-font-size: 0.875rem;
-  --workspace-gap: 0.25rem;
-}
-
-.workspace-tablet {
-  /* ??????? */
-  --workspace-header-padding: 1rem;
-  --workspace-content-padding: 1rem;
-  --workspace-input-padding: 1rem;
-  --workspace-button-size: 36px;
-  --workspace-icon-size: 16px;
-  --workspace-font-size: 1rem;
-  --workspace-gap: 0.375rem;
-}
-
-.workspace-desktop {
-  /* ??????? */
-  --workspace-header-padding: 1.5rem;
-  --workspace-content-padding: 1.5rem;
-  --workspace-input-padding: 1.5rem;
-  --workspace-button-size: 44px;
-  --workspace-icon-size: 16px;
-  --workspace-font-size: 1rem;
-  --workspace-gap: 0.5rem;
-}
-
-/* ?????????? */
-.workspace-mobile .left-panel,
-.workspace-mobile .right-panel {
-  /* ????????????*/
-  display: none;
-}
-
-.workspace-tablet .left-panel {
-  /* ????????????*/
-  max-width: 35vw;
-}
-
-.workspace-tablet .right-panel {
-  /* ????????????*/
-  display: none;
-}
-
-.workspace-desktop .left-panel {
-  /* ????????????*/
-  max-width: 40vw;
-}
-
-.workspace-desktop .right-panel {
-  /* ????????????*/
-  width: 256px;
-}
-
-/* ???????????? */
-.workspace-mobile .chat-area {
-  /* ?????????? */
-  width: 100%;
-  min-width: 320px;
-}
-
-.workspace-tablet .chat-area {
-  /* ?????????? */
-  flex: 1;
-  min-width: 400px;
-}
-
-.workspace-desktop .chat-area {
-  /* ?????????? */
-  flex: 1;
-  min-width: 480px;
-}
-
-/* ???????????? */
-.workspace-mobile .messages-area {
-  padding: var(--workspace-content-padding);
-  gap: 0.75rem;
-}
-
-.workspace-tablet .messages-area {
-  padding: var(--workspace-content-padding);
-  gap: 1rem;
-}
-
-.workspace-desktop .messages-area {
-  padding: var(--workspace-content-padding);
-  gap: 1.5rem;
-}
-
-/* ????????????*/
-.workspace-mobile .input-bar {
-  padding: var(--workspace-input-padding);
-}
-
-.workspace-tablet .input-bar {
-  padding: var(--workspace-input-padding);
-}
-
-.workspace-desktop .input-bar {
-  padding: var(--workspace-input-padding);
-}
-
-/* ?????????? */
-.workspace-mobile button,
-.workspace-mobile .btn {
-  min-width: var(--workspace-button-size);
-  min-height: var(--workspace-button-size);
-  font-size: max(0.75rem, var(--font-size-min));
-}
-
-.workspace-tablet button,
-.workspace-tablet .btn {
-  min-width: var(--workspace-button-size);
-  min-height: var(--workspace-button-size);
-  font-size: max(0.875rem, var(--font-size-min));
-}
-
-.workspace-desktop button,
-.workspace-desktop .btn {
-  min-width: var(--workspace-button-size);
-  min-height: var(--workspace-button-size);
-  font-size: max(var(--workspace-font-size), var(--font-size-min));
-}
-
-/* ?????????? */
-.workspace-mobile svg,
-.workspace-mobile .icon {
-  width: var(--workspace-icon-size);
-  height: var(--workspace-icon-size);
-}
-
-.workspace-tablet svg,
-.workspace-tablet .icon {
-  width: var(--workspace-icon-size);
-  height: var(--workspace-icon-size);
-}
-
-.workspace-desktop svg,
-.workspace-desktop .icon {
-  width: var(--workspace-icon-size);
-  height: var(--workspace-icon-size);
-}
-
-/* ???????????? */
-.workspace-mobile {
-  font-size: max(var(--workspace-font-size), var(--font-size-min));
-}
-
-.workspace-tablet {
-  font-size: max(var(--workspace-font-size), var(--font-size-min));
-}
-
-.workspace-desktop {
-  font-size: max(var(--workspace-font-size), var(--font-size-min));
-}
-
-/* ?????????? */
-.workspace-mobile h1,
-.workspace-mobile h2,
-.workspace-mobile h3 {
-  font-size: max(1rem, var(--font-size-min));
-}
-
-.workspace-tablet h1,
-.workspace-tablet h2,
-.workspace-tablet h3 {
-  font-size: max(1.125rem, var(--font-size-min));
-}
-
-.workspace-desktop h1,
-.workspace-desktop h2,
-.workspace-desktop h3 {
-  font-size: max(1.25rem, var(--font-size-min));
-}
-
-/* ?????????????? */
-.workspace-mobile .panel-toggle-button {
-  min-width: 32px;
-  min-height: 32px;
-  padding: 0.25rem;
-}
-
-.workspace-tablet .panel-toggle-button {
-  min-width: 36px;
-  min-height: 36px;
-  padding: 0.375rem;
-}
-
-.workspace-desktop .panel-toggle-button {
-  min-width: var(--button-min-size);
-  min-height: var(--button-min-size);
-  padding: 0.625rem;
-}
-
-/* ???????????? */
-.workspace-mobile .session-list-item {
-  padding: 0.5rem;
-  font-size: max(0.75rem, var(--font-size-min));
-}
-
-.workspace-tablet .session-list-item {
-  padding: 0.625rem;
-  font-size: max(0.875rem, var(--font-size-min));
-}
-
-.workspace-desktop .session-list-item {
-  padding: 0.75rem;
-  font-size: max(0.875rem, var(--font-size-min));
-}
-
-/* ========================================
-   24. ????????????
-   ======================================== */
-
-/* ????????(< 768px) */
-@media screen and (max-width: 767px) {
-  .workspace-container {
-    /* ????????? */
-    flex-direction: column;
-  }
-
-  .workspace-header {
-    /* ?????????? */
-    padding: 0.5rem 0.75rem;
-    min-height: 48px;
-  }
-
-  .workspace-input-bar {
-    /* ?????????? */
-    padding: 0.75rem;
-  }
-
-  .workspace-input-controls {
-    /* ????????????*/
-    gap: 0.25rem;
-  }
-
-  .workspace-model-selector {
-    /* ??????????? */
-    max-width: 60px;
-    min-width: 50px;
-  }
-
-  .workspace-send-button {
-    /* ????????????*/
-    min-width: 32px;
-    min-height: 32px;
-  }
-}
-
-/* ????????(768px - 1023px) */
-@media screen and (min-width: 768px) and (max-width: 1023px) {
-  .workspace-container {
-    /* ??????? */
-    flex-direction: row;
-  }
-
-  .workspace-left-panel {
-    /* ????????????*/
-    max-width: 35vw;
-  }
-
-  .workspace-right-panel {
-    /* ????????????*/
-    display: none;
-  }
-
-  .workspace-header {
-    /* ?????????? */
-    padding: 0.75rem 1rem;
-    min-height: 52px;
-  }
-
-  .workspace-input-bar {
-    /* ?????????? */
-    padding: 1rem;
-  }
-
-  .workspace-input-controls {
-    /* ????????????*/
-    gap: 0.375rem;
-  }
-
-  .workspace-model-selector {
-    /* ?????????????*/
-    max-width: 100px;
-    min-width: 70px;
-  }
-
-  .workspace-send-button {
-    /* ????????????*/
-    min-width: 36px;
-    min-height: 36px;
-  }
-}
-
-/* ????????(>= 1024px) */
-@media screen and (min-width: 1024px) {
-  .workspace-container {
-    /* ??????? */
-    flex-direction: row;
-  }
-
-  .workspace-left-panel {
-    /* ????????????*/
-    max-width: 40vw;
-  }
-
-  .workspace-right-panel {
-    /* ????????????*/
-    width: 256px;
-    display: flex;
-  }
-
-  .workspace-header {
-    /* ?????????? */
-    padding: 1rem 1.5rem;
-    min-height: 56px;
-  }
-
-  .workspace-input-bar {
-    /* ?????????? */
-    padding: 1rem 1.5rem;
-  }
-
-  .workspace-input-controls {
-    /* ????????????*/
-    gap: 0.5rem;
-  }
-
-  .workspace-model-selector {
-    /* ?????????????*/
-    max-width: 120px;
-    min-width: 80px;
-  }
-
-  .workspace-send-button {
-    /* ????????????*/
-    min-width: var(--button-min-size);
-    min-height: var(--button-min-size);
-  }
-}
-
-/* ???????? (>= 1440px) */
-@media screen and (min-width: 1440px) {
-  .workspace-container {
-    /* ??????????????????*/
-    max-width: 1920px;
-    margin: 0 auto;
-  }
-
-  .workspace-left-panel {
-    /* ?????????????*/
-    max-width: 600px;
-  }
-
-  .workspace-right-panel {
-    /* ???????????? */
-    width: 280px;
-  }
-
-  .workspace-chat-area {
-    /* ????????????*/
-    max-width: 1200px;
-  }
-}
-
-/* ???????? */
-@media (prefers-contrast: high) {
-  :root {
-    --font-size-min: 14px;
-    /* ?????????????????*/
-  }
-
-  button,
-  .btn,
-  [role="button"] {
-    border: 2px solid currentColor;
-  }
-}
-
-/* ????????*/
-@media (prefers-reduced-motion: no-preference) and (min-resolution: 2dppx) {
-  :root {
-    --font-size-min: 13px;
-    /* ???????????????????*/
-  }
-}
-
-/* ??????????????? */
-button,
-[role="button"],
-a,
-input[type="button"],
-input[type="submit"],
-input[type="reset"],
-.btn {
-  min-width: var(--button-min-size) !important;
-  min-height: var(--button-min-size) !important;
-}
-
-.btn-sm,
-button.btn-sm,
-.panel-toggle-button {
-  min-width: var(--button-min-size-compact) !important;
-  min-height: var(--button-min-size-compact) !important;
-}
-
-/* ????????? - ???????? */
-.session-action-btn {
-  min-width: 24px !important;
-  min-height: 24px !important;
-  width: 24px;
-  height: 24px;
-  padding: 0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  transform: none !important;
-}
-
-/* ????????*/
-:focus-visible {
-  outline: 3px solid #1677ff !important;
-  outline-offset: 2px !important;
-  border-radius: 2px;
-}
-
-/* ?????????????????? */
-@media screen and (max-width: 300px) {
-  :focus-visible {
-    outline-width: 2px !important;
-    outline-offset: 1px !important;
-  }
 }
