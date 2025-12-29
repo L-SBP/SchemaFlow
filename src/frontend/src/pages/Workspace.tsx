@@ -652,22 +652,33 @@ export const Workspace: React.FC<WorkspaceProps> = ({ project, onBack }) => {
       // 3. 处理响应并转换格式
       const aiMsg = mapBackendMessageToFrontend(res);
 
+      // 计算是否需要智能重命名（并持久化到后端）
+      const current = sessions.find(s => s.id === activeSessionId);
+      const shouldAutoRename = !!current && current.messages.length <= 2 && current.name === '新会话';
+      const autoName = shouldAutoRename
+        ? (textToSend.length > 10 ? textToSend.substring(0, 10) + '...' : textToSend)
+        : (current?.name ?? '');
+
+      // 先更新本地状态（乐观更新）
       setSessions(prev => prev.map(s => {
         if (s.id !== activeSessionId) return s;
-
-        // 智能重命名 (仅前端逻辑优化): 如果是前几条消息且名称为默认，尝试用问题更新会话标题
-        let newName = s.name;
-        if (s.messages.length <= 2 && s.name === '新会话') {
-          newName = textToSend.length > 10 ? textToSend.substring(0, 10) + '...' : textToSend;
-        }
-
         return {
           ...s,
-          name: newName,
+          name: shouldAutoRename ? autoName : s.name,
           messages: [...s.messages, aiMsg],
-          current_model: selectedModel  // 更新会话的当前模型
+          current_model: selectedModel
         };
       }));
+
+      // 若触发智能重命名，则调用后端持久化
+      if (shouldAutoRename && autoName) {
+        try {
+          await sessionApi.update(Number(activeSessionId), autoName);
+        } catch (e) {
+          console.error('Auto rename session failed:', e);
+          // 可选：提示用户失败，但保留本地名称以避免打断流程
+        }
+      }
 
       // 触发打字机效果 (如果是文本回复)
       if (aiMsg.text) setIsTyping(true);
@@ -740,15 +751,30 @@ export const Workspace: React.FC<WorkspaceProps> = ({ project, onBack }) => {
         setIsSending(false);
       }
     } else {
-      // 取消操作
-      handleSend("取消");
-      // 隐藏原消息的确认按钮
-      setSessions(prev => prev.map(s =>
-        s.id === activeSessionId ? {
-          ...s,
-          messages: s.messages.map(m => m.id === messageId ? { ...m, requiresConfirmation: false } : m)
-        } : s
-      ));
+      // 取消操作：调用后端取消接口，更新原消息内容（附加取消提示）
+      try {
+        setIsSending(true);
+        const res = await sessionApi.cancelMessage(Number(messageId));
+        const updatedMsg = mapBackendMessageToFrontend(res);
+
+        // 更新原消息：隐藏确认按钮，并用后端返回的更新后内容替换
+        setSessions(prev => prev.map(s => {
+          if (s.id !== activeSessionId) return s;
+          return {
+            ...s,
+            messages: s.messages.map(m => 
+              m.id === messageId 
+                ? { ...updatedMsg, requiresConfirmation: false }
+                : m
+            )
+          };
+        }));
+      } catch (error) {
+        console.error('Cancel message failed:', error);
+        GlobalMessage.error('取消失败，请稍后重试');
+      } finally {
+        setIsSending(false);
+      }
     }
   };
 

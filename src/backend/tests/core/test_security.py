@@ -228,14 +228,14 @@ class TestBlacklistManager:
             username=f"ban_test_{datetime.now().timestamp()}",
             email=f"ban_{datetime.now().timestamp()}@example.com",
             password_hash="hashed_password",
-            is_active=True
+            status='normal'
         )
         db.add(user)
         await db.commit()
         return user
     
-    async def test_ban_user_sets_is_active_false(self, db: AsyncSession, test_user):
-        """测试封禁用户设置 is_active=False"""
+    async def test_ban_user_sets_status_banned(self, db: AsyncSession, test_user):
+        """测试封禁用户设置 status='banned'"""
         success = await BlacklistManager.ban_user(
             db=db,
             user_id=test_user.user_id,
@@ -250,12 +250,10 @@ class TestBlacklistManager:
             select(UserAccount).where(UserAccount.user_id == test_user.user_id)
         )
         user = result.scalar_one()
-        assert user.is_active == False
-        assert user.ban_reason == "Test ban reason"
-        assert user.banned_at is not None
+        assert user.status == 'banned'
     
-    async def test_unban_user_sets_is_active_true(self, db: AsyncSession, test_user):
-        """测试解封用户设置 is_active=True"""
+    async def test_unban_user_sets_status_normal(self, db: AsyncSession, test_user):
+        """测试解封用户设置 status='normal'"""
         # 先封禁
         await BlacklistManager.ban_user(
             db=db,
@@ -276,12 +274,10 @@ class TestBlacklistManager:
             select(UserAccount).where(UserAccount.user_id == test_user.user_id)
         )
         user = result.scalar_one()
-        assert user.is_active == True
-        assert user.ban_reason is None
-        assert user.banned_at is None
+        assert user.status == 'normal'
     
-    async def test_auto_ban_if_needed_with_3_violations(self, db: AsyncSession, test_user):
-        """测试三击机制：3条违规记录触发自动封禁"""
+    async def test_auto_suspend_if_needed_with_3_violations(self, db: AsyncSession, test_user):
+        """测试三击机制：3条违规记录触发自动标记为异常（suspended）"""
         # 记录3条违规日志
         for i in range(3):
             await ViolationLogger.log_violation(
@@ -294,24 +290,24 @@ class TestBlacklistManager:
                 client_user_agent="test"
             )
         
-        # 触发自动封禁检查
-        is_banned, reason = await BlacklistManager.auto_ban_if_needed(
+        # 触发自动异常标记检查
+        is_suspended, reason = await BlacklistManager.auto_suspend_if_needed(
             db=db,
             user_id=test_user.user_id
         )
         
-        assert is_banned
+        assert is_suspended
         assert "3" in reason
         
-        # 验证用户已被封禁
+        # 验证用户已被标记为异常
         result = await db.execute(
             select(UserAccount).where(UserAccount.user_id == test_user.user_id)
         )
         user = result.scalar_one()
-        assert user.is_active == False
+        assert user.status == 'suspended'
     
-    async def test_auto_ban_if_needed_with_2_violations(self, db: AsyncSession, test_user):
-        """测试三击机制：2条违规记录不触发自动封禁"""
+    async def test_auto_suspend_if_needed_with_2_violations(self, db: AsyncSession, test_user):
+        """测试三击机制：2条违规记录不触发自动标记"""
         # 记录2条违规日志
         for i in range(2):
             await ViolationLogger.log_violation(
@@ -324,20 +320,20 @@ class TestBlacklistManager:
                 client_user_agent="test"
             )
         
-        # 触发自动封禁检查
-        is_banned, reason = await BlacklistManager.auto_ban_if_needed(
+        # 触发自动异常标记检查
+        is_suspended, reason = await BlacklistManager.auto_suspend_if_needed(
             db=db,
             user_id=test_user.user_id
         )
         
-        assert not is_banned
+        assert not is_suspended
         
-        # 验证用户未被封禁
+        # 验证用户未被标记为异常
         result = await db.execute(
             select(UserAccount).where(UserAccount.user_id == test_user.user_id)
         )
         user = result.scalar_one()
-        assert user.is_active == True
+        assert user.status == 'normal'
     
     async def test_auto_ban_ignores_old_violations(self, db: AsyncSession, test_user):
         """测试自动封禁只计算24小时内的违规记录"""
@@ -365,20 +361,20 @@ class TestBlacklistManager:
                 client_user_agent="test"
             )
         
-        # 触发自动封禁检查
-        is_banned, reason = await BlacklistManager.auto_ban_if_needed(
+        # 触发自动异常标记检查
+        is_suspended, reason = await BlacklistManager.auto_suspend_if_needed(
             db=db,
             user_id=test_user.user_id
         )
         
-        # 应该不被封禁 (只有2条24小时内的记录)
-        assert not is_banned
+        # 应该不被标记为异常 (只有2杨24小时内的记录)
+        assert not is_suspended
         
         result = await db.execute(
             select(UserAccount).where(UserAccount.user_id == test_user.user_id)
         )
         user = result.scalar_one()
-        assert user.is_active == True
+        assert user.status == 'normal'
     
     async def test_get_banned_users_list(self, db: AsyncSession):
         """测试获取被封禁用户列表"""
@@ -387,8 +383,7 @@ class TestBlacklistManager:
             username=f"banned_{datetime.now().timestamp()}",
             email=f"banned_{datetime.now().timestamp()}@example.com",
             password_hash="hashed",
-            is_active=False,
-            ban_reason="Test ban"
+            status='banned'
         )
         db.add(ban_user)
         await db.commit()
@@ -415,7 +410,7 @@ class TestStrikeSystemIntegration:
             username=f"strike_test_{datetime.now().timestamp()}",
             email=f"strike_{datetime.now().timestamp()}@example.com",
             password_hash="hashed",
-            is_active=True
+            status='normal'
         )
         db.add(user)
         await db.commit()
@@ -424,10 +419,10 @@ class TestStrikeSystemIntegration:
     async def test_complete_strike_system_flow(self, db: AsyncSession, strike_user):
         """
         测试完整的三击流程：
-        1. 记录第1条违规日志 → 用户仍然活跃
-        2. 记录第2条违规日志 → 用户仍然活跃
-        3. 记录第3条违规日志 → 自动触发封禁
-        4. 用户被标记为非活跃
+        1. 记录第1条违规日志 → 用户仍然正常
+        2. 记录第2条违规日志 → 用户仍然正常
+        3. 记录第3条违规日志 → 自动触发标记为异常（suspended）
+        4. 用户被标记为 suspended 状态
         """
         
         # 步骤1：第一条违规
@@ -441,8 +436,8 @@ class TestStrikeSystemIntegration:
             client_user_agent="test"
         )
         
-        is_banned, _ = await BlacklistManager.auto_ban_if_needed(db, strike_user.user_id)
-        assert not is_banned
+        is_suspended, _ = await BlacklistManager.auto_suspend_if_needed(db, strike_user.user_id)
+        assert not is_suspended
         
         # 步骤2：第二条违规
         await ViolationLogger.log_violation(
@@ -455,10 +450,10 @@ class TestStrikeSystemIntegration:
             client_user_agent="test"
         )
         
-        is_banned, _ = await BlacklistManager.auto_ban_if_needed(db, strike_user.user_id)
-        assert not is_banned
+        is_suspended, _ = await BlacklistManager.auto_suspend_if_needed(db, strike_user.user_id)
+        assert not is_suspended
         
-        # 步骤3：第三条违规 → 自动封禁
+        # 步骤3：第三条违规 → 自动标记为异常
         await ViolationLogger.log_violation(
             db=db,
             user_id=strike_user.user_id,
@@ -469,8 +464,8 @@ class TestStrikeSystemIntegration:
             client_user_agent="test"
         )
         
-        is_banned, reason = await BlacklistManager.auto_ban_if_needed(db, strike_user.user_id)
-        assert is_banned
+        is_suspended, reason = await BlacklistManager.auto_suspend_if_needed(db, strike_user.user_id)
+        assert is_suspended
         assert "3" in reason
         
         # 验证最终状态
@@ -478,8 +473,7 @@ class TestStrikeSystemIntegration:
             select(UserAccount).where(UserAccount.user_id == strike_user.user_id)
         )
         user = result.scalar_one()
-        assert user.is_active == False
-        assert "三击机制" in user.ban_reason
+        assert user.status == 'suspended'
 
 
 if __name__ == "__main__":

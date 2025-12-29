@@ -12,6 +12,7 @@ from typing import List, Any
 # 1. 导入核心工具
 from core.log import log
 from service.chat_service import process_chat, confirm_and_execute_sql
+from service.chat_service import cancel_message
 from crud.crud_message import crud_message
 from core.exceptions import ItemNotFoundException
 
@@ -122,6 +123,23 @@ async def confirm_message_execution(
         return UnifiedResponse.success(data=result, message="SQL 执行失败")
     else:
         return UnifiedResponse.success(data=result, message="SQL 执行成功")
+
+
+@router.post("/messages/{message_id}/cancel", response_model=UnifiedResponse[ChatResponse])
+async def cancel_message_request(
+    message_id: int,
+    db: AsyncSession = Depends(get_db),
+    current_user: UserMe = Depends(get_current_active_user)
+):
+    """取消一条需要确认的消息，并返回持久化的取消提示。"""
+    import traceback
+    try:
+        log.info("User {} cancelling message {}", current_user.user_id, message_id)
+        result = await cancel_message(db, message_id, current_user.user_id)
+        return UnifiedResponse.success(data=result, message="操作已取消")
+    except Exception as e:
+        log.error("Cancel message error: {}", traceback.format_exc())
+        raise
 
 
 # ----------------------------------------------------------------------

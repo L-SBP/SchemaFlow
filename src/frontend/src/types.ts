@@ -321,6 +321,8 @@ export interface ViolationLogListItem {
   violation_id: number;
   user_id: number;
   username: string;
+  event_type: string;
+  event_description: string;
   risk_level: 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL';
   resolution_status: 'pending' | 'in_progress' | 'resolved' | 'ignored';
   created_at: string;
@@ -425,6 +427,19 @@ export interface AIModelConfigUpdate {
   model_id?: string;
   api_key?: string;
   model_type?: 'local_finetune' | 'general_llm';
+}
+
+// 测试连接请求/响应
+export interface AIModelTestConnectionRequest {
+  api_url: string;
+  api_key: string;
+  model_id: string;
+}
+
+export interface AIModelTestConnectionResponse {
+  success: boolean;
+  message: string;
+  response_time_ms?: number;
 }
 
 export interface AIModelOption {

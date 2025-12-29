@@ -47,8 +47,11 @@ async def ban_user(
     管理员手动封禁用户。
     
     触发条件：
-    - 管理员主动封禁
-    - 自动三击机制触发
+    - 管理员主动封禁（设置 status='banned'）
+    
+    注意：
+    - 系统自动检测三击机制仅会将用户标记为 suspended（异常用户）
+    - 真正的封禁（banned）需要管理员手动操作
     
     参数：
     - user_id: 要封禁的用户ID
@@ -60,7 +63,7 @@ async def ban_user(
         "message": "用户 123 已被封禁",
         "user_id": 123,
         "reason": "违反服务条款",
-        "banned_at": "2025-12-23T10:30:00+00:00"
+        "status": "banned"
     }
     """
     result = await ban_user_service(
@@ -82,9 +85,11 @@ async def unban_user(
     管理员手动解封用户。
     
     效果：
-    - 将用户 is_active 设为 True
+    - 将用户 status 设为 'normal'
     - 清空 Redis 频率限制计数器
-    - 清空封禁原因
+    
+    说明：
+    - 此操作可以解除 banned（管理员封禁）或 suspended（系统标记）状态
     
     参数：
     - user_id: 要解封的用户ID
@@ -93,7 +98,8 @@ async def unban_user(
     {
         "success": true,
         "message": "用户 123 已被解封",
-        "user_id": 123
+        "user_id": 123,
+        "status": "normal"
     }
     """
     result = await unban_user_service(
@@ -112,9 +118,9 @@ async def list_banned_users(
     db: AsyncSession = Depends(get_db)
 ):
     """
-    获取被封禁的用户列表。
+    获取被封禁/异常的用户列表。
     
-    分页查询所有已被封禁（is_active=False）的用户。
+    分页查询所有已被封禁（status='banned'）或系统标记异常（status='suspended'）的用户。
     
     参数：
     - page: 页码（从 1 开始），默认 1
@@ -130,10 +136,18 @@ async def list_banned_users(
                 "user_id": 123,
                 "username": "violator_user",
                 "email": "user@example.com",
-                "banned_at": "2025-12-23T10:30:00+00:00",
-                "ban_reason": "过度API调用"
+                "status": "banned",
+                "status_desc": "管理员封禁",
+                "updated_at": "2025-12-23T10:30:00+00:00"
             },
-            ...
+            {
+                "user_id": 456,
+                "username": "suspicious_user",
+                "email": "suspicious@example.com",
+                "status": "suspended",
+                "status_desc": "系统标记异常",
+                "updated_at": "2025-12-23T09:00:00+00:00"
+            }
         ]
     }
     """
@@ -172,8 +186,7 @@ async def get_frequency_status(
     - 当前请求频率（Redis 计数器）
     - 频率阈值和时间窗口
     - 24小时内的违规记录数
-    - 是否被封禁
-    - 封禁原因（如果已封禁）
+    - 用户状态（normal/suspended/banned）
     
     参数：
     - user_id: 用户ID
@@ -186,9 +199,10 @@ async def get_frequency_status(
         "frequency_threshold": 20,
         "time_window_seconds": 10,
         "violation_count_24h": 2,
-        "auto_ban_threshold": 3,
+        "auto_suspend_threshold": 3,
+        "status": "normal",
         "is_banned": false,
-        "ban_reason": null
+        "is_suspended": false
     }
     """
     result = await get_frequency_limit_status_service(

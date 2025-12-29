@@ -83,7 +83,7 @@ async def get_current_user(
     验证流程：
     1. 解析 JWT Token 获取用户 ID
     2. 查询数据库获取用户对象
-    3. 检查用户账户是否被封禁（is_active）
+    3. 检查用户账户状态（status: normal/suspended/banned）
     4. 检查请求频率是否超限（Redis）
 
     Args:
@@ -116,10 +116,14 @@ async def get_current_user(
             log.warning("用户 {} 不存在", user_id)
             raise ItemNotFoundException(message="User not found")
 
-        # 3. 检查用户是否被封禁（黑名单检查）
-        if not user.is_active:
-            log.warning("用户 {} 已被封禁: {}", user_id, user.ban_reason)
-            raise ForbiddenException(message=f"Account is banned. Reason: {user.ban_reason}")
+        # 3. 检查用户状态
+        if user.status == 'banned':
+            log.warning("用户 {} 已被封禁", user_id)
+            raise ForbiddenException(message="Account is banned. Please contact administrator.")
+        
+        if user.status == 'suspended':
+            log.warning("用户 {} 账户异常，已被系统标记", user_id)
+            raise ForbiddenException(message="Account is suspended due to abnormal activity. Please contact administrator.")
 
         # 4. 检查请求频率（可选的额外防护）
         from core.security import freq_limiter
@@ -131,7 +135,7 @@ async def get_current_user(
 
         if is_exceeded:
             log.warning("用户 {} 请求频率超限: {} 请求/10秒", user_id, count)
-            # 记录违规行为
+            # 记录违规行为（log_violation 内部会自动检查是否需要标记为异常）
             try:
                 from core.security import ViolationLogger
                 ip_address = request.client.host if request.client else "127.0.0.1"
@@ -145,12 +149,8 @@ async def get_current_user(
                     client_user_agent=request.headers.get("user-agent")
                 )
                 await db.commit()
-
-                # 检查是否触发自动封禁
-                from core.security import BlacklistManager
-                is_banned, reason = await BlacklistManager.auto_ban_if_needed(db, user_id)
-                if is_banned:
-                    raise ForbiddenException(message="Account is banned due to excessive API usage.")
+            except ForbiddenException:
+                raise
             except Exception as e:
                 log.error("记录违规日志失败: {}", e)
                 # 即使记录失败，仍然限制请求

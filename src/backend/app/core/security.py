@@ -129,6 +129,113 @@ class RedisFrequencyLimiter:
 
 
 # ============================================================================
+# 1.5 登录失败计数器（三次密码错误标记为异常）
+# ============================================================================
+
+class LoginFailureTracker:
+    """
+    登录失败追踪器。
+    
+    记录用户连续输错密码的次数，达到阈值后将用户标记为异常（suspended）。
+    使用 Redis 存储计数，24小时后自动过期。
+    """
+    
+    # 密码错误阈值
+    MAX_FAILED_ATTEMPTS = 3
+    # 计数过期时间（秒）- 24小时
+    EXPIRE_SECONDS = 86400
+    
+    def __init__(self):
+        """初始化 Redis 连接"""
+        from redis_client.redis import get_redis
+        self.redis_client = get_redis()
+    
+    async def record_failed_attempt(self, user_id: int) -> Tuple[int, bool]:
+        """
+        记录一次登录失败。
+        
+        Args:
+            user_id: 用户ID
+            
+        Returns:
+            Tuple[int, bool]: (当前失败次数, 是否达到阈值)
+        """
+        if not self.redis_client:
+            log.warning("Redis 不可用，跳过登录失败计数")
+            return 0, False
+        
+        try:
+            from redis_client.redis_keys import redis_key_manager
+            key = redis_key_manager.get_login_fail_count_key(user_id)
+            
+            # 增加计数 (aioredis 是异步的，需要 await)
+            count = await self.redis_client.incr(key)
+            
+            # 第一次失败时设置过期时间
+            if count == 1:
+                await self.redis_client.expire(key, self.EXPIRE_SECONDS)
+            
+            # 判断是否达到阈值
+            should_suspend = count >= self.MAX_FAILED_ATTEMPTS
+            
+            if should_suspend:
+                log.warning("用户 {} 连续 {} 次输错密码，将被标记为异常", user_id, count)
+            else:
+                log.info("用户 {} 登录失败，当前失败次数: {}/{}", user_id, count, self.MAX_FAILED_ATTEMPTS)
+            
+            return count, should_suspend
+        
+        except Exception as e:
+            log.error("记录登录失败次数失败: {}", e)
+            return 0, False
+    
+    async def get_failed_count(self, user_id: int) -> int:
+        """
+        获取用户当前的登录失败次数。
+        
+        Args:
+            user_id: 用户ID
+            
+        Returns:
+            int: 当前失败次数
+        """
+        if not self.redis_client:
+            return 0
+        
+        try:
+            from redis_client.redis_keys import redis_key_manager
+            key = redis_key_manager.get_login_fail_count_key(user_id)
+            count = await self.redis_client.get(key)
+            return int(count) if count else 0
+        except Exception as e:
+            log.error("获取登录失败次数失败: {}", e)
+            return 0
+    
+    async def reset_failed_count(self, user_id: int) -> bool:
+        """
+        重置用户的登录失败计数（登录成功后调用）。
+        
+        Args:
+            user_id: 用户ID
+            
+        Returns:
+            bool: 是否成功重置
+        """
+        if not self.redis_client:
+            return False
+        
+        try:
+            from redis_client.redis_keys import redis_key_manager
+            key = redis_key_manager.get_login_fail_count_key(user_id)
+            await self.redis_client.delete(key)
+            log.info("已重置用户 {} 的登录失败计数", user_id)
+            return True
+        except Exception as e:
+            log.error("重置登录失败计数失败: {}", e)
+            return False
+
+
+# ============================================================================
 # 2. 违规日志记录器
 # ============================================================================
 
@@ -164,6 +271,7 @@ class ViolationLogger:
         ip_address: str = "127.0.0.1",
         client_user_agent: Optional[str] = None,
         request_content: Optional[str] = None,
+        auto_check_suspend: bool = True,
     ) -> ViolationLog:
         """
         记录一条违规日志。
@@ -177,6 +285,8 @@ class ViolationLogger:
             ip_address: IP 地址
             client_user_agent: 客户端信息
             request_content: 原始请求内容
+            auto_check_suspend: 是否自动检查并标记用户为异常（默认 True）
+                               如果调用方已经手动处理了标记逻辑，应设为 False
             
         Returns:
             ViolationLog: 创建的违规日志记录
@@ -200,6 +310,14 @@ class ViolationLogger:
                 f"记录违规日志: 用户={user_id}, 类型={event_type}, "
                 f"风险={risk_level}, ID={violation.violation_id}"
             )
+            
+            # 任何违规记录都直接标记用户为异常（仅当 auto_check_suspend=True 时执行）
+            if auto_check_suspend:
+                from core.security import BlacklistManager
+                reason = f"触发违规记录: {event_type} - {event_description}"
+                success = await BlacklistManager.suspend_user(db, user_id, reason=reason)
+                if success:
+                    log.warning(f"用户 {user_id} 因违规行为被标记为异常: {reason}")
             
             return violation
         
@@ -267,16 +385,18 @@ class BlacklistManager:
     """
     
     # 自动封禁的阈值
-    VIOLATION_THRESHOLD = 3  # 24小时内3次违规记录触发自动封禁
+    VIOLATION_THRESHOLD = 3  # 24小时内3次违规记录触发自动标记为异常
     
     @staticmethod
-    async def auto_ban_if_needed(
+    async def auto_suspend_if_needed(
         db: AsyncSession,
         user_id: int,
         violation_logger: ViolationLogger = ViolationLogger()
     ) -> Tuple[bool, Optional[str]]:
         """
-        检查用户是否应该被自动封禁（三击机制）。
+        检查用户是否应该被自动标记为异常（三击机制）。
+        
+        注意：系统只会将用户标记为 suspended（异常），真正的封禁（banned）需要管理员手动操作。
         
         触发条件：
         1. 频率超限（Redis 记录）
@@ -288,7 +408,7 @@ class BlacklistManager:
             violation_logger: 违规日志记录器实例
             
         Returns:
-            Tuple[bool, Optional[str]]: (是否被封禁, 封禁原因)
+            Tuple[bool, Optional[str]]: (是否被标记为异常, 原因)
         """
         try:
             # 获取违规记录数
@@ -297,43 +417,42 @@ class BlacklistManager:
             )
             
             if violation_count >= BlacklistManager.VIOLATION_THRESHOLD:
-                # 自动封禁用户
-                reason = f"24小时内违规记录达到 {violation_count} 条，自动触发三击机制"
-                success = await BlacklistManager.ban_user(
-                    db, user_id, reason=reason, banned_by=0  # 0 表示系统自动封禁
+                # 自动标记用户为异常状态（suspended）
+                reason = f"24小时内违规记录达到 {violation_count} 条，系统自动标记为异常"
+                success = await BlacklistManager.suspend_user(
+                    db, user_id, reason=reason
                 )
                 
                 if success:
-                    log.warning("自动封禁用户 {}: {}", user_id, reason)
+                    log.warning("自动标记用户 {} 为异常: {}", user_id, reason)
                     return True, reason
             
             return False, None
         
         except Exception as e:
-            log.error("自动封禁检查失败: {}", e)
+            log.error("自动异常标记检查失败: {}", e)
             return False, None
     
     @staticmethod
-    async def ban_user(
+    async def suspend_user(
         db: AsyncSession,
         user_id: int,
-        reason: str = "违反服务条款",
-        banned_by: int = 0  # 管理员ID，0 表示系统
+        reason: str = "系统检测到异常行为"
     ) -> bool:
         """
-        将用户添加到黑名单（设置 is_active=False）。
+        将用户标记为异常状态（suspended）。
+        
+        注意：这是系统自动操作，不是真正的封禁。用户可以联系管理员申诉。
         
         Args:
             db: 数据库会话
-            user_id: 要封禁的用户ID
-            reason: 封禁原因
-            banned_by: 执行封禁的管理员ID（0 表示系统）
+            user_id: 用户ID
+            reason: 异常原因
             
         Returns:
-            bool: 是否成功封禁
+            bool: 是否成功标记
         """
         try:
-            # 查询用户
             result = await db.execute(
                 select(UserAccount).where(UserAccount.user_id == user_id)
             )
@@ -343,14 +462,59 @@ class BlacklistManager:
                 log.error("用户 {} 不存在", user_id)
                 return False
             
-            # 更新用户状态
-            user.is_active = False
-            user.banned_at = datetime.now(timezone.utc)
-            user.ban_reason = reason
+            # 只有 normal 状态的用户才能被标记为 suspended
+            if user.status != 'normal':
+                log.info("用户 {} 状态为 {}，跳过自动标记", user_id, user.status)
+                return False
+            
+            user.status = 'suspended'
+            await db.commit()
+            
+            log.warning("用户 {} 已被系统标记为异常: {}", user_id, reason)
+            return True
+        
+        except Exception as e:
+            log.error("标记用户异常失败: {}", e)
+            await db.rollback()
+            return False
+    
+    @staticmethod
+    async def ban_user(
+        db: AsyncSession,
+        user_id: int,
+        reason: str = "违反服务条款",
+        banned_by: int = 0  # 管理员ID，0 表示系统
+    ) -> bool:
+        """
+        管理员手动封禁用户（设置 status='banned'）。
+        
+        注意：只有管理员才能执行真正的封禁操作。
+        
+        Args:
+            db: 数据库会话
+            user_id: 要封禁的用户ID
+            reason: 封禁原因
+            banned_by: 执行封禁的管理员ID
+            
+        Returns:
+            bool: 是否成功封禁
+        """
+        try:
+            result = await db.execute(
+                select(UserAccount).where(UserAccount.user_id == user_id)
+            )
+            user = result.scalar_one_or_none()
+            
+            if not user:
+                log.error("用户 {} 不存在", user_id)
+                return False
+            
+            # 更新用户状态为 banned
+            user.status = 'banned'
             
             await db.commit()
             
-            log.warning("用户 {} 已被封禁: {}", user_id, reason)
+            log.warning("管理员 {} 封禁了用户 {}: {}", banned_by, user_id, reason)
             return True
         
         except Exception as e:
@@ -361,20 +525,23 @@ class BlacklistManager:
     @staticmethod
     async def unban_user(
         db: AsyncSession,
-        user_id: int
+        user_id: int,
+        admin_id: int = 0
     ) -> bool:
         """
-        将用户从黑名单中移除（设置 is_active=True）。
+        管理员解封用户（设置 status='normal'）。
+        
+        可以解除 banned 和 suspended 状态。
         
         Args:
             db: 数据库会话
             user_id: 要解封的用户ID
+            admin_id: 执行解封的管理员ID
             
         Returns:
             bool: 是否成功解封
         """
         try:
-            # 查询用户
             result = await db.execute(
                 select(UserAccount).where(UserAccount.user_id == user_id)
             )
@@ -384,14 +551,17 @@ class BlacklistManager:
                 log.error("用户 {} 不存在", user_id)
                 return False
             
-            # 更新用户状态
-            user.is_active = True
-            user.banned_at = None
-            user.ban_reason = None
+            if user.status == 'normal':
+                log.info("用户 {} 状态已经是 normal", user_id)
+                return True
+            
+            # 更新用户状态为 normal
+            old_status = user.status
+            user.status = 'normal'
             
             await db.commit()
             
-            log.info("用户 {} 已被解封", user_id)
+            log.info("管理员 {} 解封了用户 {} (原状态: {})", admin_id, user_id, old_status)
             return True
         
         except Exception as e:
@@ -402,7 +572,7 @@ class BlacklistManager:
     @staticmethod
     async def get_banned_users(db: AsyncSession, limit: int = 100) -> list:
         """
-        获取所有被封禁的用户列表。
+        获取所有被封禁的用户列表（status='banned'）。
         
         Args:
             db: 数据库会话
@@ -414,7 +584,7 @@ class BlacklistManager:
         try:
             result = await db.execute(
                 select(UserAccount)
-                .where(UserAccount.is_active == False)
+                .where(UserAccount.status == 'banned')
                 .limit(limit)
             )
             users = result.scalars().all()
@@ -422,6 +592,31 @@ class BlacklistManager:
         
         except Exception as e:
             log.error("获取被封禁用户列表失败: {}", e)
+            return []
+    
+    @staticmethod
+    async def get_suspended_users(db: AsyncSession, limit: int = 100) -> list:
+        """
+        获取所有被系统标记为异常的用户列表（status='suspended'）。
+        
+        Args:
+            db: 数据库会话
+            limit: 返回的最大记录数
+            
+        Returns:
+            list: 异常用户列表
+        """
+        try:
+            result = await db.execute(
+                select(UserAccount)
+                .where(UserAccount.status == 'suspended')
+                .limit(limit)
+            )
+            users = result.scalars().all()
+            return users
+        
+        except Exception as e:
+            log.error("获取异常用户列表失败: {}", e)
             return []
 
 
@@ -431,3 +626,6 @@ class BlacklistManager:
 
 # 创建全局的 Redis 频率限制器实例
 freq_limiter = RedisFrequencyLimiter()
+
+# 创建全局的登录失败追踪器实例
+login_failure_tracker = LoginFailureTracker()
