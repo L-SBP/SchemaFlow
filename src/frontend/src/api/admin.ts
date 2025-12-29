@@ -10,7 +10,9 @@ import {
   AIModelConfigListResponse,
   AIModelConfigDetailResponse,
   AIModelConfigCreate,
-  AIModelConfigUpdate
+  AIModelConfigUpdate,
+  AIModelTestConnectionRequest,
+  AIModelTestConnectionResponse
 } from '../types.ts';
 
 // 2.2 更新用户状态请求体
@@ -159,5 +161,13 @@ export const adminApi = {
    */
   deleteAIModel: (configId: number) => {
     return client.delete<any, null>(`/v1/ai-models/${configId}`);
+  },
+
+  /**
+   * 5.6 测试 AI 模型连接
+   * POST /api/v1/ai-models/test-connection
+   */
+  testAIModelConnection: (data: AIModelTestConnectionRequest) => {
+    return client.post<any, AIModelTestConnectionResponse>('/v1/ai-models/test-connection', data);
   }
 };

@@ -110,6 +110,32 @@ class AIModelConfigListResponse(BaseModel):
 
 
 # ----------------------------------------------------------------------
+# 测试连接请求/响应
+# ----------------------------------------------------------------------
+
+class AIModelTestConnectionRequest(BaseModel):
+    """
+    测试 AI 模型连接请求 Schema。
+    """
+    api_url: str = Field(..., min_length=1, max_length=500, description="API 接口地址")
+    api_key: str = Field(..., min_length=1, max_length=500, description="API 密钥")
+    model_id: str = Field(..., min_length=1, max_length=200, description="模型 ID")
+
+    model_config = ConfigDict(protected_namespaces=())
+
+
+class AIModelTestConnectionResponse(BaseModel):
+    """
+    测试 AI 模型连接响应 Schema。
+    """
+    success: bool = Field(..., description="连接是否成功")
+    message: str = Field(..., description="连接结果描述")
+    response_time_ms: Optional[int] = Field(None, description="响应时间（毫秒）")
+
+    model_config = ConfigDict(protected_namespaces=())
+
+
+# ----------------------------------------------------------------------
 # 前端下拉选项响应
 # ----------------------------------------------------------------------
 

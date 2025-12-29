@@ -171,20 +171,58 @@ async def service_login(
         log.info(f"Login failed: user {username} not found")
         raise exceptions.UserNotFoundException()
 
+    # 用户状态检查：只有 banned（封禁）状态禁止登录
+    # suspended（异常）状态只是标记，用户仍可正常登录，管理员可查看并决定是否封禁
+    if user.status == "banned":
+        log.error(f"User {user.user_id} is banned, login denied")
+        raise exceptions.UserStatusForbiddenException(status=user.status, user_id=user.user_id)
+    
+    # 如果用户是 suspended 状态，记录日志但允许登录
+    if user.status == "suspended":
+        log.warning(f"User {user.user_id} is suspended (marked as abnormal), but allowed to login")
+
     # 密码是否正确
     if not verify_password(password, user.password_hash):
         log.error(f"User {user.user_id} password is invalid")
-        raise exceptions.PasswordInvalidException(user_id = user.user_id)
+        
+        # 管理员账户不受密码错误次数限制
+        if user.is_admin:
+            log.info(f"Admin user {user.user_id} password invalid, but no failure tracking for admins")
+            raise exceptions.PasswordInvalidException(user_id=user.user_id, failed_attempts=0)
+        
+        # 普通用户：记录密码错误次数，检查是否达到三次阈值
+        from core.security import login_failure_tracker, BlacklistManager, ViolationLogger
+        fail_count, should_suspend = await login_failure_tracker.record_failed_attempt(user.user_id)
+        
+        if should_suspend:
+            # 密码连续错误3次直接触发标记（不通过累计违规记录）
+            # 先标记用户为异常状态
+            await BlacklistManager.suspend_user(
+                db=db,
+                user_id=user.user_id,
+                reason=f"连续 {fail_count} 次输错密码，系统自动标记为异常"
+            )
+            
+            # 再记录违规日志（仅用于审计追踪，不触发累计检查）
+            await ViolationLogger.log_violation(
+                db=db,
+                user_id=user.user_id,
+                event_type=ViolationLogger.EVENT_MULTIPLE_FAILED_LOGINS,
+                event_description=f"连续 {fail_count} 次输错密码，账户被标记为异常",
+                risk_level=ViolationLogger.RISK_HIGH,
+                ip_address="127.0.0.1",
+                auto_check_suspend=False  # 已手动处理标记，跳过累计检查
+            )
+            await db.commit()
+            
+            log.warning(f"User {user.user_id} has been suspended due to {fail_count} failed login attempts")
+        
+        raise exceptions.PasswordInvalidException(user_id=user.user_id, failed_attempts=fail_count)
 
-    # 用户状态是否正常
-    if user.status != "normal":
-        log.error(f"User {user.user_id} status is {user.status}")
-        raise exceptions.UserStatusForbiddenException(status=user.status, user_id=user.user_id)
-
-    # 检查用户是否被封禁
-    if not user.is_active:
-        log.error(f"User {user.user_id} is banned: {user.ban_reason}")
-        raise exceptions.UserStatusForbiddenException(status="banned", user_id=user.user_id)
+    # 登录成功，重置密码错误计数（仅普通用户）
+    if not user.is_admin:
+        from core.security import login_failure_tracker
+        await login_failure_tracker.reset_failed_count(user.user_id)
 
     # 更新最后登录时间
     try:
@@ -416,7 +454,8 @@ async def get_current_user(
     if not user:
         raise exceptions.UserNotFoundException()
 
-    if user.status != "normal":
+    # 只有 banned 状态禁止访问，suspended 状态可正常使用
+    if user.status == "banned":
         raise exceptions.UserStatusForbiddenException(status=user.status)
 
     return user

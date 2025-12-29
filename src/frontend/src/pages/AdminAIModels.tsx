@@ -1,11 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { AIModelConfigResponse, AIModelConfigDetailResponse, AIModelConfigCreate, AIModelConfigUpdate } from '../types.ts';
 import { Card, Button, Tag, Modal, Input, message } from '../components/UI.tsx';
-import { Bot, Plus, Edit3, Trash2, Loader2, RefreshCw, Eye, EyeOff } from 'lucide-react';
+import { Bot, Plus, Edit3, Trash2, Loader2, RefreshCw, Eye, EyeOff, Zap, CheckCircle, XCircle } from 'lucide-react';
 import { adminApi } from '../api/admin.ts';
 
 /**
- * AI 模型配置管理面板（精简版）
+ * AI 模型配置管理面板
  * 管理员可以添加、编辑、删除 AI 对话模型配置
  */
 export const AdminAIModels: React.FC = () => {
@@ -31,6 +31,17 @@ export const AdminAIModels: React.FC = () => {
     });
     const [showApiKey, setShowApiKey] = useState(false);
 
+    // 表单校验错误
+    const [formErrors, setFormErrors] = useState<{ api_url?: string }>({});
+
+    // 测试连接状态
+    const [isTesting, setIsTesting] = useState(false);
+    const [testResult, setTestResult] = useState<{
+        success: boolean;
+        message: string;
+        response_time_ms?: number;
+    } | null>(null);
+
     // 删除确认
     const [deleteTarget, setDeleteTarget] = useState<AIModelConfigResponse | null>(null);
     const [isDeleting, setIsDeleting] = useState(false);
@@ -54,11 +65,30 @@ export const AdminAIModels: React.FC = () => {
         fetchModels();
     }, [page]);
 
-    // --- 业务逻辑 ---
+    // --- URL 校验 ---
+    const validateUrl = (url: string): string | undefined => {
+        const trimmed = url.trim();
+        if (!trimmed) return '请输入 API 地址';
+        try {
+            const parsed = new URL(trimmed);
+            if (!['http:', 'https:'].includes(parsed.protocol)) {
+                return 'URL 协议必须是 http 或 https';
+            }
+        } catch {
+            return 'URL 格式不正确，请检查';
+        }
+        return undefined;
+    };
 
-    /**
-     * 打开创建模态框
-     */
+    // --- URL 输入变化 ---
+    const handleApiUrlChange = (value: string) => {
+        const error = validateUrl(value);
+        setFormData(prev => ({ ...prev, api_url: value }));
+        setTestResult(null);
+        setFormErrors(prev => ({ ...prev, api_url: error }));
+    };
+
+    // --- 业务逻辑 ---
     const handleOpenCreateModal = () => {
         setEditingModel(null);
         setFormData({
@@ -69,12 +99,11 @@ export const AdminAIModels: React.FC = () => {
             model_type: 'general_llm'
         });
         setShowApiKey(false);
+        setFormErrors({});
+        setTestResult(null);
         setIsModalOpen(true);
     };
 
-    /**
-     * 打开编辑模态框
-     */
     const handleOpenEditModal = async (model: AIModelConfigResponse) => {
         try {
             const detail = await adminApi.getAIModelDetail(model.config_id);
@@ -83,10 +112,12 @@ export const AdminAIModels: React.FC = () => {
                 model_name: detail.model_name,
                 api_url: detail.api_url,
                 model_id: detail.model_id,
-                api_key: '', // 编辑时不显示原密钥，留空表示不修改
+                api_key: '',
                 model_type: detail.model_type
             });
             setShowApiKey(false);
+            setFormErrors({});
+            setTestResult(null);
             setIsModalOpen(true);
         } catch (error) {
             console.error("Get model detail failed", error);
@@ -94,46 +125,105 @@ export const AdminAIModels: React.FC = () => {
         }
     };
 
-    /**
-     * 保存模型配置
-     */
-    const handleSave = async () => {
-        // 表单验证
-        if (!formData.model_name.trim()) {
-            message.error('请输入模型名称');
+    // --- 测试连接 ---
+    const handleTestConnection = async () => {
+        const urlError = validateUrl(formData.api_url);
+        if (urlError) {
+            setFormErrors({ api_url: urlError });
             return;
         }
-        if (!formData.api_url.trim()) {
-            message.error('请输入 API 地址');
+
+        if (!formData.api_key.trim()) {
+            message.error('请先输入 API 密钥再测试连接');
             return;
         }
+
+        if (!/^(sk-|ms-|ak-)[A-Za-z0-9\-]{10,}/i.test(formData.api_key.trim())) {
+            message.error('API 密钥格式不正确，需以 sk-/ms-/ak- 开头');
+            return;
+        }
+
         if (!formData.model_id.trim()) {
             message.error('请输入模型 ID');
             return;
         }
+
+        setIsTesting(true);
+        setTestResult(null);
+        try {
+            const res = await adminApi.testAIModelConnection({
+                api_url: formData.api_url,
+                api_key: formData.api_key,
+                model_id: formData.model_id
+            });
+            setTestResult(res);
+            if (res.success) {
+                message.success(`连接成功！响应时间: ${res.response_time_ms}ms`);
+            } else {
+                message.error(res.message || '连接失败');
+            }
+        } catch (error: any) {
+            console.error('Test connection failed', error);
+            setTestResult({ success: false, message: error?.message || '连接测试失败' });
+            message.error(error?.message || '连接测试失败');
+        } finally {
+            setIsTesting(false);
+        }
+    };
+
+    // --- 保存配置 ---
+    const handleSave = async () => {
+        setFormErrors({});
+
+        if (!formData.model_name.trim()) {
+            message.error('请输入模型名称');
+            return;
+        }
+
+        const urlError = validateUrl(formData.api_url);
+        if (urlError) {
+            setFormErrors({ api_url: urlError });
+            return;
+        }
+
+        if (!formData.model_id.trim()) {
+            message.error('请输入模型 ID');
+            return;
+        }
+
         if (!editingModel && !formData.api_key.trim()) {
             message.error('请输入 API 密钥');
+            return;
+        }
+
+        if (formData.api_key.trim()) {
+            const key = formData.api_key.trim();
+            if (!/^(sk-|ms-|ak-)[A-Za-z0-9\-]{10,}/i.test(key)) {
+                message.error('API 密钥格式不正确，需以 sk-/ms-/ak- 开头');
+                return;
+            }
+        }
+
+        if (!testResult || !testResult.success) {
+            message.error('请先点击"测试连接"并确保通过后再保存');
             return;
         }
 
         setIsSaving(true);
         try {
             if (editingModel) {
-                // 更新
                 const updateData: AIModelConfigUpdate = {
                     model_name: formData.model_name,
                     api_url: formData.api_url,
                     model_id: formData.model_id,
                     model_type: formData.model_type
                 };
-                // 只有填写了新密钥才更新
                 if (formData.api_key.trim()) {
-                    updateData.api_key = formData.api_key;
+                    updateData.api_key = formData.api_key.trim();
                 }
                 await adminApi.updateAIModel(editingModel.config_id, updateData);
                 message.success('模型配置已更新');
             } else {
-                // 创建
                 await adminApi.createAIModel(formData);
                 message.success('模型配置已创建');
             }
@@ -147,9 +237,7 @@ export const AdminAIModels: React.FC = () => {
         }
     };
 
-    /**
-     * 删除模型配置
-     */
+    // --- 删除配置 ---
     const handleDelete = async () => {
         if (!deleteTarget) return;
 
@@ -292,7 +380,7 @@ export const AdminAIModels: React.FC = () => {
                 footer={
                     <>
                         <Button onClick={() => setIsModalOpen(false)}>取消</Button>
-                        <Button variant="primary" onClick={handleSave} disabled={isSaving}>
+                        <Button variant="primary" onClick={handleSave} disabled={isSaving || !testResult?.success}>
                             {isSaving ? '保存中...' : '保存'}
                         </Button>
                     </>
@@ -303,21 +391,32 @@ export const AdminAIModels: React.FC = () => {
                         label="模型名称"
                         placeholder="如: GPT-4, Qwen-32B"
                         value={formData.model_name}
-                        onChange={(e) => setFormData(prev => ({ ...prev, model_name: e.target.value }))}
+                        onChange={(e) => {
+                            setFormData(prev => ({ ...prev, model_name: e.target.value }));
+                            setTestResult(null);
+                        }}
                     />
 
-                    <Input
-                        label="API 地址"
-                        placeholder="https://api.example.com/v1/chat/completions"
-                        value={formData.api_url}
-                        onChange={(e) => setFormData(prev => ({ ...prev, api_url: e.target.value }))}
-                    />
+                    <div>
+                        <Input
+                            label="API 地址"
+                            placeholder="https://api.example.com/v1/chat/completions"
+                            value={formData.api_url}
+                            onChange={(e) => handleApiUrlChange(e.target.value)}
+                        />
+                        {formErrors.api_url && (
+                            <p className="text-xs text-red-500 mt-1">{formErrors.api_url}</p>
+                        )}
+                    </div>
 
                     <Input
                         label="模型 ID"
                         placeholder="如: gpt-4, qwen-coder-32b"
                         value={formData.model_id}
-                        onChange={(e) => setFormData(prev => ({ ...prev, model_id: e.target.value }))}
+                        onChange={(e) => {
+                            setFormData(prev => ({ ...prev, model_id: e.target.value }));
+                            setTestResult(null);
+                        }}
                     />
 
                     <div className="relative">
@@ -326,7 +425,10 @@ export const AdminAIModels: React.FC = () => {
                             type={showApiKey ? "text" : "password"}
                             placeholder={editingModel ? "留空则保持原密钥不变" : "sk-xxxxx"}
                             value={formData.api_key}
-                            onChange={(e) => setFormData(prev => ({ ...prev, api_key: e.target.value }))}
+                            onChange={(e) => {
+                                setFormData(prev => ({ ...prev, api_key: e.target.value }));
+                                setTestResult(null);
+                            }}
                         />
                         <button
                             type="button"
@@ -342,12 +444,37 @@ export const AdminAIModels: React.FC = () => {
                         )}
                     </div>
 
+                    {/* 测试连接按钮 */}
+                    <div className="flex items-center gap-3">
+                        <Button
+                            variant="default"
+                            className="h-9 px-4 flex items-center gap-2"
+                            onClick={handleTestConnection}
+                            disabled={isTesting}
+                            icon={<Zap size={14} />}
+                        >
+                            {isTesting ? '测试中...' : '测试连接'}
+                        </Button>
+                        {testResult && (
+                            <div className={`flex items-center gap-2 text-sm ${testResult.success ? 'text-green-600' : 'text-red-500'}`}>
+                                {testResult.success ? <CheckCircle size={16} /> : <XCircle size={16} />}
+                                <span>{testResult.message}</span>
+                                {typeof testResult.response_time_ms === 'number' && testResult.success && (
+                                    <span className="text-gray-500 text-xs">({testResult.response_time_ms}ms)</span>
+                                )}
+                            </div>
+                        )}
+                    </div>
+
                     <div>
                         <label className="block text-sm font-medium text-gray-700 mb-1">模型类型</label>
                         <select
                             className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:ring-primary focus:border-primary"
                             value={formData.model_type}
-                            onChange={(e) => setFormData(prev => ({ ...prev, model_type: e.target.value as any }))}
+                            onChange={(e) => {
+                                setFormData(prev => ({ ...prev, model_type: e.target.value as any }));
+                                setTestResult(null);
+                            }}
                         >
                             <option value="general_llm">通用 LLM</option>
                             <option value="local_finetune">本地微调模型</option>

@@ -92,7 +92,14 @@ class UserStatusForbiddenException(BusinessException):
     """
     user_id: int
     def __init__(self, status: str, user_id: int):
-        super().__init__(code=403, message=f"用户账号状态为 '{status}'")
+        if status == 'suspended':
+            message = "账户已被锁定（登录失败次数过多），请联系管理员解锁"
+        elif status == 'banned':
+            message = "账户已被封禁，请联系管理员"
+        else:
+            message = f"用户账号状态异常 ({status})，请联系管理员"
+        super().__init__(code=403, message=message)
+        self.user_id = user_id
         self.user_id = user_id
 
 class PasswordInvalidException(BusinessException):
@@ -101,11 +108,21 @@ class PasswordInvalidException(BusinessException):
 
     Attributes:
         user_id (int): 用户 ID。
+        failed_attempts (int): 连续失败次数。
     """
     user_id: int
-    def __init__(self, user_id: int):
-        super().__init__(code=401, message="用户名或密码不正确")
+    failed_attempts: int
+    def __init__(self, user_id: int, failed_attempts: int = 0):
+        if failed_attempts >= 3:
+            # suspended 只是标记异常，用户仍可登录，但会被管理员关注
+            message = f"密码错误次数过多，账户已被标记为异常，请注意账户安全"
+        elif failed_attempts > 0:
+            message = f"用户名或密码不正确，还剩 {3 - failed_attempts} 次尝试机会"
+        else:
+            message = "用户名或密码不正确"
+        super().__init__(code=401, message=message)
         self.user_id = user_id
+        self.failed_attempts = failed_attempts
 
 class ValidationException(BusinessException):
     """数据验证失败异常。"""

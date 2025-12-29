@@ -46,7 +46,7 @@ async def get_user_list(
     pagination: PaginationParams = Depends(),
     search: Optional[str] = Query(None, description="按用户名/邮箱搜索"),
     # 变量名改为 filter_status，增加 alias="status"
-    filter_status: Literal["normal", "banned", "all"] = Query("all", alias="status", description="按状态筛选"),
+    filter_status: Literal["normal", "suspended", "banned", "all"] = Query("all", alias="status", description="按状态筛选"),
 ) -> Any:
     """
     获取用户列表，支持搜索和筛选。
@@ -56,7 +56,7 @@ async def get_user_list(
         admin_user (UserMe): 当前管理员用户。
         pagination (PaginationParams): 分页参数。
         search (Optional[str]): 按用户名/邮箱搜索关键字。
-        filter_status (Literal["normal", "banned", "all"]): 按状态筛选用户。
+        filter_status (Literal["normal", "suspended", "banned", "all"]): 按状态筛选用户。
 
     Returns:
         UnifiedResponse[PageData[List[AdminUserDetailResponse]]]: 用户列表响应。
@@ -285,9 +285,12 @@ async def get_system_stats(
 
 from schema.ai_model_config import (
     AIModelConfigCreate, AIModelConfigUpdate, AIModelConfigResponse,
-    AIModelConfigDetailResponse, AIModelConfigListResponse, AIModelOptionsResponse
+    AIModelConfigDetailResponse, AIModelConfigListResponse, AIModelOptionsResponse,
+    AIModelTestConnectionRequest, AIModelTestConnectionResponse
 )
 from crud.crud_ai_model_config import crud_ai_model_config
+import httpx
+import time
 
 
 @router.get("/ai-models", response_model=UnifiedResponse[AIModelConfigListResponse], summary="4.5.1 获取 AI 模型配置列表")
@@ -438,3 +441,122 @@ async def delete_ai_model_config(
     
     await crud_ai_model_config.delete(db, config_id)
     return UnifiedResponse.success(message="删除 AI 模型配置成功")
+
+
+@router.post("/ai-models/test-connection", response_model=UnifiedResponse[AIModelTestConnectionResponse], summary="4.5.6 测试 AI 模型连接")
+async def test_ai_model_connection(
+    data: AIModelTestConnectionRequest,
+    db: Session = Depends(get_db),
+    admin_user: UserMe = AdminDependency,
+) -> Any:
+    """
+    测试 AI 模型 API 连接是否可用。
+
+    Args:
+        data (AIModelTestConnectionRequest): 测试连接请求数据。
+        db (Session): 数据库会话。
+        admin_user (UserMe): 当前管理员用户。
+
+    Returns:
+        UnifiedResponse[AIModelTestConnectionResponse]: 测试结果响应。
+    """
+    start_time = time.time()
+    
+    # 清理 URL 中的不可见字符（零宽空格、换行符等）
+    import re
+    clean_url = re.sub(r'[\x00-\x1f\x7f-\x9f\u200b-\u200d\ufeff]', '', data.api_url.strip())
+    clean_api_key = data.api_key.strip()
+    clean_model_id = data.model_id.strip()
+    
+    try:
+        # 构造简单的测试请求
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            # 发送简单的对话请求测试连接
+            test_payload = {
+                "model": clean_model_id,
+                "messages": [
+                    {"role": "user", "content": "Hi"}
+                ],
+                "max_tokens": 5,
+                "stream": False
+            }
+            
+            headers = {
+                "Authorization": f"Bearer {clean_api_key}",
+                "Content-Type": "application/json"
+            }
+            
+            response = await client.post(
+                clean_url,
+                json=test_payload,
+                headers=headers
+            )
+            
+            response_time_ms = int((time.time() - start_time) * 1000)
+            
+            if response.status_code == 200:
+                result = AIModelTestConnectionResponse(
+                    success=True,
+                    message="连接成功，API 可正常使用",
+                    response_time_ms=response_time_ms
+                )
+            elif response.status_code == 401:
+                result = AIModelTestConnectionResponse(
+                    success=False,
+                    message="API 密钥无效或已过期",
+                    response_time_ms=response_time_ms
+                )
+            elif response.status_code == 404:
+                result = AIModelTestConnectionResponse(
+                    success=False,
+                    message=f"模型 ID '{data.model_id}' 不存在",
+                    response_time_ms=response_time_ms
+                )
+            elif response.status_code == 429:
+                result = AIModelTestConnectionResponse(
+                    success=False,
+                    message="请求频率超限，请稍后再试",
+                    response_time_ms=response_time_ms
+                )
+            else:
+                try:
+                    resp_json = response.json()
+                    # 尝试多种错误格式
+                    error_detail = (
+                        resp_json.get("error", {}).get("message", "") or
+                        resp_json.get("message", "") or
+                        resp_json.get("detail", "") or
+                        resp_json.get("msg", "") or
+                        str(resp_json)[:200]
+                    )
+                except:
+                    error_detail = response.text[:200] if response.text else "未知错误"
+                result = AIModelTestConnectionResponse(
+                    success=False,
+                    message=f"请求失败 (HTTP {response.status_code}): {error_detail}",
+                    response_time_ms=response_time_ms
+                )
+                
+    except httpx.TimeoutException:
+        response_time_ms = int((time.time() - start_time) * 1000)
+        result = AIModelTestConnectionResponse(
+            success=False,
+            message="连接超时，请检查 API 地址是否正确",
+            response_time_ms=response_time_ms
+        )
+    except httpx.ConnectError:
+        response_time_ms = int((time.time() - start_time) * 1000)
+        result = AIModelTestConnectionResponse(
+            success=False,
+            message="无法连接到服务器，请检查 API 地址",
+            response_time_ms=response_time_ms
+        )
+    except Exception as e:
+        response_time_ms = int((time.time() - start_time) * 1000)
+        result = AIModelTestConnectionResponse(
+            success=False,
+            message=f"测试失败: {str(e)}",
+            response_time_ms=response_time_ms
+        )
+    
+    return UnifiedResponse.success(data=result, message="测试完成")

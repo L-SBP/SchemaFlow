@@ -104,10 +104,11 @@ export const AdminStatus: React.FC = () => {
                 <div className="lg:col-span-2 h-full flex flex-col">
                     <Card title="安全违规审计日志" className="flex-1 flex flex-col overflow-hidden" extra={<span className="text-xs text-gray-400">最新20条</span>}>
                         <div className="overflow-auto flex-1">
-                            <table className="w-full text-left text-sm min-w-[500px]">
+                            <table className="w-full text-left text-sm min-w-[600px]">
                                 <thead className="bg-gray-50 border-b border-gray-200 sticky top-0 z-10">
                                     <tr>
                                         <th className="px-4 py-3 whitespace-nowrap bg-gray-50">风险等级</th>
+                                        <th className="px-4 py-3 whitespace-nowrap bg-gray-50">违规类型</th>
                                         <th className="px-4 py-3 whitespace-nowrap bg-gray-50">用户</th>
                                         <th className="px-4 py-3 whitespace-nowrap bg-gray-50">处理状态</th>
                                         <th className="px-4 py-3 whitespace-nowrap bg-gray-50 text-right">时间</th>
@@ -128,6 +129,23 @@ export const AdminStatus: React.FC = () => {
                                                     </span>
                                                 </div>
                                             </td>
+                                            <td className="px-4 py-3">
+                                                <div className="flex flex-col">
+                                                    <span className="text-gray-700 font-medium text-xs">
+                                                        {log.event_type === 'excessive_api_usage' && 'API频率超限'}
+                                                        {log.event_type === 'sql_injection_attempt' && 'SQL注入尝试'}
+                                                        {log.event_type === 'suspicious_query' && '可疑查询'}
+                                                        {log.event_type === 'unauthorized_access_attempt' && '未授权访问'}
+                                                        {log.event_type === 'ai_violation_content' && 'AI内容违规'}
+                                                        {log.event_type === 'frequent_remote_login' && '异地频繁登录'}
+                                                        {log.event_type === 'multiple_failed_logins' && '多次登录失败'}
+                                                        {!['excessive_api_usage', 'sql_injection_attempt', 'suspicious_query', 'unauthorized_access_attempt', 'ai_violation_content', 'frequent_remote_login', 'multiple_failed_logins'].includes(log.event_type) && log.event_type}
+                                                    </span>
+                                                    <span className="text-gray-400 text-xs truncate max-w-[200px]" title={log.event_description}>
+                                                        {log.event_description}
+                                                    </span>
+                                                </div>
+                                            </td>
                                             <td className="px-4 py-3 text-gray-600">
                                                 {log.username} <span className="text-xs text-gray-400">(ID:{log.user_id})</span>
                                             </td>
@@ -142,7 +160,7 @@ export const AdminStatus: React.FC = () => {
                                         </tr>
                                     ))}
                                     {violations.length === 0 && (
-                                        <tr><td colSpan={4} className="text-center py-12 text-gray-400">暂无违规记录</td></tr>
+                                        <tr><td colSpan={5} className="text-center py-12 text-gray-400">暂无违规记录</td></tr>
                                     )}
                                 </tbody>
                             </table>
