@@ -1002,6 +1002,8 @@ def _get_friendly_error_message(error_msg: str) -> str:
         return "SQL语法错误，请检查SQL语句。\n详细信息: " + error_msg
     elif "access denied" in error_lower or "permission denied" in error_lower:
         return "权限不足，无法执行此操作。\n详细信息: " + error_msg
+    elif "doesn't have a default value" in error_lower:
+        return "执行失败：缺少必需字段值（如主键）。请检查是否提供了所有必需字段的值。\n详细信息: " + error_msg
     else:
         return error_msg
 

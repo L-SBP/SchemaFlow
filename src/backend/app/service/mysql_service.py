@@ -436,6 +436,8 @@ async def execute_mysql_sql_with_user_check(
             detail = "执行失败：违反外键约束。请检查关联数据是否存在。\n详细信息: {}".format(error_msg)
         elif "duplicate entry" in error_msg.lower():
             detail = "执行失败：数据重复（违反唯一约束）。\n详细信息: {}".format(error_msg)
+        elif "doesn't have a default value" in error_msg.lower():
+            detail = "执行失败：缺少必需字段值（如主键）。请检查是否提供了所有必需字段的值。\n详细信息: {}".format(error_msg)
         else:
             detail = "执行失败：数据库完整性错误。\n详细信息: {}".format(error_msg)
         raise InvalidOperationException(message=detail)
@@ -446,6 +448,8 @@ async def execute_mysql_sql_with_user_check(
             detail = "执行失败：表或字段不存在。请检查 Schema 是否最新。\n详细信息: {}".format(error_msg)
         elif "syntax error" in error_msg.lower():
             detail = "执行失败：SQL 语法错误。\n详细信息: {}".format(error_msg)
+        elif "doesn't have a default value" in error_msg.lower():
+            detail = "执行失败：缺少必需字段值（如主键）。请检查是否提供了所有必需字段的值。\n详细信息: {}".format(error_msg)
         else:
             detail = "执行失败：SQL 执行错误。\n详细信息: {}".format(error_msg)
         raise InvalidOperationException(message=detail)
