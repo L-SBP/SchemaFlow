@@ -92,6 +92,14 @@ export const sessionApi = {
   },
 
   /**
+   * 2.3.1 取消消息 (取消执行)
+   * POST /api/v1/messages/{message_id}/cancel
+   */
+  cancelMessage: (messageId: number) => {
+    return client.post<any, ChatResponse>(`/v1/messages/${messageId}/cancel`);
+  },
+
+  /**
    * 2.4 获取可用的 AI 模型列表
    * GET /api/v1/ai-models/options
    */
