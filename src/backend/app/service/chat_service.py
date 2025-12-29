@@ -318,19 +318,18 @@ async def _convert_rag_knowledge_to_domain(
 # 4. AI 调用（事务外执行）
 # =========================================================
 
-# TODO: [Celery] AI 调用任务化（可选）
-# 当前实现：同步等待 AI 响应（最长 300s）
-# 后续优化场景：
-#   1. 对于复杂查询，可迁移到 Celery 异步执行
-#   2. 前端显示 "生成中..." 加载状态，通过 WebSocket 推送结果
-#   3. 支持用户取消正在进行的 AI 调用
-#   4. 记录 AI 调用耗时，用于性能监控
+
 # 注意：大多数场景可保持同步，用户体验更好
 
 def _clean_ai_response(content: str) -> str:
     """清洗 AI 返回的 SQL 内容。"""
-    # 移除停止符
-    for stop_token in ["<|im_end|>", "<|im_start|>"]:
+    # 移除所有可能的停止符（INST 格式 + ChatML 格式兜底）
+    stop_tokens = [
+        "[/INST]", "[INST]", "<<SYS>>", "<</SYS>>",
+        "<|im_end|>", "<|im_start|>",  # ChatML 格式兜底清理
+        "<|endoftext|>", "<|end|>", "</s>", "<s>"
+    ]
+    for stop_token in stop_tokens:
         if stop_token in content:
             content = content.split(stop_token)[0]
     
@@ -365,7 +364,8 @@ async def call_ai_agent(
     history: List[MessageModel] = None,
     knowledge: List[DomainKnowledge] = None,
     model_key: str = None,
-    model_registry: Dict[str, Dict[str, Any]] = None
+    model_registry: Dict[str, Dict[str, Any]] = None,
+    db_type: str = None
 ) -> str:
     """
     调用 AI 接口生成 SQL。
@@ -379,6 +379,7 @@ async def call_ai_agent(
         knowledge: 领域知识列表
         model_key: 模型标识符
         model_registry: 模型配置注册表（从数据库或后备配置获取）
+        db_type: 数据库类型（mysql/postgresql/sqlite）
     """
     history = history or []
     knowledge = knowledge or []
@@ -392,22 +393,39 @@ async def call_ai_agent(
     config = registry[model_key]
     log.info(f"Using AI Model: {config['name']} ({config['model_id']})")
 
-    messages = build_ai_messages(
+    ai_input = build_ai_messages(
         model_type=config["type"],
         schema_text=ddl_text,
         question=question,
         history=history,
-        knowledge=knowledge
+        knowledge=knowledge,
+        db_type=db_type
     )
 
-    payload = {
-        "model": config["model_id"],
-        "messages": messages,
-        "temperature": 0.1,
-        "stream": False,
-        "max_tokens": 512,
-        "stop": ["<|im_end|>", "<|im_start|>", "User:", "Assistant:"]
-    }
+    # 根据返回类型决定使用 completions 还是 chat completions 端点
+    if isinstance(ai_input, dict) and ai_input.get("is_completion"):
+        # 微调模型：使用 /v1/completions 端点，直接发送格式化的 prompt
+        # 这样可以避免服务器应用错误的 chat template (如 ChatML)
+        payload = {
+            "model": config["model_id"],
+            "prompt": ai_input["prompt"],
+            "temperature": 0.1,
+            "stream": False,
+            "max_tokens": 512,
+            "stop": ["[/INST]", "[INST]", "<<SYS>>", "<</SYS>>", "\n\n\n"]
+        }
+        use_completion_api = True
+    else:
+        # 在线模型：使用 /v1/chat/completions 端点
+        payload = {
+            "model": config["model_id"],
+            "messages": ai_input,
+            "temperature": 0.1,
+            "stream": False,
+            "max_tokens": 512,
+            "stop": ["User:", "Assistant:", "\n\n\n"]
+        }
+        use_completion_api = False
 
     headers = {
         "Authorization": f"Bearer {config['api_key']}",
@@ -415,9 +433,17 @@ async def call_ai_agent(
     }
 
     try:
+        # 根据模型类型选择 API 端点
+        if use_completion_api:
+            # 微调模型：使用 /v1/completions 端点
+            # 将 /v1/chat/completions 替换为 /v1/completions
+            api_url = config["api_url"].replace("/chat/completions", "/completions")
+        else:
+            api_url = config["api_url"]
+
         async with httpx.AsyncClient(timeout=300.0) as client:
             resp = await client.post(
-                config["api_url"], 
+                api_url,
                 content=json.dumps(payload, ensure_ascii=False).encode("utf-8"), 
                 headers=headers
             )
@@ -426,7 +452,12 @@ async def call_ai_agent(
         
         content = ""
         if "choices" in raw and len(raw["choices"]) > 0:
-            content = raw["choices"][0]["message"]["content"]
+            if use_completion_api:
+                # completions 端点返回 text 字段
+                content = raw["choices"][0].get("text", "")
+            else:
+                # chat completions 端点返回 message.content
+                content = raw["choices"][0]["message"]["content"]
         
         return _clean_ai_response(content)
 
@@ -724,6 +755,13 @@ async def process_chat(
     ddl_text = project.ddl_statement if project and project.ddl_statement else "-- No DDL found"
     instance_id = project.instance_id
     
+    # 获取数据库类型
+    db_type = None
+    if instance_id:
+        database_instance = await crud_database_instance.get(db, instance_id)
+        if database_instance:
+            db_type = database_instance.db_type
+
     # 提交事务1，释放数据库连接
     await db.commit()
     
@@ -738,7 +776,8 @@ async def process_chat(
         history=history_context,
         knowledge=knowledge_context,
         model_key=final_model_key,
-        model_registry=model_registry
+        model_registry=model_registry,
+        db_type=db_type
     )
     
     # 检查元数据 SQL
@@ -964,11 +1003,12 @@ async def _handle_execution_error(
     error: Exception
 ) -> ChatResponse:
     """处理执行错误并返回错误响应，不创建新消息。"""
+    # 优先获取 detail，因为 BusinessException/AppException 的 message 可能是类属性默认值"内部错误"
     error_msg = str(error)
-    if hasattr(error, 'message'):
-        error_msg = error.message
-    elif hasattr(error, 'detail'):
-        error_msg = error.detail
+    if hasattr(error, 'detail') and error.detail:
+        error_msg = str(error.detail)
+    elif hasattr(error, 'message') and error.message and error.message != "内部错误":
+        error_msg = str(error.message)
     
     # 提供更友好的错误信息
     friendly_msg = _get_friendly_error_message(error_msg)
@@ -992,20 +1032,29 @@ def _get_friendly_error_message(error_msg: str) -> str:
     # 常见数据库错误的友好提示
     if "duplicate entry" in error_lower or "unique constraint" in error_lower:
         return "数据重复（违反唯一约束）。\n详细信息: " + error_msg
+    elif "doesn't have a default value" in error_lower:
+        return "必填字段缺失（字段没有默认值且未提供值，可能是主键未设置AUTO_INCREMENT）。\n详细信息: " + error_msg
+    elif "cannot be null" in error_lower:
+        return "字段不能为空。\n详细信息: " + error_msg
+    elif "can't specify target table" in error_lower and "update in from clause" in error_lower:
+        return "MySQL限制：INSERT/UPDATE语句中不能直接从同一张表SELECT。\n详细信息: " + error_msg
     elif "foreign key constraint" in error_lower:
         return "外键约束错误，请检查关联数据是否存在。\n详细信息: " + error_msg
     elif "table doesn't exist" in error_lower or "no such table" in error_lower:
         return "表不存在，请检查表名是否正确。\n详细信息: " + error_msg
-    elif "column" in error_lower and "doesn't exist" in error_lower:
+    elif ("column" in error_lower and "doesn't exist" in error_lower) or "unknown column" in error_lower:
         return "列不存在，请检查列名是否正确。\n详细信息: " + error_msg
     elif "syntax error" in error_lower:
         return "SQL语法错误，请检查SQL语句。\n详细信息: " + error_msg
     elif "access denied" in error_lower or "permission denied" in error_lower:
         return "权限不足，无法执行此操作。\n详细信息: " + error_msg
-    elif "doesn't have a default value" in error_lower:
-        return "执行失败：缺少必需字段值（如主键）。请检查是否提供了所有必需字段的值。\n详细信息: " + error_msg
+    elif "data too long" in error_lower:
+        return "数据过长，超出字段长度限制。\n详细信息: " + error_msg
+    elif "incorrect" in error_lower and "value" in error_lower:
+        return "数据类型或格式不正确。\n详细信息: " + error_msg
     else:
-        return error_msg
+        # 对于未枚举的错误，仍然返回原始错误信息，而不是"内部错误"
+        return "执行失败。\n详细信息: " + error_msg
 
 
 async def confirm_and_execute_sql(
