@@ -323,14 +323,11 @@ async def _convert_rag_knowledge_to_domain(
 
 def _clean_ai_response(content: str) -> str:
     """清洗 AI 返回的 SQL 内容。"""
-    # 移除停止符（支持多种模型格式）
+    # 移除所有可能的停止符（INST 格式 + ChatML 格式兜底）
     stop_tokens = [
-        # CodeLlama / Llama INST 格式
         "[/INST]", "[INST]", "<<SYS>>", "<</SYS>>",
-        # ChatML 格式 (Qwen, etc.)
-        "<|im_end|>", "<|im_start|>",
-        # 其他常见停止符
-        "<|endoftext|>", "<|end|>"
+        "<|im_end|>", "<|im_start|>",  # ChatML 格式兜底清理
+        "<|endoftext|>", "<|end|>", "</s>", "<s>"
     ]
     for stop_token in stop_tokens:
         if stop_token in content:
@@ -396,7 +393,7 @@ async def call_ai_agent(
     config = registry[model_key]
     log.info(f"Using AI Model: {config['name']} ({config['model_id']})")
 
-    messages = build_ai_messages(
+    ai_input = build_ai_messages(
         model_type=config["type"],
         schema_text=ddl_text,
         question=question,
@@ -405,21 +402,30 @@ async def call_ai_agent(
         db_type=db_type
     )
 
-    payload = {
-        "model": config["model_id"],
-        "messages": messages,
-        "temperature": 0.1,
-        "stream": False,
-        "max_tokens": 512,
-        "stop": [
-            # CodeLlama / Llama INST 格式
-            "[/INST]", "[INST]",
-            # ChatML 格式 (Qwen, etc.)
-            "<|im_end|>", "<|im_start|>",
-            # 通用停止符
-            "User:", "Assistant:", "\n\n\n"
-        ]
-    }
+    # 根据返回类型决定使用 completions 还是 chat completions 端点
+    if isinstance(ai_input, dict) and ai_input.get("is_completion"):
+        # 微调模型：使用 /v1/completions 端点，直接发送格式化的 prompt
+        # 这样可以避免服务器应用错误的 chat template (如 ChatML)
+        payload = {
+            "model": config["model_id"],
+            "prompt": ai_input["prompt"],
+            "temperature": 0.1,
+            "stream": False,
+            "max_tokens": 512,
+            "stop": ["[/INST]", "[INST]", "<<SYS>>", "<</SYS>>", "\n\n\n"]
+        }
+        use_completion_api = True
+    else:
+        # 在线模型：使用 /v1/chat/completions 端点
+        payload = {
+            "model": config["model_id"],
+            "messages": ai_input,
+            "temperature": 0.1,
+            "stream": False,
+            "max_tokens": 512,
+            "stop": ["User:", "Assistant:", "\n\n\n"]
+        }
+        use_completion_api = False
 
     headers = {
         "Authorization": f"Bearer {config['api_key']}",
@@ -427,9 +433,17 @@ async def call_ai_agent(
     }
 
     try:
+        # 根据模型类型选择 API 端点
+        if use_completion_api:
+            # 微调模型：使用 /v1/completions 端点
+            # 将 /v1/chat/completions 替换为 /v1/completions
+            api_url = config["api_url"].replace("/chat/completions", "/completions")
+        else:
+            api_url = config["api_url"]
+        
         async with httpx.AsyncClient(timeout=300.0) as client:
             resp = await client.post(
-                config["api_url"], 
+                api_url, 
                 content=json.dumps(payload, ensure_ascii=False).encode("utf-8"), 
                 headers=headers
             )
@@ -438,7 +452,12 @@ async def call_ai_agent(
         
         content = ""
         if "choices" in raw and len(raw["choices"]) > 0:
-            content = raw["choices"][0]["message"]["content"]
+            if use_completion_api:
+                # completions 端点返回 text 字段
+                content = raw["choices"][0].get("text", "")
+            else:
+                # chat completions 端点返回 message.content
+                content = raw["choices"][0]["message"]["content"]
         
         return _clean_ai_response(content)
 

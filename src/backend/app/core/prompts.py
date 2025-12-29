@@ -21,12 +21,11 @@ Your ONLY task is to generate valid, executable SQL queries based on the provide
 
 [Output Format - CRITICAL]
 7. The output must be a DIRECTLY EXECUTABLE SQL statement.
-8. NEVER wrap SQL inside SELECT as a string like: SELECT 'INSERT INTO...'. This is WRONG!
-9. For INSERT requests, output: INSERT INTO table (...) VALUES (...);
-10. For SELECT requests, output: SELECT ... FROM ... WHERE ...;
-11. For UPDATE requests, output: UPDATE table SET ... WHERE ...;
-12. For DELETE requests, output: DELETE FROM table WHERE ...;
-13. Even if the user asks the same question multiple times, generate the same type of SQL (INSERT for insert, SELECT for query, etc.)
+8. For INSERT requests, output: INSERT INTO table (...) VALUES (...);
+9. For SELECT requests, output: SELECT ... FROM ... WHERE ...;
+10. For UPDATE requests, output: UPDATE table SET ... WHERE ...;
+11. For DELETE requests, output: DELETE FROM table WHERE ...;
+12. Even if the user asks the same question multiple times, generate the same type of SQL (INSERT for insert, SELECT for query, etc.)
 
 IMPORTANT: 
 - For string literals, YOU MUST USE SINGLE QUOTES (').
@@ -89,7 +88,6 @@ def build_history_section(history: list) -> str:
     注意：
         - 只保留用户问题，不拼接 AI 的 SQL 回复（避免干扰）
         - 跳过取消操作相关的消息
-        - 对重复的用户问题进行去重（避免模型困惑）
     
     TODO: [RAG] 历史对话注入优化
         1. 接收的 history 应为 RAG 检索后的结果
@@ -101,7 +99,6 @@ def build_history_section(history: list) -> str:
         return ""
     
     history_lines = []
-    seen_questions = set()  # 用于去重
     
     for msg in history:
         content = msg.content.strip()
@@ -114,13 +111,6 @@ def build_history_section(history: list) -> str:
         if msg.message_type == "user":
             # 清理内容，移除换行
             clean_content = content.replace("\n", " ")
-            
-            # 去重：相同的问题只保留第一次出现
-            content_key = clean_content.lower().strip()
-            if content_key in seen_questions:
-                continue
-            seen_questions.add(content_key)
-            
             history_lines.append(f"User: {clean_content}")
     
     if not history_lines:
@@ -202,6 +192,8 @@ def build_ai_messages(
     context_block = build_context_block(schema_text, knowledge, history, db_type)
     
     if model_type == "local_finetune":
+        # CodeLlama-Instruct 使用 INST 格式，直接返回格式化的 prompt 字符串
+        # 这样可以使用 /v1/completions 端点，避免服务器应用错误的 chat template
         prompt_content = f"""{SQL_GENERATION_SYSTEM_INSTRUCTION}
 {context_block}
 
@@ -210,10 +202,14 @@ def build_ai_messages(
 
 ### SQL Query
 """
-        return [
-            {"role": "system", "content": LOCAL_FINETUNE_SYSTEM_PROMPT},
-            {"role": "user", "content": prompt_content}
-        ]
+        # 返回 CodeLlama INST 格式的完整 prompt
+        llama_prompt = f"""<s>[INST] <<SYS>>
+{LOCAL_FINETUNE_SYSTEM_PROMPT}
+<</SYS>>
+
+{prompt_content} [/INST]
+"""
+        return {"prompt": llama_prompt, "is_completion": True}
     else:
         full_system_prompt = f"{SQL_GENERATION_SYSTEM_INSTRUCTION}\n{context_block}"
         return [
