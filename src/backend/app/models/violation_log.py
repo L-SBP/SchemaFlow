@@ -33,13 +33,9 @@ class ViolationLog(Base):
 
     __table_args__ = (
         CheckConstraint("""event_type IN (
-            'multiple_failed_logins',
-            'suspicious_query',
-            'frequent_remote_login',
-            'ai_violation_content',
             'excessive_api_usage',
-            'unauthorized_access_attempt',
-            'sql_injection_attempt'
+            'multiple_failed_logins',
+            'frequent_remote_login'
         )"""),
         CheckConstraint("risk_level IN ('LOW', 'MEDIUM', 'HIGH', 'CRITICAL')"),
         Index("idx_violation_logs_user_id", "user_id"),

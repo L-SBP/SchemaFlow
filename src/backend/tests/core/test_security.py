@@ -148,8 +148,8 @@ class TestViolationLogger:
             violation = await ViolationLogger.log_violation(
                 db=db,
                 user_id=test_user.user_id,
-                event_type=ViolationLogger.EVENT_SUSPICIOUS_QUERY,
-                event_description=f"Suspicious query #{i+1}",
+                event_type=ViolationLogger.EVENT_EXCESSIVE_API_USAGE,
+                event_description=f"API usage #{i+1}",
                 risk_level=ViolationLogger.RISK_HIGH,
                 ip_address="192.168.1.1",
                 client_user_agent="Mozilla/5.0"
@@ -195,8 +195,8 @@ class TestViolationLogger:
         await ViolationLogger.log_violation(
             db=db,
             user_id=test_user.user_id,
-            event_type=ViolationLogger.EVENT_SUSPICIOUS_QUERY,
-            event_description="Suspicious query",
+            event_type=ViolationLogger.EVENT_MULTIPLE_FAILED_LOGINS,
+            event_description="Failed login",
             risk_level=ViolationLogger.RISK_HIGH,
             ip_address="192.168.1.1",
             client_user_agent="test"
@@ -313,7 +313,7 @@ class TestBlacklistManager:
             await ViolationLogger.log_violation(
                 db=db,
                 user_id=test_user.user_id,
-                event_type=ViolationLogger.EVENT_SUSPICIOUS_QUERY,
+                event_type=ViolationLogger.EVENT_MULTIPLE_FAILED_LOGINS,
                 event_description=f"Violation #{i+1}",
                 risk_level=ViolationLogger.RISK_LOW,
                 ip_address="192.168.1.1",
@@ -354,7 +354,7 @@ class TestBlacklistManager:
             await ViolationLogger.log_violation(
                 db=db,
                 user_id=test_user.user_id,
-                event_type=ViolationLogger.EVENT_SUSPICIOUS_QUERY,
+                event_type=ViolationLogger.EVENT_FREQUENT_REMOTE_LOGIN,
                 event_description=f"Recent violation #{i+1}",
                 risk_level=ViolationLogger.RISK_MEDIUM,
                 ip_address="192.168.1.1",
@@ -443,7 +443,7 @@ class TestStrikeSystemIntegration:
         await ViolationLogger.log_violation(
             db=db,
             user_id=strike_user.user_id,
-            event_type=ViolationLogger.EVENT_SUSPICIOUS_QUERY,
+            event_type=ViolationLogger.EVENT_MULTIPLE_FAILED_LOGINS,
             event_description="Strike 2",
             risk_level=ViolationLogger.RISK_HIGH,
             ip_address="192.168.1.1",
@@ -457,7 +457,7 @@ class TestStrikeSystemIntegration:
         await ViolationLogger.log_violation(
             db=db,
             user_id=strike_user.user_id,
-            event_type=ViolationLogger.EVENT_SQL_INJECTION_ATTEMPT,
+            event_type=ViolationLogger.EVENT_FREQUENT_REMOTE_LOGIN,
             event_description="Strike 3",
             risk_level=ViolationLogger.RISK_CRITICAL,
             ip_address="192.168.1.1",

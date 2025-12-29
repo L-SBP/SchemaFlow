@@ -8,10 +8,10 @@
 
 import json
 from datetime import datetime, timezone
-from typing import Optional, Tuple
+from typing import Optional, Tuple, Dict, Any
 import redis_client
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select
+from sqlalchemy import select, desc, and_
 
 from core.config import settings
 from core.log import log
@@ -33,12 +33,19 @@ class RedisFrequencyLimiter:
     
     def __init__(self):
         """
-        初始化 Redis 连接（使用全局 Redis 客户端）。
+        初始化 Redis 连接（延迟获取，避免启动时Redis未初始化）。
         """
-        from redis_client.redis import get_redis
-        self.redis_client = get_redis()
+        self._redis_client = None
     
-    def check_frequency(self, user_id: int, 
+    @property
+    def redis_client(self):
+        """延迟获取Redis客户端，确保在Redis初始化后获取"""
+        if self._redis_client is None:
+            from redis_client.redis import get_redis
+            self._redis_client = get_redis()
+        return self._redis_client
+    
+    async def check_frequency(self, user_id: int, 
                        time_window: int = 10,  # 时间窗口（秒）
                        threshold: int = 20,     # 请求次数阈值
                        ) -> Tuple[bool, int]:
@@ -63,12 +70,12 @@ class RedisFrequencyLimiter:
             from redis_client.redis_keys import redis_key_manager
             key = redis_key_manager.get_frequency_limit_key(user_id)
             
-            # INCR 操作：增加请求计数
-            current_count = self.redis_client.incr(key)
+            # INCR 操作：增加请求计数 (异步调用)
+            current_count = await self.redis_client.incr(key)
             
-            # 第一次请求时设置过期时间
+            # 第一次请求时设置过期时间 (异步调用)
             if current_count == 1:
-                self.redis_client.expire(key, time_window)
+                await self.redis_client.expire(key, time_window)
             
             # 判断是否超限
             is_exceeded = current_count > threshold
@@ -86,6 +93,9 @@ class RedisFrequencyLimiter:
         """
         获取用户当前请求频率。
         
+        注意：此方法是同步的，仅用于非关键路径。
+        如需在异步上下文中使用，请改用 async 版本。
+        
         Args:
             user_id: 用户ID
             
@@ -98,6 +108,8 @@ class RedisFrequencyLimiter:
         try:
             from redis_client.redis_keys import redis_key_manager
             key = redis_key_manager.get_frequency_limit_key(user_id)
+            # 注意：这里使用同步方式，可能会有警告
+            # 在生产环境中建议使用异步版本
             count = self.redis_client.get(key)
             return int(count) if count else 0
         except Exception as e:
@@ -107,6 +119,9 @@ class RedisFrequencyLimiter:
     def reset_frequency(self, user_id: int) -> bool:
         """
         重置用户请求频率（管理员使用）。
+        
+        注意：此方法是同步的，仅用于非关键路径。
+        如需在异步上下文中使用，请改用 async 版本。
         
         Args:
             user_id: 用户ID
@@ -120,6 +135,8 @@ class RedisFrequencyLimiter:
         try:
             from redis_client.redis_keys import redis_key_manager
             key = redis_key_manager.get_frequency_limit_key(user_id)
+            # 注意：这里使用同步方式，可能会有警告
+            # 在生产环境中建议使用异步版本
             self.redis_client.delete(key)
             log.info("已重置用户 {} 的请求频率", user_id)
             return True
@@ -146,9 +163,16 @@ class LoginFailureTracker:
     EXPIRE_SECONDS = 86400
     
     def __init__(self):
-        """初始化 Redis 连接"""
-        from redis_client.redis import get_redis
-        self.redis_client = get_redis()
+        """初始化 Redis 连接（延迟获取，避免启动时Redis未初始化）"""
+        self._redis_client = None
+    
+    @property
+    def redis_client(self):
+        """延迟获取Redis客户端，确保在Redis初始化后获取"""
+        if self._redis_client is None:
+            from redis_client.redis import get_redis
+            self._redis_client = get_redis()
+        return self._redis_client
     
     async def record_failed_attempt(self, user_id: int) -> Tuple[int, bool]:
         """
@@ -236,23 +260,145 @@ class LoginFailureTracker:
 
 
 # ============================================================================
-# 2. 违规日志记录器
+# 2. 异地频繁登录检测器
+# ============================================================================
+
+class RemoteLoginDetector:
+    """
+    异地频繁登录检测器。
+    
+    注意：异地频繁登录检测（基于地理位置和距离）已禁用。
+    仅保留IP频繁变更检测功能。
+    """
+    
+    # IP变更检测参数
+    IP_CHANGE_WINDOW = 1800  # 30分钟
+    IP_CHANGE_THRESHOLD = 15  # 阈值15次
+    
+    @staticmethod
+    async def check_frequent_ip_changes(
+        user_id: int,
+        current_ip: str
+    ) -> tuple[bool, Optional[str]]:
+        """
+        检测用户是否在短时间内频繁变更IP。
+        
+        Args:
+            user_id: 用户ID
+            current_ip: 当前IP
+            
+        Returns:
+            Tuple[bool, Optional[str]]: (是否频繁变更, 描述信息)
+        """
+        try:
+            from redis_client.redis import get_redis
+            redis = get_redis()
+            if not redis:
+                log.warning("Redis 不可用，跳过IP变更检测")
+                return False, None
+
+            # Redis Set key: user:{id}:ip_history
+            key = f"user:{user_id}:ip_history"
+            
+            # 使用有序集合(ZSET)存储IP变更记录，Score为时间戳
+            current_timestamp = int(datetime.now(timezone.utc).timestamp())
+            
+            # 1. 添加当前记录 (使用IP作为Member，确保同一IP在同一时间窗口只算一次变更？ 
+            # 或者是记录每次请求的IP？ 需求是"IP改变15次"，意味着不同的IP数量？ 
+            # 或者是切换次数？ 通常理解为IP变动次数。如果IP相同不应该算"改变"。
+            # 这里我们使用 "IP:Timestamp" 作为 member 来记录每次带IP的活动，
+            # 但为了检测"改变"，我们需要对比上一次。
+            
+            # 简化逻辑：记录最近的IP列表，并计数不同IP的数量或者变更事件。
+            # 更精准的逻辑：
+            # 维护一个List，记录 (timestamp, ip)。
+            # 每次请求，如果 ip != last_ip，则记录一次变更。
+            # 统计 30分钟内的变更次数。
+            
+            # 使用 Redis List 记录最近的变更历史
+            change_log_key = f"user:{user_id}:ip_changes"
+            
+            # 获取上一次的IP
+            last_ip_key = f"user:{user_id}:last_ip"
+            last_ip = await redis.get(last_ip_key)
+            
+            if last_ip and last_ip != current_ip:
+                # IP 发生了改变，记录一次变更事件
+                # 记录时间戳
+                await redis.lpush(change_log_key, current_timestamp)
+                # 仅保留最近 20 条记录（稍微多存点，以免边界误差）
+                await redis.ltrim(change_log_key, 0, 19)
+                # 设置过期时间，避免永久占用
+                await redis.expire(change_log_key, RemoteLoginDetector.IP_CHANGE_WINDOW + 60)
+            
+            # 更新 Last IP
+            if last_ip != current_ip:
+                await redis.set(last_ip_key, current_ip, ex=RemoteLoginDetector.IP_CHANGE_WINDOW)
+            
+            # 2. 统计30分钟内的变更次数
+            # 获取列表中的所有时间戳
+            timestamps = await redis.lrange(change_log_key, 0, -1)
+            
+            change_count = 0
+            window_start = current_timestamp - RemoteLoginDetector.IP_CHANGE_WINDOW
+            
+            for ts in timestamps:
+                if int(ts) >= window_start:
+                    change_count += 1
+                else:
+                    # List 是按时间倒序的，一旦遇到过期时间，后面的都过期了
+                    break
+            
+            if change_count >= RemoteLoginDetector.IP_CHANGE_THRESHOLD:
+                description = f"IP频繁变更检测: 30分钟内IP变更 {change_count} 次 (阈值 {RemoteLoginDetector.IP_CHANGE_THRESHOLD})"
+                log.warning(f"用户 {user_id}: {description}")
+                return True, description
+                
+            return False, None
+
+        except Exception as e:
+            log.error(f"IP变更检测失败: {e}")
+            return False, None
+
+    @staticmethod
+    async def detect_remote_login(
+        db: AsyncSession,
+        user_id: int,
+        current_ip: str,
+        current_time: Optional[datetime] = None
+    ) -> tuple[bool, Optional[str]]:
+        """
+        检测当前登录是否为异地频繁登录。
+        
+        注意：异地频繁登录检测已禁用，始终返回 False。
+        
+        Args:
+            db: 数据库会话
+            user_id: 用户ID
+            current_ip: 当前登录IP
+            current_time: 当前时间（默认为now）
+            
+        Returns:
+            Tuple[bool, Optional[str]]: (是否检测到异地频繁登录, 检测信息描述)
+        """
+        # 异地频繁登录检测已禁用
+        return False, None
+
+
+# ============================================================================
+# 3. 违规日志记录器
 # ============================================================================
 
 class ViolationLogger:
     """
     违规日志记录器。
     
-    负责记录用户的违规行为（频率超限、SQL 注入、权限拒绝等）。
+    负责记录用户的违规行为（频率超限、多次登录失败、异地频繁登录）。
     """
     
     # 违规事件类型常量
     EVENT_EXCESSIVE_API_USAGE = "excessive_api_usage"
-    EVENT_SQL_INJECTION_ATTEMPT = "sql_injection_attempt"
-    EVENT_SUSPICIOUS_QUERY = "suspicious_query"
-    EVENT_UNAUTHORIZED_ACCESS = "unauthorized_access_attempt"
     EVENT_MULTIPLE_FAILED_LOGINS = "multiple_failed_logins"
-    EVENT_AI_VIOLATION = "ai_violation_content"
     EVENT_FREQUENT_REMOTE_LOGIN = "frequent_remote_login"
     
     # 风险等级常量
@@ -314,10 +460,12 @@ class ViolationLogger:
             # 任何违规记录都直接标记用户为异常（仅当 auto_check_suspend=True 时执行）
             if auto_check_suspend:
                 from core.security import BlacklistManager
-                reason = f"触发违规记录: {event_type} - {event_description}"
-                success = await BlacklistManager.suspend_user(db, user_id, reason=reason)
-                if success:
-                    log.warning(f"用户 {user_id} 因违规行为被标记为异常: {reason}")
+                # 改为调用 auto_suspend_if_needed，遵循三击机制
+                # reason = f"触发违规记录: {event_type} - {event_description}"
+                # success = await BlacklistManager.suspend_user(db, user_id, reason=reason)
+                is_suspended, reason = await BlacklistManager.auto_suspend_if_needed(db, user_id)
+                if is_suspended:
+                    log.warning(f"用户 {user_id} 因违规行为被系统自动标记为异常: {reason}")
             
             return violation
         

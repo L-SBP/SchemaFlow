@@ -232,6 +232,8 @@ class CRUDAdminData:
     ) -> Tuple[List[Dict[str, Any]], int]:
         """
         获取违规记录列表 (支持分页、筛选，并关联用户名)。
+        
+        注意：同一用户的同一违规类型只显示最新的一条记录。
 
         Args:
             db (AsyncSession): 数据库会话。
@@ -247,11 +249,32 @@ class CRUDAdminData:
             DatabaseOperationFailedException: 数据库查询失败时抛出。
         """
         try:
+            from sqlalchemy import func, and_
+            from sqlalchemy.sql import exists
+            
+            # 使用子查询找出每个用户每种违规类型的最新记录ID
+            # 子查询：获取每个(user_id, event_type)组合的最大violation_id
+            subquery = select(
+                ViolationLog.user_id,
+                ViolationLog.event_type,
+                func.max(ViolationLog.violation_id).label('max_id')
+            ).group_by(
+                ViolationLog.user_id,
+                ViolationLog.event_type
+            ).subquery()
+            
             # 1. 构建基础查询：关联 UserAccount 表以获取 username
+            # 只选择在子查询中的记录（即每个用户每种类型的最新记录）
             query = select(ViolationLog, UserAccount.username) \
-                .join(UserAccount, ViolationLog.user_id == UserAccount.user_id)
-
-            count_query = select(func.count(ViolationLog.violation_id))
+                .join(UserAccount, ViolationLog.user_id == UserAccount.user_id) \
+                .join(
+                    subquery,
+                    and_(
+                        ViolationLog.user_id == subquery.c.user_id,
+                        ViolationLog.event_type == subquery.c.event_type,
+                        ViolationLog.violation_id == subquery.c.max_id
+                    )
+                )
 
             # 2. 动态添加筛选条件
             filters = []
@@ -262,9 +285,21 @@ class CRUDAdminData:
 
             if filters:
                 query = query.where(*filters)
-                count_query = count_query.where(*filters)
 
-            # 3. 执行总数查询
+            # 3. 执行总数查询（应用相同的去重逻辑）
+            count_query = select(func.count(ViolationLog.violation_id)) \
+                .join(
+                    subquery,
+                    and_(
+                        ViolationLog.user_id == subquery.c.user_id,
+                        ViolationLog.event_type == subquery.c.event_type,
+                        ViolationLog.violation_id == subquery.c.max_id
+                    )
+                )
+            
+            if filters:
+                count_query = count_query.where(*filters)
+            
             total = await db.scalar(count_query) or 0
 
             # 4. 执行分页查询 (按时间倒序)

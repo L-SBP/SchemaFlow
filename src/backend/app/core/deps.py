@@ -123,22 +123,23 @@ async def get_current_user(
         
         if user.status == 'suspended':
             log.warning("用户 {} 账户异常，已被系统标记", user_id)
-            raise ForbiddenException(message="Account is suspended due to abnormal activity. Please contact administrator.")
+            raise ForbiddenException(message="账号被标记为异常用户，请谨慎使用。")
 
         # 4. 检查请求频率（可选的额外防护）
-        from core.security import freq_limiter
-        is_exceeded, count = freq_limiter.check_frequency(
+        from core.security import freq_limiter, RemoteLoginDetector
+        is_exceeded, count = await freq_limiter.check_frequency(
             user_id,
             time_window=10,
             threshold=20
         )
 
+        ip_address = request.client.host if request.client else "127.0.0.1"
+
         if is_exceeded:
             log.warning("用户 {} 请求频率超限: {} 请求/10秒", user_id, count)
-            # 记录违规行为（log_violation 内部会自动检查是否需要标记为异常）
+            # 记录违规行为
             try:
                 from core.security import ViolationLogger
-                ip_address = request.client.host if request.client else "127.0.0.1"
                 await ViolationLogger.log_violation(
                     db,
                     user_id,
@@ -149,18 +150,39 @@ async def get_current_user(
                     client_user_agent=request.headers.get("user-agent")
                 )
                 await db.commit()
-            except ForbiddenException:
-                raise
             except Exception as e:
                 log.error("记录违规日志失败: {}", e)
-                # 即使记录失败，仍然限制请求
-                raise ForbiddenException(message="Too many requests")
 
-        return user
+        # 5. 检查IP频繁变更（30分钟内变动15次）
+        try:
+            is_ip_changed_frequently, ip_change_desc = await RemoteLoginDetector.check_frequent_ip_changes(
+                user_id,
+                ip_address
+            )
+            if is_ip_changed_frequently:
+                from core.security import ViolationLogger
+                await ViolationLogger.log_violation(
+                    db,
+                    user_id,
+                    ViolationLogger.EVENT_FREQUENT_REMOTE_LOGIN, # 复用异地登录事件类型，或新增类型
+                    ip_change_desc,
+                    risk_level=ViolationLogger.RISK_HIGH,
+                    ip_address=ip_address,
+                    client_user_agent=request.headers.get("user-agent")
+                )
+                await db.commit()
+        except Exception as e:
+            log.error("IP变更检测执行失败: {}", e)
 
     except Exception as e:
-        log.error("获取当前用户失败: {}", e)
-        raise ForbiddenException(message="Could not validate credentials")
+        log.error("用户认证过程发生未知错误: {}", e)
+        # 如果是已知异常直接抛出
+        if isinstance(e, (ForbiddenException, ItemNotFoundException)):
+            raise e
+        # 其他异常转为认证失败
+        raise ForbiddenException(message="认证失败")
+
+    return user
 
 
 # 4. 获取当前管理员用户（需要 admin 权限）

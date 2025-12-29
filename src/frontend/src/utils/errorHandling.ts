@@ -181,9 +181,25 @@ export class ErrorHandler {
  */
 export class HttpErrorHandler {
   private config: ErrorHandlingConfig;
+  private lastErrorMessage: string = '';
+  private lastErrorTime: number = 0;
+  private readonly ERROR_DEBOUNCE_TIME = 3000; // 3秒内相同错误只显示一次
 
   constructor(config: Partial<ErrorHandlingConfig> = {}) {
     this.config = { ...defaultErrorConfig, ...config };
+  }
+
+  /**
+   * 检查是否应该显示错误消息（防止重复提示）
+   */
+  private shouldShowError(errorMessage: string): boolean {
+    const now = Date.now();
+    if (errorMessage === this.lastErrorMessage && now - this.lastErrorTime < this.ERROR_DEBOUNCE_TIME) {
+      return false;
+    }
+    this.lastErrorMessage = errorMessage;
+    this.lastErrorTime = now;
+    return true;
   }
 
   /**
@@ -237,8 +253,9 @@ export class HttpErrorHandler {
     localStorage.removeItem('refresh_token');
     localStorage.removeItem('user_info');
 
-    if (this.config.showUserFriendlyMessages) {
-      message.error('登录已过期，请重新登录');
+    const errorMessage = '登录已过期，请重新登录';
+    if (this.config.showUserFriendlyMessages && this.shouldShowError(errorMessage)) {
+      message.error(errorMessage);
     }
 
     // 触发全局认证失效事件
@@ -258,7 +275,7 @@ export class HttpErrorHandler {
   private handleForbiddenError(data?: any): void {
     const message_text = this.extractErrorMessage(data) || '权限不足，无法访问此资源';
 
-    if (this.config.showUserFriendlyMessages) {
+    if (this.config.showUserFriendlyMessages && this.shouldShowError(message_text)) {
       message.error(message_text);
     }
   }
@@ -269,7 +286,7 @@ export class HttpErrorHandler {
   private handleNotFoundError(data?: any): void {
     const message_text = this.extractErrorMessage(data) || '请求的资源不存在';
 
-    if (this.config.showUserFriendlyMessages) {
+    if (this.config.showUserFriendlyMessages && this.shouldShowError(message_text)) {
       message.error(message_text);
     }
   }
@@ -278,8 +295,9 @@ export class HttpErrorHandler {
    * 处理请求超时错误 (408)
    */
   private handleTimeoutError(data?: any): void {
-    if (this.config.showUserFriendlyMessages) {
-      message.error('请求超时，请检查网络连接后重试');
+    const errorMessage = '请求超时，请检查网络连接后重试';
+    if (this.config.showUserFriendlyMessages && this.shouldShowError(errorMessage)) {
+      message.error(errorMessage);
     }
   }
 
@@ -287,8 +305,9 @@ export class HttpErrorHandler {
    * 处理请求频率限制错误 (429)
    */
   private handleRateLimitError(data?: any): void {
-    if (this.config.showUserFriendlyMessages) {
-      message.error('请求过于频繁，请稍后再试');
+    const errorMessage = '请求过于频繁，请稍后再试';
+    if (this.config.showUserFriendlyMessages && this.shouldShowError(errorMessage)) {
+      message.error(errorMessage);
     }
   }
 
@@ -300,7 +319,10 @@ export class HttpErrorHandler {
       const message_text = status === 503
         ? '服务暂时不可用，请稍后重试'
         : '服务器内部错误，请稍后重试';
-      message.error(message_text);
+      
+      if (this.shouldShowError(message_text)) {
+        message.error(message_text);
+      }
     }
   }
 
@@ -310,7 +332,7 @@ export class HttpErrorHandler {
   private handleGenericHttpError(status: number, data?: any): void {
     const message_text = this.extractErrorMessage(data) || '网络请求失败，请检查网络连接';
 
-    if (this.config.showUserFriendlyMessages) {
+    if (this.config.showUserFriendlyMessages && this.shouldShowError(message_text)) {
       message.error(message_text);
     }
   }

@@ -102,6 +102,8 @@ services:
     volumes:
       - ./src/backend:/app
     environment:
+      # Fix import errors by adding inner app directory to PYTHONPATH
+      - PYTHONPATH=/app/app
       # --- Pydantic BaseSettings 覆盖配置 (使用双下划线映射嵌套配置) ---
       # 覆盖 config.yaml 中的 db 部分
       - DB__HOST=postgres-meta
@@ -121,12 +123,15 @@ services:
       # 覆盖 config.yaml 中的 app 部分
       - APP__HOST=0.0.0.0
 
+      # Fix User Postgres Port for internal Docker network
+      - POSTGRESQL__PORT=5432
+
       # 如果代码中有逻辑读取这些非标准变量，保留它们以防万一
       - POSTGRES_SERVER=postgres-meta
       - POSTGRES_USER=admin
       - POSTGRES_PASSWORD=secure_2025
       - REDIS_HOST=redis
-    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+    command: uvicorn app.server:my_app --host 0.0.0.0 --port 8000 --reload
     depends_on:
       - postgres-meta
       - redis
@@ -141,6 +146,8 @@ services:
       dockerfile: Dockerfile.dev
     container_name: celery
     environment:
+      # Fix import errors
+      - PYTHONPATH=/app/app
       # 同样注入配置以确保 Worker 能连接到正确的 DB 和 Redis
       - DB__HOST=postgres-meta
       - DB__PORT=5432
