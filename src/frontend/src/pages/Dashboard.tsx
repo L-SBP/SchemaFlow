@@ -46,6 +46,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ onProjectSelect }) => {
   // 部署状态管理
   const [isDeploying, setIsDeploying] = useState(false);
   const [currentProjectId, setCurrentProjectId] = useState<string | number | null>(null);
+  const [wizardFooter, setWizardFooter] = useState<React.ReactNode>(null);
 
   // 创建表单状态
   const [newProjectName, setNewProjectName] = useState('');
@@ -109,6 +110,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ onProjectSelect }) => {
       setNewProjectDesc('');
       setIsDeploying(false);
       setCurrentProjectId(null);
+      setWizardFooter(null);
     }, 300);
     loadProjects();
   };
@@ -224,7 +226,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ onProjectSelect }) => {
                 开始智能部署
               </Button>
             </>
-          ) : null
+          ) : wizardFooter
         }
       >
         {!showProgressView ? (
@@ -263,6 +265,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ onProjectSelect }) => {
             projectId={currentProjectId!}
             onComplete={handleCloseModal}
             onClose={handleCloseModal}
+            renderFooter={setWizardFooter}
           />
         )}
       </Modal>

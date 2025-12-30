@@ -358,10 +358,12 @@ async def request_ddl_generation_service(
     if data.requirements:
         project.description = data.requirements
 
-    # 更新 Schema
-    current_def = project.schema_definition or {}
+    # 更新 Schema - 创建新字典以确保 SQLAlchemy 检测到变化
+    from sqlalchemy.orm.attributes import flag_modified
+    current_def = dict(project.schema_definition or {})
     current_def['schema'] = new_schema
     project.schema_definition = current_def
+    flag_modified(project, 'schema_definition')
     project.creation_stage = schemas.CreationStageEnum.GENERATING_DDL.value
 
     db.add(project)
@@ -710,12 +712,15 @@ async def regenerate_project_er_service(
     2. 调度 Celery 任务重新生成 ER 图
     3. 返回 task_id 供前端查询状态
     """
+    from sqlalchemy.orm.attributes import flag_modified
+    
     project = await _verify_project_ownership(db, project_id, user_id)
 
-    # 保存新的 Schema
-    current_def = project.schema_definition or {}
+    # 保存新的 Schema - 创建新字典以确保 SQLAlchemy 检测到变化
+    current_def = dict(project.schema_definition or {})
     current_def['schema'] = schema_text
     project.schema_definition = current_def
+    flag_modified(project, 'schema_definition')
 
     db.add(project)
     await db.commit()

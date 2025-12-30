@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useRef, useState, useCallback } from 'react';
 
 interface InteractiveERRendererProps {
   chart: string;
@@ -7,16 +7,37 @@ interface InteractiveERRendererProps {
 
 export const InteractiveERRenderer: React.FC<InteractiveERRendererProps> = ({ chart, className = '' }) => {
   const containerRef = useRef<HTMLDivElement>(null);
+  const svgContainerRef = useRef<HTMLDivElement>(null);
   const svgRef = useRef<SVGElement | null>(null);
   const [scale, setScale] = useState(1);
   const [position, setPosition] = useState({ x: 0, y: 0 });
   const [isDragging, setIsDragging] = useState(false);
   const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
+  const [isLoading, setIsLoading] = useState(true);
+
+  // 使用 ref 存储最新的 scale 和 position，避免闭包问题
+  const scaleRef = useRef(scale);
+  const positionRef = useRef(position);
 
   useEffect(() => {
-    if (!chart || !containerRef.current) return;
+    scaleRef.current = scale;
+  }, [scale]);
+
+  useEffect(() => {
+    positionRef.current = position;
+  }, [position]);
+
+  useEffect(() => {
+    if (!chart || !svgContainerRef.current) return;
+
+    setIsLoading(true);
 
     const renderER = async () => {
+      // 创建离屏渲染容器，避免 mermaid 在 body 中创建临时元素导致抖动
+      const offscreenContainer = document.createElement('div');
+      offscreenContainer.style.cssText = 'position: fixed; left: -9999px; top: -9999px; visibility: hidden; pointer-events: none;';
+      document.body.appendChild(offscreenContainer);
+
       try {
         // 修复格式问题
         let fixedChart = chart.trim();
@@ -41,24 +62,19 @@ export const InteractiveERRenderer: React.FC<InteractiveERRendererProps> = ({ ch
             stroke: '#333',
             fill: '#f8f9fa',
             fontSize: 16,
-            useMaxWidth: false // 禁用自动宽度，我们手动控制
+            useMaxWidth: false
           }
         });
 
-        // 清空容器
-        if (containerRef.current) {
-          containerRef.current.innerHTML = '';
-        }
-
-        // 渲染
+        // 在离屏容器中渲染
         const id = `interactive-er-${Date.now()}`;
-        const result = await mermaid.render(id, fixedChart);
+        const result = await mermaid.render(id, fixedChart, offscreenContainer);
 
-        if (containerRef.current) {
-          containerRef.current.innerHTML = result.svg;
+        if (svgContainerRef.current) {
+          svgContainerRef.current.innerHTML = result.svg;
 
           // 获取 SVG 元素
-          const svg = containerRef.current.querySelector('svg');
+          const svg = svgContainerRef.current.querySelector('svg');
           if (svg) {
             svgRef.current = svg;
 
@@ -85,16 +101,23 @@ export const InteractiveERRenderer: React.FC<InteractiveERRendererProps> = ({ ch
           }
 
           console.log('✅ 交互式 ER 图渲染完成！');
+          setIsLoading(false);
         }
       } catch (error) {
         console.error('❌ ER图渲染失败:', error);
-        if (containerRef.current) {
-          containerRef.current.innerHTML = `
+        if (svgContainerRef.current) {
+          svgContainerRef.current.innerHTML = `
             <div style="padding: 20px; color: red; border: 1px solid red; border-radius: 8px; background: #ffe6e6;">
               <h3>渲染失败</h3>
               <p>${error}</p>
             </div>
           `;
+        }
+        setIsLoading(false);
+      } finally {
+        // 清理离屏容器
+        if (offscreenContainer.parentNode) {
+          offscreenContainer.parentNode.removeChild(offscreenContainer);
         }
       }
     };
@@ -103,50 +126,64 @@ export const InteractiveERRenderer: React.FC<InteractiveERRendererProps> = ({ ch
   }, [chart]);
 
   // 更新变换
-  const updateTransform = (svg: SVGElement, newScale: number, newPosition: { x: number, y: number }) => {
+  const updateTransform = useCallback((svg: SVGElement, newScale: number, newPosition: { x: number, y: number }) => {
     svg.style.transform = `translate(${newPosition.x}px, ${newPosition.y}px) scale(${newScale})`;
     svg.style.transformOrigin = 'center center';
-  };
+  }, []);
 
-  // 滚轮缩放 - 只在鼠标在ER图区域内时生效
-  const handleWheel = (e: React.WheelEvent) => {
-    if (!svgRef.current || !containerRef.current) return;
+  // 使用 useEffect 添加 non-passive wheel 事件监听器，解决 preventDefault 警告
+  useEffect(() => {
+    const container = svgContainerRef.current;
+    if (!container) return;
 
-    // 获取容器边界
-    const containerRect = containerRef.current.getBoundingClientRect();
-    const mouseX = e.clientX;
-    const mouseY = e.clientY;
+    const handleWheel = (e: WheelEvent) => {
+      if (!svgRef.current || !svgContainerRef.current) return;
 
-    // 检查鼠标是否在ER图容器内
-    const isMouseInContainer = (
-      mouseX >= containerRect.left &&
-      mouseX <= containerRect.right &&
-      mouseY >= containerRect.top &&
-      mouseY <= containerRect.bottom
-    );
+      // 获取容器边界
+      const containerRect = svgContainerRef.current.getBoundingClientRect();
+      const mouseX = e.clientX;
+      const mouseY = e.clientY;
 
-    // 只有当鼠标在ER图容器内时才进行缩放，否则允许正常滚动
-    if (!isMouseInContainer) {
-      return;
-    }
+      // 检查鼠标是否在ER图容器内
+      const isMouseInContainer = (
+        mouseX >= containerRect.left &&
+        mouseX <= containerRect.right &&
+        mouseY >= containerRect.top &&
+        mouseY <= containerRect.bottom
+      );
 
-    // 阻止默认滚动行为并停止事件冒泡
-    e.preventDefault();
-    e.stopPropagation();
+      // 只有当鼠标在ER图容器内时才进行缩放，否则允许正常滚动
+      if (!isMouseInContainer) {
+        return;
+      }
 
-    const delta = e.deltaY > 0 ? 0.9 : 1.1;
-    const newScale = Math.max(0.2, Math.min(3, scale * delta));
+      // 阻止默认滚动行为并停止事件冒泡
+      e.preventDefault();
+      e.stopPropagation();
 
-    setScale(newScale);
-    updateTransform(svgRef.current, newScale, position);
-  };
+      const delta = e.deltaY > 0 ? 0.9 : 1.1;
+      const currentScale = scaleRef.current;
+      const currentPosition = positionRef.current;
+      const newScale = Math.max(0.2, Math.min(3, currentScale * delta));
+
+      setScale(newScale);
+      updateTransform(svgRef.current, newScale, currentPosition);
+    };
+
+    // 添加 non-passive 事件监听器
+    container.addEventListener('wheel', handleWheel, { passive: false });
+
+    return () => {
+      container.removeEventListener('wheel', handleWheel);
+    };
+  }, [updateTransform]);
 
   // 开始拖动 - 只在鼠标在ER图区域内时生效
   const handleMouseDown = (e: React.MouseEvent) => {
-    if (!svgRef.current || !containerRef.current) return;
+    if (!svgRef.current || !svgContainerRef.current) return;
 
     // 获取容器边界
-    const containerRect = containerRef.current.getBoundingClientRect();
+    const containerRect = svgContainerRef.current.getBoundingClientRect();
     const mouseX = e.clientX;
     const mouseY = e.clientY;
 
@@ -220,7 +257,9 @@ export const InteractiveERRenderer: React.FC<InteractiveERRendererProps> = ({ ch
         right: '10px',
         zIndex: 10,
         display: 'flex',
-        gap: '5px'
+        gap: '5px',
+        opacity: isLoading ? 0 : 1,
+        transition: 'opacity 0.2s ease-in-out'
       }}>
         <button
           onClick={() => {
@@ -286,38 +325,42 @@ export const InteractiveERRenderer: React.FC<InteractiveERRendererProps> = ({ ch
         background: 'rgba(0,0,0,0.7)',
         color: 'white',
         borderRadius: '4px',
-        fontSize: '12px'
+        fontSize: '12px',
+        opacity: isLoading ? 0 : 1,
+        transition: 'opacity 0.2s ease-in-out'
       }}>
         {Math.round(scale * 100)}%
       </div>
 
-      {/* ER 图容器 */}
+      {/* 外层容器 - 固定尺寸，防止抖动 */}
       <div
         ref={containerRef}
-        onWheel={handleWheel}
-        onMouseDown={handleMouseDown}
-        onMouseMove={handleMouseMove}
-        onMouseUp={(e) => handleMouseUp(e)}
-        onMouseLeave={() => handleMouseUp()}
         style={{
           width: '100%',
           height: '100%',
-          minHeight: '600px',
+          minHeight: '300px',
           border: '1px solid #e0e0e0',
           background: 'white',
           borderRadius: '12px',
-          overflow: 'hidden', // 移除滚动条
+          overflow: 'hidden',
           boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
           position: 'relative'
         }}
       >
+        {/* 加载状态 - 绝对定位，不影响布局 */}
         <div style={{
+          position: 'absolute',
+          inset: 0,
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
-          height: '100%',
           color: '#666',
-          fontSize: '16px'
+          fontSize: '16px',
+          background: 'white',
+          opacity: isLoading ? 1 : 0,
+          visibility: isLoading ? 'visible' : 'hidden',
+          transition: 'opacity 0.2s ease-in-out',
+          zIndex: 5
         }}>
           <div>
             <div style={{
@@ -332,6 +375,24 @@ export const InteractiveERRenderer: React.FC<InteractiveERRendererProps> = ({ ch
             正在渲染交互式 ER 图...
           </div>
         </div>
+
+        {/* SVG 容器 - 绝对定位，渲染完成后显示 */}
+        <div
+          ref={svgContainerRef}
+          onMouseDown={handleMouseDown}
+          onMouseMove={handleMouseMove}
+          onMouseUp={(e) => handleMouseUp(e)}
+          onMouseLeave={() => handleMouseUp()}
+          style={{
+            position: 'absolute',
+            inset: 0,
+            touchAction: 'none',
+            opacity: isLoading ? 0 : 1,
+            visibility: isLoading ? 'hidden' : 'visible',
+            transition: 'opacity 0.2s ease-in-out'
+          }}
+        />
+
         <style>{`
           @keyframes spin {
             0% { transform: rotate(0deg); }

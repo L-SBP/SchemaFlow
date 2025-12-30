@@ -131,6 +131,26 @@ export const ProjectOverview: React.FC<ProjectOverviewProps> = ({
   // 分页状态
   const [currentPage, setCurrentPage] = useState(1);
 
+  // 响应式状态 - 用于判断是否使用简化分页
+  const [isSimpleMode, setIsSimpleMode] = useState(false);
+
+  // 监听窗口大小变化
+  useEffect(() => {
+    const checkWindowSize = () => {
+      setIsSimpleMode(window.innerWidth < 640);
+    };
+
+    // 初始检查
+    checkWindowSize();
+
+    // 添加 resize 监听
+    window.addEventListener('resize', checkWindowSize);
+
+    return () => {
+      window.removeEventListener('resize', checkWindowSize);
+    };
+  }, []);
+
   // 分页数据
   const paginatedProjects = useMemo(() => {
     const start = (currentPage - 1) * pageSize;
@@ -140,6 +160,9 @@ export const ProjectOverview: React.FC<ProjectOverviewProps> = ({
   const totalProjects = processedState.validatedProjects.length;
 
   // Process projects when they change
+  // 使用 JSON.stringify 来比较数组内容，避免因引用变化导致的无限循环
+  const projectsKey = useMemo(() => JSON.stringify(projects), [projects]);
+
   useEffect(() => {
     const processed = processProjects(projects);
     setProcessedState(processed);
@@ -150,7 +173,8 @@ export const ProjectOverview: React.FC<ProjectOverviewProps> = ({
     if (processed.hasErrors) {
       console.warn('Project validation errors:', processed.errorMessages);
     }
-  }, [projects]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [projectsKey]);
 
   // Default handlers with error handling
   const handleCardClick = useCallback((projectId: number) => {
@@ -298,7 +322,7 @@ export const ProjectOverview: React.FC<ProjectOverviewProps> = ({
               pageSize={pageSize}
               onChange={setCurrentPage}
               showTotal={true}
-              simple={window.innerWidth < 640}
+              simple={isSimpleMode}
             />
           </div>
         </div>

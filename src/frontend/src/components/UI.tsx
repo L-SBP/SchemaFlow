@@ -278,10 +278,10 @@ interface ModalProps {
 export const Modal: React.FC<ModalProps> = ({ isOpen, onClose, title, children, footer, maxWidth = 'max-w-md' }) => {
     if (!isOpen) return null;
     return (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-gray-900/60 backdrop-blur-sm p-2 sm:p-4 transition-opacity duration-300 overflow-y-auto">
-            <div className={`bg-white rounded-xl shadow-2xl w-full ${maxWidth} animate-in fade-in zoom-in-95 duration-200 flex flex-col max-h-[95vh] max-h-[95dvh] overflow-hidden my-auto`}>
+        <div className="fixed inset-0 z-50 flex items-start justify-center bg-gray-900/60 backdrop-blur-sm p-2 sm:p-4 transition-opacity duration-300 overflow-y-auto">
+            <div className={`bg-white rounded-xl shadow-2xl w-full ${maxWidth} animate-in fade-in zoom-in-95 duration-200 flex flex-col my-auto shrink-0`}>
                 {/* Header */}
-                <div className="px-4 sm:px-8 py-4 sm:py-5 border-b border-gray-100 flex justify-between items-center shrink-0 bg-white gap-2 min-h-[64px]">
+                <div className="px-4 sm:px-8 py-4 sm:py-5 border-b border-gray-100 flex justify-between items-center shrink-0 bg-white gap-2 min-h-[64px] rounded-t-xl">
                     <h3 className="text-base sm:text-lg font-bold text-gray-800 tracking-tight truncate flex-1 min-w-0 flex items-center">{title}</h3>
                     <button
                         onClick={onClose}
@@ -291,13 +291,13 @@ export const Modal: React.FC<ModalProps> = ({ isOpen, onClose, title, children, 
                         <X size={14} />
                     </button>
                 </div>
-                {/* Content - 移除整体滚动条 */}
+                {/* Content */}
                 <div className="p-4 sm:p-8 bg-white flex-1 min-h-0 overflow-hidden">
                     {children}
                 </div>
                 {/* Footer */}
                 {footer && (
-                    <div className="px-4 sm:px-8 py-4 sm:py-5 bg-gray-50 border-t border-gray-100 flex flex-wrap justify-end gap-2 sm:gap-3 shrink-0">
+                    <div className="px-4 sm:px-8 py-4 sm:py-5 bg-gray-50 border-t border-gray-100 flex flex-wrap justify-end gap-2 sm:gap-3 shrink-0 rounded-b-xl">
                         {footer}
                     </div>
                 )}

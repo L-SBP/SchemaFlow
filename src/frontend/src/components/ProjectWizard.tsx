@@ -1,8 +1,8 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { ProjectDTO, CreationStageEnum, ProjectStatusEnum } from '../types';
-import { getProjectDetail, generateDDL, deployProject } from '../api/project';
+import { getProjectDetail, generateDDL, deployProject, regenerateER } from '../api/project';
 import { Button, ProgressBar } from './UI';
-import { Loader2, CheckCircle2, AlertTriangle, FileJson, Code2, Play } from 'lucide-react';
+import { Loader2, CheckCircle2, AlertTriangle, FileJson, Code2, Play, RefreshCw } from 'lucide-react';
 import { InteractiveERRenderer } from './InteractiveERRenderer';
 
 interface ProjectWizardProps {
@@ -10,6 +10,7 @@ interface ProjectWizardProps {
   onComplete: () => void;
   onClose: () => void;
   viewOnly?: boolean;
+  renderFooter?: (footer: React.ReactNode) => void;
 }
 
 const formatDisplayContent = (content: any) => {
@@ -34,7 +35,20 @@ const formatDisplayContent = (content: any) => {
   return str.replace(/\\n/g, '\n').replace(/\\"/g, '"');
 };
 
-export const ProjectWizard: React.FC<ProjectWizardProps> = ({ projectId, onComplete, onClose, viewOnly = false }) => {
+// 从 schema_definition 对象中提取 schema 文本
+const extractSchemaText = (schemaDefinition: any): string => {
+  if (!schemaDefinition) return '';
+
+  // 如果是对象且有 schema 字段，提取它
+  if (typeof schemaDefinition === 'object' && schemaDefinition.schema) {
+    return formatDisplayContent(schemaDefinition.schema);
+  }
+
+  // 否则格式化整个内容
+  return formatDisplayContent(schemaDefinition);
+};
+
+export const ProjectWizard: React.FC<ProjectWizardProps> = ({ projectId, onComplete, onClose, viewOnly = false, renderFooter }) => {
   const [project, setProject] = useState<ProjectDTO | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -43,6 +57,14 @@ export const ProjectWizard: React.FC<ProjectWizardProps> = ({ projectId, onCompl
   const [editedDDL, setEditedDDL] = useState<string>('');
   const [requirements] = useState<string>('');
   const [activeTab, setActiveTab] = useState('概览');
+
+  // ER 图重新生成状态
+  const [isRegeneratingER, setIsRegeneratingER] = useState(false);
+  const [localERCode, setLocalERCode] = useState<string>('');
+  const previousERCodeRef = useRef<string>('');
+
+  // 轮询控制状态
+  const [shouldPoll, setShouldPoll] = useState(true);
 
   // Progress animation state
   const [visualProgress, setVisualProgress] = useState(0);
@@ -55,7 +77,7 @@ export const ProjectWizard: React.FC<ProjectWizardProps> = ({ projectId, onCompl
 
   // Polling
   useEffect(() => {
-    let intervalId: NodeJS.Timeout;
+    let intervalId: NodeJS.Timeout | null = null;
 
     const fetchProject = async () => {
       try {
@@ -65,16 +87,22 @@ export const ProjectWizard: React.FC<ProjectWizardProps> = ({ projectId, onCompl
         // Initialize edit states if empty - 在任何需要显示的阶段都初始化数据
         // Schema: 在 SCHEMA_GENERATED, GENERATING_DDL, DDL_GENERATED 等阶段都需要
         if (!editedSchema && data.schema_definition) {
-          setEditedSchema(formatDisplayContent(data.schema_definition));
+          setEditedSchema(extractSchemaText(data.schema_definition));
         }
         // DDL: 在 DDL_GENERATED, EXECUTING_DDL, COMPLETED 等阶段需要
         if (!editedDDL && data.ddl_statement) {
           setEditedDDL(formatDisplayContent(data.ddl_statement));
         }
 
-        // Stop polling if completed
-        if (data.project_status === ProjectStatusEnum.ACTIVE) {
-          // Continue polling? Maybe not.
+        // 在需要用户操作的阶段停止轮询
+        const stage = data.creation_stage;
+        // 在用户需要操作的阶段停止轮询（除非正在重新生成 ER 图）
+        if (!isRegeneratingER && (
+          stage === CreationStageEnum.SCHEMA_GENERATED ||
+          stage === CreationStageEnum.DDL_GENERATED ||
+          stage === CreationStageEnum.COMPLETED ||
+          data.project_status === ProjectStatusEnum.ACTIVE)) {
+          setShouldPoll(false);
         }
       } catch (err) {
         console.error("Failed to fetch project:", err);
@@ -83,14 +111,16 @@ export const ProjectWizard: React.FC<ProjectWizardProps> = ({ projectId, onCompl
     };
 
     fetchProject();
-    if (!viewOnly) {
-      intervalId = setInterval(fetchProject, 3000); // Poll every 3 seconds
+    if (!viewOnly && shouldPoll) {
+      // 重新生成 ER 图时使用较低的轮询频率（5秒），其他情况使用正常频率（3秒）
+      const pollInterval = isRegeneratingER ? 5000 : 3000;
+      intervalId = setInterval(fetchProject, pollInterval);
     }
 
     return () => {
       if (intervalId) clearInterval(intervalId);
     };
-  }, [projectId, editedSchema, editedDDL, viewOnly]);
+  }, [projectId, viewOnly, shouldPoll, isRegeneratingER]);
 
   useEffect(() => {
     progressSnapshotRef.current = {
@@ -163,23 +193,25 @@ export const ProjectWizard: React.FC<ProjectWizardProps> = ({ projectId, onCompl
     }
 
     // 如果是同一阶段从弹窗关闭后恢复，尽量从上次的进度继续增长（不从 0 重来）
-    if (
-      restoredSnapshotRef.current &&
-      restoredSnapshotRef.current.stage === stage &&
-      visualProgress < restoredSnapshotRef.current.progress
-    ) {
-      setVisualProgress(restoredSnapshotRef.current.progress);
+    const restored = restoredSnapshotRef.current;
+    if (restored && restored.stage === stage && visualProgress < restored.progress) {
+      setVisualProgress(restored.progress);
+      return; // 避免立即启动 timer
     }
 
-    // 修复：如果处于已完成阶段且进度为0（刚打开弹窗），直接显示100%，避免重新跑进度条
-    if (visualProgress === 0 && (
-      stage === CreationStageEnum.SCHEMA_GENERATED ||
+    // 对于"已完成"类型的阶段（非生成中），如果进度为0且没有恢复快照，直接显示100%
+    // 这是为了处理刚打开弹窗时的情况
+    const isCompletedStage = stage === CreationStageEnum.SCHEMA_GENERATED ||
       stage === CreationStageEnum.DDL_GENERATED ||
-      stage === CreationStageEnum.COMPLETED
-    )) {
+      stage === CreationStageEnum.COMPLETED;
+
+    if (visualProgress === 0 && isCompletedStage && !restored) {
       setVisualProgress(100);
       return;
     }
+
+    // 如果已经达到目标，不启动 timer
+    if (visualProgress >= target) return;
 
     const timer = setInterval(() => {
       setVisualProgress(prev => {
@@ -194,6 +226,7 @@ export const ProjectWizard: React.FC<ProjectWizardProps> = ({ projectId, onCompl
     }, 100); // Update every 100ms
 
     return () => clearInterval(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [project?.creation_stage, viewOnly]);
 
   // Reset progress when entering a new "generating" stage
@@ -221,13 +254,17 @@ export const ProjectWizard: React.FC<ProjectWizardProps> = ({ projectId, onCompl
   }, [project?.creation_stage]);
 
 
-  const handleConfirmSchema = async () => {
+  const handleConfirmSchema = useCallback(async () => {
     if (!project) return;
     try {
-      setVisualProgress(0); // Reset progress for next stage
+      // 清除恢复快照，确保进度从0开始
+      restoredSnapshotRef.current = null;
+      setShouldPoll(true); // 重新开启轮询
 
       // 乐观更新：立即切换到生成 DDL 状态，显示进度条
+      // 注意：先更新 project 状态，再重置进度，避免进度条动画逻辑的干扰
       setProject(prev => prev ? { ...prev, creation_stage: CreationStageEnum.GENERATING_DDL } : null);
+      setVisualProgress(0); // Reset progress for next stage
 
       await generateDDL(project.project_id, editedSchema, requirements);
       // State update will happen on next poll
@@ -235,15 +272,18 @@ export const ProjectWizard: React.FC<ProjectWizardProps> = ({ projectId, onCompl
       console.error("Failed to confirm schema:", err);
       setError("确认 Schema 失败。");
     }
-  };
+  }, [project, editedSchema, requirements]);
 
-  const handleConfirmDDL = async () => {
+  const handleConfirmDDL = useCallback(async () => {
     if (!project) return;
     try {
-      setVisualProgress(0); // Reset progress for next stage
+      // 清除恢复快照，确保进度从0开始
+      restoredSnapshotRef.current = null;
+      setShouldPoll(true); // 重新开启轮询
 
       // 乐观更新：立即切换到执行 DDL 状态，显示进度条
       setProject(prev => prev ? { ...prev, creation_stage: CreationStageEnum.EXECUTING_DDL } : null);
+      setVisualProgress(0); // Reset progress for next stage
 
       await deployProject(project.project_id, editedDDL);
       // State update will happen on next poll
@@ -251,15 +291,112 @@ export const ProjectWizard: React.FC<ProjectWizardProps> = ({ projectId, onCompl
       console.error("Failed to deploy project:", err);
       setError("部署项目失败。");
     }
-  };
+  }, [project, editedDDL]);
+
+  // 重新生成 ER 图
+  const handleRegenerateER = useCallback(async () => {
+    if (!project || !editedSchema.trim()) return;
+
+    // 记录当前 ER 图代码，用于检测更新
+    previousERCodeRef.current = localERCode;
+
+    setIsRegeneratingER(true);
+    setError(null);
+    setShouldPoll(true); // 开启轮询等待 ER 图更新
+
+    try {
+      await regenerateER(project.project_id, editedSchema);
+      // ER 图会在后台生成，通过轮询获取最新数据
+    } catch (err) {
+      console.error("Failed to regenerate ER:", err);
+      setError("重新生成 ER 图失败。");
+      setIsRegeneratingER(false);
+    }
+  }, [project, editedSchema, localERCode]);
+
+  // 当 project 更新时，同步更新本地 ER 图代码
+  useEffect(() => {
+    const newERCode = project?.er_diagram_code;
+    if (!newERCode || newERCode === localERCode) return;
+
+    // 如果正在重新生成 ER 图，检测 ER 图是否真的更新了
+    if (isRegeneratingER && newERCode !== previousERCodeRef.current) {
+      setIsRegeneratingER(false);
+      setShouldPoll(false);
+    }
+
+    // 更新本地 ER 图代码
+    setLocalERCode(newERCode);
+    // 更新 ref
+    previousERCodeRef.current = newERCode;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [project?.er_diagram_code]);
+
+  // 根据当前阶段更新 footer 内容
+  useEffect(() => {
+    if (!renderFooter || !project) {
+      renderFooter?.(null);
+      return;
+    }
+
+    const stage = viewOnly ? CreationStageEnum.COMPLETED : (project.creation_stage || CreationStageEnum.INITIALIZING);
+
+    switch (stage) {
+      case CreationStageEnum.SCHEMA_GENERATED:
+        renderFooter(
+          <div className="flex justify-between items-center w-full">
+            <Button
+              variant="default"
+              onClick={handleRegenerateER}
+              disabled={isRegeneratingER}
+              icon={isRegeneratingER ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
+            >
+              {isRegeneratingER ? '生成中...' : '修改'}
+            </Button>
+            <div className="flex gap-2 sm:gap-3">
+              <Button variant="default" onClick={onClose}>取消</Button>
+              <Button onClick={handleConfirmSchema} className="bg-blue-600 hover:bg-blue-700 text-white">
+                确认并生成 DDL
+              </Button>
+            </div>
+          </div>
+        );
+        break;
+      case CreationStageEnum.DDL_GENERATED:
+        renderFooter(
+          <>
+            <Button variant="default" onClick={onClose}>取消</Button>
+            <Button onClick={handleConfirmDDL} className="bg-blue-600 hover:bg-blue-700 text-white">
+              <Play className="w-4 h-4 mr-2" />
+              部署项目
+            </Button>
+          </>
+        );
+        break;
+      case CreationStageEnum.COMPLETED:
+        if (!viewOnly) {
+          renderFooter(
+            <Button onClick={onComplete} className="bg-blue-600 hover:bg-blue-700 text-white">
+              进入工作台
+            </Button>
+          );
+        } else {
+          renderFooter(null);
+        }
+        break;
+      default:
+        renderFooter(null);
+        break;
+    }
+    // 注意：这里故意省略部分依赖项以避免无限循环
+    // renderFooter, onClose, onComplete 是 props 函数，可能每次渲染都是新引用
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [project?.creation_stage, viewOnly, isRegeneratingER, handleRegenerateER, handleConfirmSchema, handleConfirmDDL]);
 
   if (!project) return <div className="p-8 flex justify-center"><Loader2 className="animate-spin" /></div>;
 
   const renderStageContent = () => {
     const stage = viewOnly ? CreationStageEnum.COMPLETED : (project.creation_stage || CreationStageEnum.INITIALIZING);
-
-    // Common height for display areas
-    const displayHeightClass = "h-[600px]";
 
     switch (stage) {
       case CreationStageEnum.INITIALIZING:
@@ -277,30 +414,49 @@ export const ProjectWizard: React.FC<ProjectWizardProps> = ({ projectId, onCompl
 
       case CreationStageEnum.SCHEMA_GENERATED:
         return (
-          <div className="space-y-4">
-            <div className="flex justify-between items-center">
+          <div className="flex flex-col">
+            <div className="flex justify-between items-center mb-4 shrink-0">
               <h3 className="text-lg font-medium flex items-center gap-2">
                 <FileJson className="w-5 h-5 text-blue-500" />
-                审查 Schema
+                审查 Schema 与 ER 图
               </h3>
-              <span className="text-sm text-gray-500">请审查并在需要时修改生成的 Schema。</span>
+              <span className="text-sm text-gray-500">请审查并在需要时修改生成的 Schema，点击"修改"更新 ER 图。</span>
             </div>
 
-            <div className={`${displayHeightClass} border rounded-md overflow-y-auto`}>
-              <textarea
-                className="w-full h-full p-4 font-mono text-sm resize-none focus:outline-none"
-                value={editedSchema}
-                onChange={(e) => setEditedSchema(e.target.value)}
-              />
-            </div>
+            <div className="flex gap-4 h-[500px]">
+              {/* 左侧：Schema 编辑区 */}
+              <div className="flex-1 min-w-0 border rounded-md overflow-hidden">
+                <textarea
+                  className="w-full h-full p-4 font-mono text-sm resize-none focus:outline-none overflow-y-auto"
+                  value={editedSchema}
+                  onChange={(e) => setEditedSchema(e.target.value)}
+                />
+              </div>
 
-
-
-            <div className="flex justify-end gap-3 pt-4">
-              <Button variant="default" onClick={onClose}>取消</Button>
-              <Button onClick={handleConfirmSchema} className="bg-blue-600 hover:bg-blue-700 text-white">
-                确认并生成 DDL
-              </Button>
+              {/* 右侧：ER 图预览区 */}
+              <div className="flex-1 min-w-0 border rounded-md overflow-hidden bg-gray-50 relative">
+                {isRegeneratingER && (
+                  <div className="absolute inset-0 bg-white/80 flex items-center justify-center z-10">
+                    <div className="text-center">
+                      <Loader2 className="w-8 h-8 animate-spin mx-auto text-blue-500 mb-2" />
+                      <p className="text-sm text-gray-600">正在重新生成 ER 图...</p>
+                    </div>
+                  </div>
+                )}
+                {localERCode && localERCode.trim() ? (
+                  <div className="h-full" style={{ touchAction: 'none' }}>
+                    <InteractiveERRenderer chart={localERCode} className="h-full" />
+                  </div>
+                ) : (
+                  <div className="h-full flex items-center justify-center text-gray-400">
+                    <div className="text-center">
+                      <FileJson className="w-12 h-12 mx-auto mb-2 opacity-50" />
+                      <p>ER 图预览</p>
+                      <p className="text-sm">点击"确认修改"生成 ER 图</p>
+                    </div>
+                  </div>
+                )}
+              </div>
             </div>
           </div>
         );
@@ -319,8 +475,8 @@ export const ProjectWizard: React.FC<ProjectWizardProps> = ({ projectId, onCompl
 
       case CreationStageEnum.DDL_GENERATED:
         return (
-          <div className="space-y-4">
-            <div className="flex justify-between items-center">
+          <div className="flex flex-col">
+            <div className="flex justify-between items-center mb-4 shrink-0">
               <h3 className="text-lg font-medium flex items-center gap-2">
                 <Code2 className="w-5 h-5 text-purple-500" />
                 审查 DDL
@@ -328,20 +484,10 @@ export const ProjectWizard: React.FC<ProjectWizardProps> = ({ projectId, onCompl
               <span className="text-sm text-gray-500">请在部署前审查 SQL 语句。</span>
             </div>
 
-            <div className={`${displayHeightClass} border rounded-md overflow-y-auto bg-gray-50`}>
-              <textarea
-                className="w-full h-full p-4 font-mono text-sm resize-none focus:outline-none bg-transparent"
-                value={editedDDL}
-                onChange={(e) => setEditedDDL(e.target.value)}
-              />
-            </div>
-
-            <div className="flex justify-end gap-3 pt-4">
-              <Button variant="default" onClick={onClose}>取消</Button>
-              <Button onClick={handleConfirmDDL} className="bg-blue-600 hover:bg-blue-700 text-white">
-                <Play className="w-4 h-4 mr-2" />
-                部署项目
-              </Button>
+            <div className="h-[500px] border rounded-md overflow-y-auto bg-gray-50">
+              <pre className="w-full p-4 font-mono text-sm whitespace-pre-wrap" style={{ wordBreak: 'break-word' }}>
+                {editedDDL}
+              </pre>
             </div>
           </div>
         );
@@ -360,9 +506,9 @@ export const ProjectWizard: React.FC<ProjectWizardProps> = ({ projectId, onCompl
 
       case CreationStageEnum.COMPLETED:
         return (
-          <div className="space-y-6">
+          <div className="flex flex-col">
             {!viewOnly && (
-              <div className="text-center py-6 bg-green-50 rounded-lg border border-green-100">
+              <div className="text-center py-6 bg-green-50 rounded-lg border border-green-100 mb-6 shrink-0">
                 <CheckCircle2 className="w-12 h-12 text-green-500 mx-auto mb-2" />
                 <h3 className="text-xl font-bold text-green-800">项目部署成功！</h3>
                 <p className="text-green-600">您的数据库已准备就绪。</p>
@@ -370,7 +516,7 @@ export const ProjectWizard: React.FC<ProjectWizardProps> = ({ projectId, onCompl
             )}
 
             {/* Tabs */}
-            <div className="border-b border-gray-200">
+            <div className="border-b border-gray-200 shrink-0">
               <nav className="-mb-px flex space-x-8">
                 {['概览', 'Schema', 'DDL'].map((tab) => (
                   <button
@@ -387,7 +533,7 @@ export const ProjectWizard: React.FC<ProjectWizardProps> = ({ projectId, onCompl
               </nav>
             </div>
 
-            <div className={`${displayHeightClass} w-full`}>
+            <div className="h-[500px] w-full mt-6">
               {activeTab === '概览' && project?.er_diagram_code && project.er_diagram_code.trim() && (
                 <div className="h-full border rounded-lg p-4 flex flex-col" style={{ overflow: 'hidden' }}>
                   <h4 className="font-medium mb-4 text-gray-700 shrink-0">ER 图</h4>
@@ -416,7 +562,7 @@ export const ProjectWizard: React.FC<ProjectWizardProps> = ({ projectId, onCompl
                       lineHeight: '1.5'
                     }}
                   >
-                    {project.schema_definition ? formatDisplayContent(project.schema_definition) : ''}
+                    {project.schema_definition ? extractSchemaText(project.schema_definition) : ''}
                   </div>
                 </div>
               )}
@@ -435,17 +581,7 @@ export const ProjectWizard: React.FC<ProjectWizardProps> = ({ projectId, onCompl
                 </div>
               )}
             </div>
-
-            {
-              !viewOnly && (
-                <div className="flex justify-center pt-4">
-                  <Button onClick={onComplete} className="bg-blue-600 hover:bg-blue-700 text-white">
-                    进入工作台
-                  </Button>
-                </div>
-              )
-            }
-          </div >
+          </div>
         );
 
       default:
@@ -454,20 +590,20 @@ export const ProjectWizard: React.FC<ProjectWizardProps> = ({ projectId, onCompl
   };
 
   return (
-    <div className="bg-white rounded-lg shadow-sm p-6 max-w-4xl mx-auto w-full" style={{ overflow: 'hidden' }}>
-      <div className="mb-6 border-b pb-4">
+    <div className="bg-white rounded-lg shadow-sm p-6 max-w-4xl mx-auto w-full flex flex-col">
+      <div className="mb-6 border-b pb-4 shrink-0">
         <h2 className="text-2xl font-bold text-gray-800">{project.project_name}</h2>
         <p className="text-gray-500">{project.description}</p>
       </div>
 
       {error && (
-        <div className="bg-red-50 text-red-600 p-4 rounded-md mb-6 flex items-center gap-2">
+        <div className="bg-red-50 text-red-600 p-4 rounded-md mb-6 flex items-center gap-2 shrink-0">
           <AlertTriangle className="w-5 h-5" />
           {error}
         </div>
       )}
 
-      <div style={{ overflow: 'hidden' }}>
+      <div className="flex-1 min-h-0">
         {renderStageContent()}
       </div>
     </div>

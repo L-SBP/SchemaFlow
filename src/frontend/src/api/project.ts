@@ -74,6 +74,16 @@ export const deployProject = async (projectId: string | number, confirmedDDL: st
   });
 };
 
+// 3.3 重新生成 ER 图 - 适配统一响应
+export const regenerateER = async (projectId: string | number, schemaText: string, aiModel: string = 'gpt4'): Promise<{ task_id: string; message: string }> => {
+  // 对应文档: POST /api/v1/projects/{project_id}/regenerate-er
+  // 后端返回 UnifiedResponse<ProjectAsyncResponse>
+  return await client.post(`/v1/projects/${projectId}/regenerate-er`, {
+    schema_text: schemaText,
+    ai_model: aiModel
+  });
+};
+
 // 4. 更新项目信息 (用于需求微调、触发重生成) - 适配统一响应
 export const updateProject = async (projectId: string | number, params: UpdateProjectParams): Promise<ProjectDTO> => {
   // 后端返回 UnifiedResponse<ProjectDetailOut>
