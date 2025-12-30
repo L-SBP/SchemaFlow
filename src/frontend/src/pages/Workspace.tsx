@@ -762,8 +762,8 @@ export const Workspace: React.FC<WorkspaceProps> = ({ project, onBack }) => {
           if (s.id !== activeSessionId) return s;
           return {
             ...s,
-            messages: s.messages.map(m => 
-              m.id === messageId 
+            messages: s.messages.map(m =>
+              m.id === messageId
                 ? { ...updatedMsg, requiresConfirmation: false }
                 : m
             )
@@ -824,14 +824,7 @@ export const Workspace: React.FC<WorkspaceProps> = ({ project, onBack }) => {
           />
         </div>
         <div className="flex-1 min-h-0 overflow-hidden">
-          {activeSessionId ? (
-            <DatabaseViewer sessionId={Number(activeSessionId)} className="h-full w-full" />
-          ) : (
-            <div className="h-full flex flex-col items-center justify-center text-gray-400 p-6 text-center bg-gray-50/30">
-              <Database size={44} className="mb-3 opacity-20" />
-              <p className="text-sm">请选择/创建会话后查看数据库</p>
-            </div>
-          )}
+          <DatabaseViewer projectId={Number(project.id)} className="h-full w-full" />
         </div>
       </div>
 

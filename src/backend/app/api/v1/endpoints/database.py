@@ -1,6 +1,6 @@
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Query
 from sqlalchemy.ext.asyncio import AsyncSession
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Optional
 from schema.unified_response import UnifiedResponse
 
 from api.v1 import deps
@@ -14,6 +14,28 @@ from service.postgresql_service import execute_postgres_sql_with_user_check as e
 from service.sqlite_service import execute_sqlite_sql_with_user_check as execute_sqlite
 
 router = APIRouter()
+
+
+async def get_db_instance_by_project(db: AsyncSession, project_id: int, user_id: int):
+    """
+    通过 project_id 获取数据库实例，验证用户权限。
+    """
+    # 1. 获取项目
+    project = await crud_project.get(db, project_id)
+    if not project:
+        raise ItemNotFoundException("Project not found")
+    
+    # 2. 验证用户权限
+    if project.user_id != user_id:
+        raise OperationNotPermittedException("Not authorized")
+    
+    # 3. 获取数据库实例
+    database_instance = await crud_database_instance.get(db, project.instance_id)
+    if not database_instance:
+        raise ItemNotFoundException("Database instance not found")
+    
+    return database_instance
+
 
 async def get_db_instance_by_session(db: AsyncSession, session_id: int, user_id: int):
     """
@@ -195,5 +217,145 @@ async def get_table_data(
 
     else:
         return []
+
+    return UnifiedResponse.success(data=result or [], message="获取表数据成功")
+
+
+# =========================================================
+# 基于 Project ID 的数据库访问 API（无需会话）
+# =========================================================
+
+@router.get("/project/{project_id}/tables", response_model=UnifiedResponse[List[Dict[str, Any]]])
+async def get_tables_by_project(
+    project_id: int,
+    db: AsyncSession = Depends(deps.get_db),
+    current_user = Depends(deps.get_current_active_user),
+):
+    """
+    通过项目 ID 获取数据库中的所有表（无需创建会话）。
+    """
+    instance = await get_db_instance_by_project(db, project_id, current_user.user_id)
+
+    tables = []
+
+    # === MySQL ===
+    if instance.db_type == 'mysql':
+        sql = "SHOW FULL TABLES WHERE Table_Type = 'BASE TABLE'"
+        result = await execute_mysql(sql, "SELECT", instance)
+        if result:
+            for row in result:
+                values = list(row.values())
+                if values:
+                    tables.append({"name": values[0]})
+
+    # === PostgreSQL ===
+    elif instance.db_type == 'postgresql':
+        sql = "SELECT table_name FROM information_schema.tables WHERE table_schema = 'public' AND table_type = 'BASE TABLE'"
+        result = await execute_postgres(sql, "SELECT", instance)
+        if result:
+            for row in result:
+                tables.append({"name": row.get('table_name')})
+
+    # === SQLite ===
+    elif instance.db_type == 'sqlite':
+        sql = "SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'"
+        result = await execute_sqlite(sql, "SELECT", instance, current_user.user_id)
+        if result:
+            for row in result:
+                tables.append({"name": row.get('name')})
+
+    else:
+        raise ValidationException(f"Unsupported DB type: {instance.db_type}")
+
+    return UnifiedResponse.success(data=tables, message="获取数据库表列表成功")
+
+
+@router.get("/project/{project_id}/tables/{table_name}/schema", response_model=UnifiedResponse[List[Dict[str, Any]]])
+async def get_table_schema_by_project(
+    project_id: int,
+    table_name: str,
+    db: AsyncSession = Depends(deps.get_db),
+    current_user = Depends(deps.get_current_active_user),
+):
+    """
+    通过项目 ID 获取指定表的结构（无需创建会话）。
+    """
+    instance = await get_db_instance_by_project(db, project_id, current_user.user_id)
+    
+    if not table_name.isidentifier():
+        raise ValidationException("无效的表名")
+
+    schema = []
+
+    # === MySQL ===
+    if instance.db_type == 'mysql':
+        sql = f"DESCRIBE `{table_name}`"
+        result = await execute_mysql(sql, "SELECT", instance)
+        if result:
+            for row in result:
+                schema.append({k.lower(): v for k, v in row.items()})
+
+    # === PostgreSQL ===
+    elif instance.db_type == 'postgresql':
+        sql = f"SELECT column_name, data_type, is_nullable, column_default FROM information_schema.columns WHERE table_name = '{table_name}' AND table_schema = 'public'"
+        result = await execute_postgres(sql, "SELECT", instance)
+        if result:
+            for row in result:
+                schema.append({
+                    "field": row.get("column_name"),
+                    "type": row.get("data_type"),
+                    "null": row.get("is_nullable"),
+                    "default": row.get("column_default")
+                })
+
+    # === SQLite ===
+    elif instance.db_type == 'sqlite':
+        sql = f"SELECT * FROM pragma_table_info('{table_name}')"
+        result = await execute_sqlite(sql, "SELECT", instance, current_user.user_id)
+        if result:
+            for row in result:
+                schema.append({
+                    "field": row.get("name"),
+                    "type": row.get("type"),
+                    "null": "NO" if row.get("notnull") else "YES",
+                    "default": row.get("dflt_value")
+                })
+
+    return UnifiedResponse.success(data=schema, message="获取表结构成功")
+
+
+@router.get("/project/{project_id}/tables/{table_name}/data", response_model=UnifiedResponse[List[Dict[str, Any]]])
+async def get_table_data_by_project(
+    project_id: int,
+    table_name: str,
+    limit: int = 100,
+    offset: int = 0,
+    db: AsyncSession = Depends(deps.get_db),
+    current_user = Depends(deps.get_current_active_user),
+):
+    """
+    通过项目 ID 获取指定表的数据（无需创建会话）。
+    """
+    instance = await get_db_instance_by_project(db, project_id, current_user.user_id)
+
+    if not table_name.isidentifier():
+        raise ValidationException("无效的表名")
+
+    limit = min(limit, 1000)
+
+    if instance.db_type == 'mysql':
+        sql = f"SELECT * FROM `{table_name}` LIMIT {limit} OFFSET {offset}"
+        result = await execute_mysql(sql, "SELECT", instance)
+
+    elif instance.db_type == 'postgresql':
+        sql = f'SELECT * FROM "{table_name}" LIMIT {limit} OFFSET {offset}'
+        result = await execute_postgres(sql, "SELECT", instance)
+
+    elif instance.db_type == 'sqlite':
+        sql = f'SELECT * FROM "{table_name}" LIMIT {limit} OFFSET {offset}'
+        result = await execute_sqlite(sql, "SELECT", instance, current_user.user_id)
+
+    else:
+        return UnifiedResponse.success(data=[], message="获取表数据成功")
 
     return UnifiedResponse.success(data=result or [], message="获取表数据成功")

@@ -12,16 +12,20 @@ import {
   fetchDatabaseStructure,
   fetchTableData,
   fetchTableSchema,
+  fetchDatabaseStructureByProject,
+  fetchTableDataByProject,
+  fetchTableSchemaByProject,
   TableInfo,
   ColumnInfo
 } from '../api/database';
 
 interface DatabaseViewerProps {
-  sessionId: number;
+  sessionId?: number;
+  projectId?: number;
   className?: string;
 }
 
-const DatabaseViewer: React.FC<DatabaseViewerProps> = ({ sessionId, className }) => {
+const DatabaseViewer: React.FC<DatabaseViewerProps> = ({ sessionId, projectId, className }) => {
   const [tables, setTables] = useState<TableInfo[]>([]);
   const [selectedTable, setSelectedTable] = useState<string | null>(null);
   const [columns, setColumns] = useState<ColumnInfo[]>([]);
@@ -155,12 +159,19 @@ const DatabaseViewer: React.FC<DatabaseViewerProps> = ({ sessionId, className })
 
   useEffect(() => {
     loadTables();
-  }, [sessionId]);
+  }, [sessionId, projectId]);
 
   const loadTables = async () => {
     try {
       setLoading(true);
-      const result = await fetchDatabaseStructure(sessionId);
+      let result: TableInfo[];
+      if (projectId) {
+        result = await fetchDatabaseStructureByProject(projectId);
+      } else if (sessionId) {
+        result = await fetchDatabaseStructure(sessionId);
+      } else {
+        result = [];
+      }
       setTables(result);
     } catch (error) {
       console.error('Failed to load tables:', error);
@@ -177,10 +188,23 @@ const DatabaseViewer: React.FC<DatabaseViewerProps> = ({ sessionId, className })
       setColumns([]);
       setData([]);
 
-      const [schemaData, tableData] = await Promise.all([
-        fetchTableSchema(sessionId, tableName),
-        fetchTableData(sessionId, tableName)
-      ]);
+      let schemaData: ColumnInfo[];
+      let tableData: any[];
+
+      if (projectId) {
+        [schemaData, tableData] = await Promise.all([
+          fetchTableSchemaByProject(projectId, tableName),
+          fetchTableDataByProject(projectId, tableName)
+        ]);
+      } else if (sessionId) {
+        [schemaData, tableData] = await Promise.all([
+          fetchTableSchema(sessionId, tableName),
+          fetchTableData(sessionId, tableName)
+        ]);
+      } else {
+        schemaData = [];
+        tableData = [];
+      }
 
       setColumns(schemaData);
       setData(tableData);
