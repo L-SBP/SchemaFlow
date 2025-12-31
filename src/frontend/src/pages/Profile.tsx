@@ -112,6 +112,13 @@ export const Profile: React.FC<ProfileProps> = ({ onLogout }) => {
 
   const handleUpdateUsername = async () => {
     if (!editNameValue.trim()) return;
+    
+    // 前端校验：新用户名不能和当前用户名相同
+    if (editNameValue.trim() === userProfile?.username) {
+      message.warning('新用户名不能与当前用户名相同');
+      return;
+    }
+    
     try {
       const res = await updateUsername(editNameValue) as any;
       // 修正：PATCH /user/me 返回 UserMe 对象

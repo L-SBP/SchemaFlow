@@ -579,13 +579,18 @@ async def update_username_service(
     """
     log.info(f"Updating username for user {user_id} to {username_data.username}")
     try:
-        if await check_username_exists(db, username_data.username):
-            raise exceptions.UsernameHasBeenRegisteredException()
-
         db_user = await crud_user_account.get(db, user_id)
 
         if not db_user:
             raise exceptions.UserNotFoundException()
+
+        # 如果用户名没有变化，直接返回
+        if db_user.username == username_data.username:
+            return schemas.UserMe.model_validate(db_user)
+
+        # 检查新用户名是否已被其他用户使用
+        if await check_username_exists(db, username_data.username):
+            raise exceptions.UsernameHasBeenRegisteredException()
 
         updated_orm = await crud_user_account.update(
             db,
