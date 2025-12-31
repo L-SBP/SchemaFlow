@@ -43,3 +43,4 @@ src/frontend/.vite/
 src/backend/app/static/
 node_modules
 src/backend/todo.md
+mcp/

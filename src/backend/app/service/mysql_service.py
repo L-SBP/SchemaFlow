@@ -220,7 +220,14 @@ async def init_user_engine_with_plugin(
         bool: 初始化成功返回 True，否则返回 False。
     """
     try:
-        mysql_url = build_mysql_url(db_username, db_password, db_name, plugin)
+        mysql_url = build_mysql_url(
+            db_username, 
+            db_password, 
+            db_name, 
+            plugin,
+            host=config.mysql.host,
+            port=config.mysql.port
+        )
         await MysqlHelper.init_user_engine(config.mysql, instance_id, mysql_url)
         log.info("[MySQL] User engine initialized successfully with {}", plugin)
         return True
