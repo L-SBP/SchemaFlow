@@ -4,6 +4,7 @@ PostgreSQL 用户配置服务。
 为项目创建 PostgreSQL 用户、授予权限，并初始化用户引擎。
 """
 # backend/app/service/postgresql_service.py
+import asyncio
 from sqlalchemy import text
 from typing import Optional
 from sqlalchemy.exc import IntegrityError, ProgrammingError, OperationalError, SQLAlchemyError
@@ -17,6 +18,21 @@ from postgresql.postgres_database import PostgresHelper
 from postgresql.postgres_execute import execute_sql_root, execute_dql_user
 from postgresql.postgres_secure import validate_safe_sql
 from models.database_instance import DatabaseInstance
+
+# 用于防止并发授权导致的 "tuple concurrently updated" 错误
+_grant_locks: dict[str, asyncio.Lock] = {}
+_grant_locks_lock = asyncio.Lock()
+
+
+async def _get_grant_lock(key: str) -> asyncio.Lock:
+    """
+    获取指定 key 的授权锁，如果不存在则创建
+    """
+    global _grant_locks, _grant_locks_lock
+    async with _grant_locks_lock:
+        if key not in _grant_locks:
+            _grant_locks[key] = asyncio.Lock()
+        return _grant_locks[key]
 
 
 def _escape_sql_identifier(identifier: str) -> str:
@@ -92,6 +108,7 @@ async def grant_user_privileges(
 ) -> None:
     """
     授予用户对指定数据库的权限。
+    使用锁防止并发授权导致的 "tuple concurrently updated" 错误
 
     Args:
         db_name (str): 数据库名称。
@@ -100,35 +117,40 @@ async def grant_user_privileges(
     Raises:
         Exception: 授予权限失败时抛出异常。
     """
-    # 使用字符串拼接但确保安全转义
-    escaped_db_name = _escape_sql_identifier(db_name)
-    escaped_username = _escape_sql_identifier(db_username)
+    # 使用 db_name + db_username 作为锁的 key，防止并发授权
+    lock_key = f"{db_name}:{db_username}"
+    grant_lock = await _get_grant_lock(lock_key)
     
-    # 授予数据库连接权限
-    grant_connect_sql = f"GRANT CONNECT ON DATABASE {escaped_db_name} TO {escaped_username}"
-    
-    # 授予数据库使用权限
-    grant_usage_sql = f"GRANT USAGE ON SCHEMA public TO {escaped_username}"
-    
-    # 授予表的所有权限
-    grant_tables_sql = f"GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA public TO {escaped_username}"
-    
-    # 授予序列的所有权限
-    grant_sequences_sql = f"GRANT ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA public TO {escaped_username}"
-    
-    # 设置默认权限，以便用户能访问未来创建的表
-    alter_default_privileges = f"ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON TABLES TO {escaped_username}"
-    
-    log.info(f"[PostgreSQL] Granting privileges to user {db_username} on database {db_name}")
-    
-    # 执行授权语句
-    # 关键：传入 db_name
-    await _execute_raw_sql(grant_usage_sql, db_name=db_name)
-    await _execute_raw_sql(grant_tables_sql, db_name=db_name)
-    await _execute_raw_sql(grant_sequences_sql, db_name=db_name)
-    await _execute_raw_sql(alter_default_privileges, db_name=db_name)
-    
-    log.info(f"[PostgreSQL] Privileges granted to {db_username} on {db_name}")
+    async with grant_lock:
+        # 使用字符串拼接但确保安全转义
+        escaped_db_name = _escape_sql_identifier(db_name)
+        escaped_username = _escape_sql_identifier(db_username)
+        
+        # 授予数据库连接权限
+        grant_connect_sql = f"GRANT CONNECT ON DATABASE {escaped_db_name} TO {escaped_username}"
+        
+        # 授予数据库使用权限
+        grant_usage_sql = f"GRANT USAGE ON SCHEMA public TO {escaped_username}"
+        
+        # 授予表的所有权限
+        grant_tables_sql = f"GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA public TO {escaped_username}"
+        
+        # 授予序列的所有权限
+        grant_sequences_sql = f"GRANT ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA public TO {escaped_username}"
+        
+        # 设置默认权限，以便用户能访问未来创建的表
+        alter_default_privileges = f"ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON TABLES TO {escaped_username}"
+        
+        log.info(f"[PostgreSQL] Granting privileges to user {db_username} on database {db_name}")
+        
+        # 执行授权语句
+        # 关键：传入 db_name
+        await _execute_raw_sql(grant_usage_sql, db_name=db_name)
+        await _execute_raw_sql(grant_tables_sql, db_name=db_name)
+        await _execute_raw_sql(grant_sequences_sql, db_name=db_name)
+        await _execute_raw_sql(alter_default_privileges, db_name=db_name)
+        
+        log.info(f"[PostgreSQL] Privileges granted to {db_username} on {db_name}")
 
 
 def build_postgresql_url(
@@ -235,6 +257,7 @@ async def ensure_user_and_engine(
 ) -> bool:
     """
     确保用户存在且引擎已初始化。
+    使用锁防止并发初始化导致的 "tuple concurrently updated" 错误
 
     执行 SQL 逻辑前的检查函数：
     1. 检查 PostgresHelper 中的 _user_engine 是否有对应项目的引擎
@@ -254,66 +277,76 @@ async def ensure_user_and_engine(
     Raises:
         Exception: 检查或创建过程中出现的错误会向上抛出。
     """
-    try:
-        # 1. 检查用户引擎是否存在
-        if PostgresHelper.is_user_engine_exists(instance_id):
-            log.info(f"[PostgreSQL] User engine already exists for instance {instance_id}")
-            return True
+    # 快速路径：如果引擎已存在，直接返回（无需加锁）
+    if PostgresHelper.is_user_engine_exists(instance_id):
+        log.info(f"[PostgreSQL] User engine already exists for instance {instance_id}")
+        return True
 
-        log.info(f"[PostgreSQL] User engine not found for instance {instance_id}, checking user status...")
-
-        # 2. 检查 _user_exist 中是否有这个用户
-        if PostgresHelper.is_user_exists(db_username):
-            log.info(f"[PostgreSQL] User {db_username} found in cache, checking privileges...")
-
-            # 检查用户是否有该数据库的权限
-            has_privileges = await PostgresHelper.check_privilege(db_username, db_name)
-            if not has_privileges:
-                log.info(f"[PostgreSQL] User {db_username} does not have privileges for {db_name}, granting privileges...")
-                await PostgresHelper.grant_user_privileges(db_name, db_username)
-
-            # 尝试初始化引擎
-            if await init_user_engine(db_username, db_password, db_name, instance_id):
-                return True
-
-            log.error(f"[PostgreSQL] Failed to initialize engine for existing user {db_username}")
-            return False
-
-        # 3. 检查 PostgreSQL 中是否创建有该用户
-        log.info(f"[PostgreSQL] Checking if user {db_username} exists in PostgreSQL...")
-        user_exists = await PostgresHelper.is_user_exist_in_postgres(db_username)
-        if user_exists:
-            log.info(f"[PostgreSQL] User {db_username} exists in PostgreSQL, adding to cache...")
-            PostgresHelper.add_user(db_username)
-
-            # 检查用户是否有该数据库的权限
-            has_privileges = await PostgresHelper.check_privilege(db_username, db_name)
-            if not has_privileges:
-                log.info(f"[PostgreSQL] User {db_username} does not have privileges for {db_name}, granting privileges...")
-                await PostgresHelper.grant_user_privileges(db_name, db_username)
-
-            # 尝试初始化引擎
-            if await init_user_engine(db_username, db_password, db_name, instance_id):
-                return True
-
-            log.error(f"[PostgreSQL] Failed to initialize engine for existing user {db_username}")
-            return False
-
-        # 4. 用户不存在，在 PostgreSQL 中创建用户
-        log.info(f"[PostgreSQL] User {db_username} not found, creating new user...")
-
+    # 使用 instance_id 作为锁的 key，防止同一实例的并发初始化
+    lock_key = f"ensure:{instance_id}"
+    ensure_lock = await _get_grant_lock(lock_key)
+    
+    async with ensure_lock:
         try:
-            # 创建用户并初始化
-            await create_postgresql_user_and_setup(db_name, db_username, db_password, instance_id)
-            return True
+            # 双重检查：获取锁后再次检查引擎是否存在
+            if PostgresHelper.is_user_engine_exists(instance_id):
+                log.info(f"[PostgreSQL] User engine already exists for instance {instance_id}")
+                return True
 
-        except Exception as create_error:
-            log.error(f"[PostgreSQL] Failed to create user {db_username}: {str(create_error)}")
+            log.info(f"[PostgreSQL] User engine not found for instance {instance_id}, checking user status...")
+
+            # 2. 检查 _user_exist 中是否有这个用户
+            if PostgresHelper.is_user_exists(db_username):
+                log.info(f"[PostgreSQL] User {db_username} found in cache, checking privileges...")
+
+                # 检查用户是否有该数据库的权限
+                has_privileges = await PostgresHelper.check_privilege(db_username, db_name)
+                if not has_privileges:
+                    log.info(f"[PostgreSQL] User {db_username} does not have privileges for {db_name}, granting privileges...")
+                    await PostgresHelper.grant_user_privileges(db_name, db_username)
+
+                # 尝试初始化引擎
+                if await init_user_engine(db_username, db_password, db_name, instance_id):
+                    return True
+
+                log.error(f"[PostgreSQL] Failed to initialize engine for existing user {db_username}")
+                return False
+
+            # 3. 检查 PostgreSQL 中是否创建有该用户
+            log.info(f"[PostgreSQL] Checking if user {db_username} exists in PostgreSQL...")
+            user_exists = await PostgresHelper.is_user_exist_in_postgres(db_username)
+            if user_exists:
+                log.info(f"[PostgreSQL] User {db_username} exists in PostgreSQL, adding to cache...")
+                PostgresHelper.add_user(db_username)
+
+                # 检查用户是否有该数据库的权限
+                has_privileges = await PostgresHelper.check_privilege(db_username, db_name)
+                if not has_privileges:
+                    log.info(f"[PostgreSQL] User {db_username} does not have privileges for {db_name}, granting privileges...")
+                    await PostgresHelper.grant_user_privileges(db_name, db_username)
+
+                # 尝试初始化引擎
+                if await init_user_engine(db_username, db_password, db_name, instance_id):
+                    return True
+
+                log.error(f"[PostgreSQL] Failed to initialize engine for existing user {db_username}")
+                return False
+
+            # 4. 用户不存在，在 PostgreSQL 中创建用户
+            log.info(f"[PostgreSQL] User {db_username} not found, creating new user...")
+
+            try:
+                # 创建用户并初始化
+                await create_postgresql_user_and_setup(db_name, db_username, db_password, instance_id)
+                return True
+
+            except Exception as create_error:
+                log.error(f"[PostgreSQL] Failed to create user {db_username}: {str(create_error)}")
+                raise
+
+        except Exception as e:
+            log.error(f"[PostgreSQL] Error in ensure_user_and_engine: {str(e)}", exc_info=True)
             raise
-
-    except Exception as e:
-        log.error(f"[PostgreSQL] Error in ensure_user_and_engine: {str(e)}", exc_info=True)
-        raise
 
 
 async def execute_postgres_sql_with_user_check(

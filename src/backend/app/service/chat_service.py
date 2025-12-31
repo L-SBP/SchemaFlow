@@ -546,7 +546,25 @@ def _is_meta_sql(sql_text: str) -> bool:
 
 def _requires_confirmation(sql_type: str) -> bool:
     """判断 SQL 类型是否需要用户确认。"""
-    return sql_type in ["INSERT", "UPDATE", "DELETE", "DROP", "ALTER", "TRUNCATE"]
+    return sql_type in ["INSERT", "UPDATE", "DELETE", "DROP", "ALTER", "TRUNCATE", "CREATE", "DDL"]
+
+
+def _is_forbidden_sql_type(sql_type: str) -> bool:
+    """判断 SQL 类型是否被禁止执行（DDL 类操作）。"""
+    return sql_type in ["DROP", "ALTER", "TRUNCATE", "CREATE", "DDL"]
+
+
+def _normalize_sql_type_for_db(sql_type: str) -> str:
+    """
+    将 SQL 类型标准化为数据库允许的类型。
+    数据库约束: statement_type IN ('SELECT', 'INSERT', 'UPDATE', 'DELETE', 'DDL', 'OTHER')
+    """
+    if sql_type in ["SELECT", "INSERT", "UPDATE", "DELETE"]:
+        return sql_type
+    elif sql_type in ["CREATE", "DROP", "ALTER", "TRUNCATE"]:
+        return "DDL"
+    else:
+        return "OTHER"
 
 
 async def _execute_sql_by_type(sql: str, sql_type: str, instance: Any, user_id: int):
@@ -641,10 +659,12 @@ async def _save_ai_response(
         db.add(ai_message)
 
     safe_data = jsonable_encoder(data)
+    # 将 SQL 类型标准化为数据库允许的类型
+    db_sql_type = _normalize_sql_type_for_db(sql_type)
     new_statement = AIGeneratedStatement(
         message_id=ai_message.message_id,
         sql_text=clean_sql_text,  # 存储干净的SQL文本
-        statement_type=sql_type,
+        statement_type=db_sql_type,
         execution_status=execution_status,
         execution_result=safe_data,
         statement_order=1
@@ -790,24 +810,35 @@ async def process_chat(
     
     data = []
     execution_status = "pending"
+    execution_error = None
     
-    if not requires_confirm:
+    # 检查是否为被禁止的 DDL 操作
+    if _is_forbidden_sql_type(sql_type):
+        execution_status = "failed"
+        execution_error = f"执行失败：此类别sql无法使用"
+    elif not requires_confirm:
         data, execution_status = await _try_execute_sql(
             db, sql_text, sql_type, instance_id, user_id
         )
     
     ai_message, _ = await _save_ai_response(
-        db, session_id, sql_text, sql_type, requires_confirm, execution_status, data
+        db, session_id, sql_text, sql_type, False if _is_forbidden_sql_type(sql_type) else requires_confirm, execution_status, data
     )
+    
+    # 构建响应内容
+    if execution_error:
+        response_content = f"❌ {execution_error}"
+    else:
+        response_content = f"已生成SQL语句：\n{sql_text}"
     
     return ChatResponse(
         message_id=ai_message.message_id,
-        content=f"已生成SQL语句：\n{sql_text}",
+        content=response_content,
         message_type=MessageType.ASSISTANT,
         sql_text=sql_text,
         sql_type=sql_type,
-        requires_confirmation=requires_confirm,
-        data=jsonable_encoder(data)
+        requires_confirmation=False if _is_forbidden_sql_type(sql_type) else requires_confirm,
+        data=jsonable_encoder(data) if data else ([{"error": execution_error}] if execution_error else None)
     )
 
 

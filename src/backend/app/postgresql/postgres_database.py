@@ -7,6 +7,7 @@ PostgreSQL 数据库管理器。
 
 # backend/app/postgresql/postgres_database.py
 
+import asyncio
 from typing import Optional
 
 from sqlalchemy import text
@@ -32,6 +33,19 @@ class PostgresHelper:
     _root_engine: Optional[AsyncEngine] = None
     _user_engine: dict[int, AsyncEngine] = {}
     _user_exist: set[str] = set()
+    # 用于防止并发授权导致的 "tuple concurrently updated" 错误
+    _grant_locks: dict[str, asyncio.Lock] = {}
+    _grant_locks_lock = asyncio.Lock()
+
+    @classmethod
+    async def _get_grant_lock(cls, key: str) -> asyncio.Lock:
+        """
+        获取指定 key 的授权锁，如果不存在则创建
+        """
+        async with cls._grant_locks_lock:
+            if key not in cls._grant_locks:
+                cls._grant_locks[key] = asyncio.Lock()
+            return cls._grant_locks[key]
 
     # 测试有没有连上PostgreSQL
     @classmethod
@@ -252,56 +266,62 @@ class PostgresHelper:
     async def grant_user_privileges(cls, db_name: str, db_username: str):
         """
         为用户授予数据库的读写权限（修复：切换到目标库+补充默认权限）
+        使用锁防止并发授权导致的 "tuple concurrently updated" 错误
         """
         if cls._root_engine is None:
             raise InvalidOperationException("请先初始化root用户引擎")
 
-        try:
-            # 1. 获取root引擎
-            root_engine = await cls.get_root_engine()
-            async with root_engine.begin() as conn:
-                # 步骤1：授予数据库连接权限
-                await conn.execute(
-                    text(f"GRANT CONNECT ON DATABASE {db_name} TO {db_username}")
-                )
+        # 使用 db_name + db_username 作为锁的 key，防止并发授权
+        lock_key = f"{db_name}:{db_username}"
+        grant_lock = await cls._get_grant_lock(lock_key)
+        
+        async with grant_lock:
+            try:
+                # 1. 获取root引擎
+                root_engine = await cls.get_root_engine()
+                async with root_engine.begin() as conn:
+                    # 步骤1：授予数据库连接权限
+                    await conn.execute(
+                        text(f"GRANT CONNECT ON DATABASE {db_name} TO {db_username}")
+                    )
 
-            # 2. 连接到目标数据库授予权限
-            # 构建目标数据库的连接URL
-            root_db_url = cls._root_engine.url
-            target_db_url = root_db_url.set(database=db_name)
-            target_engine = create_async_engine(target_db_url)
-            
-            async with target_engine.begin() as target_conn:
-                # 授予public schema使用权限
-                await target_conn.execute(
-                    text(f"GRANT USAGE ON SCHEMA public TO {db_username}")
-                )
+                # 2. 连接到目标数据库授予权限
+                # 构建目标数据库的连接URL
+                root_db_url = cls._root_engine.url
+                target_db_url = root_db_url.set(database=db_name)
+                target_engine = create_async_engine(target_db_url)
+                
+                async with target_engine.begin() as target_conn:
+                    # 授予public schema使用权限
+                    await target_conn.execute(
+                        text(f"GRANT USAGE ON SCHEMA public TO {db_username}")
+                    )
 
-                # 授予现有表的读写权限（INSERT/SELECT/UPDATE/DELETE）
-                await target_conn.execute(
-                    text(f"GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO {db_username}")
-                )
+                    # 授予现有表的读写权限（INSERT/SELECT/UPDATE/DELETE）
+                    await target_conn.execute(
+                        text(f"GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO {db_username}")
+                    )
 
-                # 授予现有序列权限
-                await target_conn.execute(
-                    text(f"GRANT USAGE, SELECT, UPDATE ON ALL SEQUENCES IN SCHEMA public TO {db_username}")
-                )
+                    # 授予现有序列权限
+                    await target_conn.execute(
+                        text(f"GRANT USAGE, SELECT, UPDATE ON ALL SEQUENCES IN SCHEMA public TO {db_username}")
+                    )
 
-                # 设置默认权限（未来创建的表/序列也有权限）
-                await target_conn.execute(
-                    text(f"ALTER DEFAULT PRIVILEGES FOR ROLE postgres IN SCHEMA public GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO {db_username}")
-                )
-                await target_conn.execute(
-                    text(f"ALTER DEFAULT PRIVILEGES FOR ROLE postgres IN SCHEMA public GRANT USAGE, SELECT, UPDATE ON SEQUENCES TO {db_username}")
-                )
-            
-            await target_engine.dispose()
+                    # 设置默认权限（未来创建的表/序列也有权限）
+                    await target_conn.execute(
+                        text(f"ALTER DEFAULT PRIVILEGES FOR ROLE postgres IN SCHEMA public GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO {db_username}")
+                    )
+                    await target_conn.execute(
+                        text(f"ALTER DEFAULT PRIVILEGES FOR ROLE postgres IN SCHEMA public GRANT USAGE, SELECT, UPDATE ON SEQUENCES TO {db_username}")
+                    )
+                
+                await target_engine.dispose()
 
-            log.info(f"[PostgreSQL] 成功为用户 '{db_username}' 授予数据库 '{db_name}' 的读写权限")
-        except Exception as e:
-            raise RuntimeError(
-                f"为用户 '{db_username}' 授予数据库 '{db_name}' 权限失败: {str(e)}"
-            ) from e
+                log.info(f"[PostgreSQL] 成功为用户 '{db_username}' 授予数据库 '{db_name}' 的读写权限")
+            except Exception as e:
+                raise RuntimeError(
+                    f"为用户 '{db_username}' 授予数据库 '{db_name}' 权限失败: {str(e)}"
+                ) from e
 
     @classmethod
     async def revoke_user_all_privileges(cls, db_name: str, db_username: str):
