@@ -591,7 +591,7 @@ class BlacklistManager:
         将用户标记为异常状态（suspended）。
         
         注意：这是系统自动操作，不是真正的封禁。用户可以联系管理员申诉。
-        
+        管理员账户不会被标记为异常。
         Args:
             db: 数据库会话
             user_id: 用户ID
@@ -608,6 +608,11 @@ class BlacklistManager:
             
             if not user:
                 log.error("用户 {} 不存在", user_id)
+                return False
+
+             # 管理员不会被标记为异常
+            if user.is_admin:
+                log.info("用户 {} 是管理员，跳过自动标记", user_id)
                 return False
             
             # 只有 normal 状态的用户才能被标记为 suspended

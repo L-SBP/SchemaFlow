@@ -37,6 +37,10 @@ class CRUDProject:
             return db_obj
         except SQLAlchemyError as e:
             await db.rollback()
+            # 记录详细的错误信息
+            from core.log import log
+            log.error(f"创建项目失败，详细错误: {type(e).__name__}: {str(e)}")
+            log.error(f"项目数据: {kwargs}")
             raise DatabaseOperationFailedException("create project") from e
 
     @staticmethod

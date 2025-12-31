@@ -117,62 +117,67 @@ async def get_current_user(
             raise ItemNotFoundException(message="User not found")
 
         # 3. 检查用户状态
+        # 只有 banned 状态禁止访问，suspended 状态只是标签，不限制功能
         if user.status == 'banned':
             log.warning("用户 {} 已被封禁", user_id)
             raise ForbiddenException(message="Account is banned. Please contact administrator.")
         
+        # suspended 状态只记录日志，不阻止访问
         if user.status == 'suspended':
-            log.warning("用户 {} 账户异常，已被系统标记", user_id)
-            raise ForbiddenException(message="账号被标记为异常用户，请谨慎使用。")
+            log.info("用户 {} 被标记为异常，但允许正常访问", user_id)
 
-        # 4. 检查请求频率（可选的额外防护）
-        from core.security import freq_limiter, RemoteLoginDetector
-        is_exceeded, count = await freq_limiter.check_frequency(
-            user_id,
-            time_window=10,
-            threshold=20
-        )
-
-        ip_address = request.client.host if request.client else "127.0.0.1"
-
-        if is_exceeded:
-            log.warning("用户 {} 请求频率超限: {} 请求/10秒", user_id, count)
-            # 记录违规行为
-            try:
-                from core.security import ViolationLogger
-                await ViolationLogger.log_violation(
-                    db,
-                    user_id,
-                    ViolationLogger.EVENT_EXCESSIVE_API_USAGE,
-                    f"请求频率超限: {count} 请求在 10 秒内",
-                    risk_level=ViolationLogger.RISK_MEDIUM,
-                    ip_address=ip_address,
-                    client_user_agent=request.headers.get("user-agent")
-                )
-                await db.commit()
-            except Exception as e:
-                log.error("记录违规日志失败: {}", e)
-
-        # 5. 检查IP频繁变更（30分钟内变动15次）
-        try:
-            is_ip_changed_frequently, ip_change_desc = await RemoteLoginDetector.check_frequent_ip_changes(
+        # 4. 检查请求频率（仅对普通用户）
+        # 管理员不受频率限制
+        if not user.is_admin:
+            from core.security import freq_limiter, RemoteLoginDetector
+            is_exceeded, count = await freq_limiter.check_frequency(
                 user_id,
-                ip_address
+                time_window=10,
+                threshold=200
             )
-            if is_ip_changed_frequently:
-                from core.security import ViolationLogger
-                await ViolationLogger.log_violation(
-                    db,
+
+            ip_address = request.client.host if request.client else "127.0.0.1"
+
+            if is_exceeded:
+                log.warning("用户 {} 请求频率超限: {} 请求/10秒", user_id, count)
+                # 记录违规行为
+                try:
+                    from core.security import ViolationLogger
+                    await ViolationLogger.log_violation(
+                        db,
+                        user_id,
+                        ViolationLogger.EVENT_EXCESSIVE_API_USAGE,
+                        f"请求频率超限: {count} 请求在 10 秒内",
+                        risk_level=ViolationLogger.RISK_MEDIUM,
+                        ip_address=ip_address,
+                        client_user_agent=request.headers.get("user-agent")
+                    )
+                    await db.commit()
+                except Exception as e:
+                    log.error("记录违规日志失败: {}", e)
+
+            # 5. 检查IP频繁变更（30分钟内变动15次）
+            try:
+                is_ip_changed_frequently, ip_change_desc = await RemoteLoginDetector.check_frequent_ip_changes(
                     user_id,
-                    ViolationLogger.EVENT_FREQUENT_REMOTE_LOGIN, # 复用异地登录事件类型，或新增类型
-                    ip_change_desc,
-                    risk_level=ViolationLogger.RISK_HIGH,
-                    ip_address=ip_address,
-                    client_user_agent=request.headers.get("user-agent")
+                    ip_address
                 )
-                await db.commit()
-        except Exception as e:
-            log.error("IP变更检测执行失败: {}", e)
+                if is_ip_changed_frequently:
+                    from core.security import ViolationLogger
+                    await ViolationLogger.log_violation(
+                        db,
+                        user_id,
+                        ViolationLogger.EVENT_FREQUENT_REMOTE_LOGIN,
+                        ip_change_desc,
+                        risk_level=ViolationLogger.RISK_HIGH,
+                        ip_address=ip_address,
+                        client_user_agent=request.headers.get("user-agent")
+                    )
+                    await db.commit()
+            except Exception as e:
+                log.error("IP变更检测执行失败: {}", e)
+        else:
+            log.debug("用户 {} 是管理员，跳过频率和IP变更检测", user_id)
 
     except Exception as e:
         log.error("用户认证过程发生未知错误: {}", e)
