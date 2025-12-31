@@ -1,10 +1,11 @@
 import React, { useState, useEffect } from 'react';
+import { Routes, Route, Navigate, useNavigate, useLocation } from 'react-router-dom';
 import { Sidebar } from './components/Sidebar.tsx';
 import { Header } from './components/Header.tsx';
 import { ToastContainer } from './components/UI.tsx';
 import { Login } from './pages/Login.tsx';
 import { Dashboard } from './pages/Dashboard.tsx';
-import { Workspace } from './pages/Workspace.tsx';
+import { WorkspaceWrapper } from './pages/WorkspaceWrapper.tsx';
 import { AdminPanel } from './pages/Admin.tsx';
 import { AdminAnnouncements } from './pages/AdminAnnouncements.tsx';
 import { UserProfile } from './pages/UserProfile.tsx';
@@ -19,38 +20,40 @@ import { authApi } from './api/auth.ts';
 import { getUserProfile } from './api/user.ts';
 import { ProjectDTO } from './api/project.ts';
 import { Loader2 } from 'lucide-react';
+import { ROUTES, getActivePageFromPath, generatePath } from './routes/index.tsx';
 
 const App: React.FC = () => {
-  // 新增：isLoading 状态，用于在检查 Token 时显示加载动画，防止登录页闪烁
+  const navigate = useNavigate();
+  const location = useLocation();
+
+  // 认证状态
   const [isLoading, setIsLoading] = useState(true);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [currentUser, setCurrentUser] = useState<{ role: UserRole, name: string, avatar_url?: string } | null>(null);
-  const [activePage, setActivePage] = useState('dashboard');
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
 
   // Shared State
-  const [projects, setProjects] = useState<Project[]>([]);
+  const [projects] = useState<Project[]>([]);
   const [selectedProject, setSelectedProject] = useState<Project | null>(null);
   const [viewingUser, setViewingUser] = useState<User | null>(null);
 
-  // --- 新增：初始化时检查登录状态 ---
+  // 根据当前路径计算 activePage（用于 Sidebar 高亮）
+  const activePage = getActivePageFromPath(location.pathname);
+
+  // 初始化时检查登录状态
   useEffect(() => {
     const initAuth = async () => {
       const token = localStorage.getItem('access_token');
 
-      // 如果没有 Token，直接结束加载，显示登录页
       if (!token) {
         setIsLoading(false);
         return;
       }
 
       try {
-        // 有 Token，尝试获取用户信息来验证 Token 是否过期
-        // 注意：这里复用了 Profile.tsx 中的数据处理逻辑
         const res = await getUserProfile() as any;
 
         let userData = null;
-        // 兼容后端可能返回直接对象或 { code: 200, data: ... } 的结构
         if (res && res.user_id) {
           userData = res;
         } else if (res && res.data && res.data.user_id) {
@@ -58,7 +61,6 @@ const App: React.FC = () => {
         }
 
         if (userData) {
-          // Token 有效，恢复登录状态
           const role = userData.is_admin ? UserRole.ADMIN : UserRole.USER;
           setCurrentUser({
             role,
@@ -67,14 +69,15 @@ const App: React.FC = () => {
           });
           setIsAuthenticated(true);
 
-          // 根据角色恢复默认页面
-          setActivePage(role === UserRole.ADMIN ? 'admin_users' : 'dashboard');
+          // 如果当前在登录页或根路径，跳转到默认页面
+          if (location.pathname === '/login' || location.pathname === '/') {
+            navigate(role === UserRole.ADMIN ? ROUTES.ADMIN_USERS : ROUTES.DASHBOARD, { replace: true });
+          }
         } else {
           throw new Error('Invalid user data');
         }
       } catch (error) {
         console.warn('Auto login failed (Token expired or invalid):', error);
-        // Token 无效，清除它
         localStorage.removeItem('access_token');
         setIsAuthenticated(false);
         setCurrentUser(null);
@@ -89,7 +92,7 @@ const App: React.FC = () => {
   const handleLogin = (role: UserRole, username: string, avatar_url?: string) => {
     setIsAuthenticated(true);
     setCurrentUser({ role, name: username, avatar_url });
-    setActivePage(role === UserRole.ADMIN ? 'admin_users' : 'dashboard');
+    navigate(role === UserRole.ADMIN ? ROUTES.ADMIN_USERS : ROUTES.DASHBOARD, { replace: true });
   };
 
   const handleLogout = async () => {
@@ -103,8 +106,13 @@ const App: React.FC = () => {
       setCurrentUser(null);
       setSelectedProject(null);
       setViewingUser(null);
-      setActivePage('dashboard');
+      navigate(ROUTES.LOGIN, { replace: true });
     }
+  };
+
+  // 设置选中项目（供 WorkspaceWrapper 使用）
+  const handleSetSelectedProject = (project: Project) => {
+    setSelectedProject(project);
   };
 
   const handleProjectSelect = (projectDTO: ProjectDTO) => {
@@ -132,15 +140,70 @@ const App: React.FC = () => {
     };
 
     setSelectedProject(project);
-    setActivePage('workspace');
+    navigate(generatePath(ROUTES.WORKSPACE, { projectId: project.id }));
   };
 
   const handleViewUser = (user: User) => {
     setViewingUser(user);
-    setActivePage('admin_user_detail');
+    navigate(generatePath(ROUTES.ADMIN_USER_DETAIL, { userId: user.id }));
   };
 
-  // --- 渲染逻辑 ---
+  // 页面导航处理（供 Sidebar 使用）
+  const handleNavigate = (page: string) => {
+    if (page !== 'admin_user_detail') setViewingUser(null);
+
+    switch (page) {
+      case 'dashboard':
+        navigate(ROUTES.DASHBOARD);
+        break;
+      case 'workspace':
+        if (selectedProject) {
+          navigate(generatePath(ROUTES.WORKSPACE, { projectId: selectedProject.id }));
+        } else {
+          navigate(ROUTES.DASHBOARD);
+        }
+        break;
+      case 'reports':
+        navigate(ROUTES.REPORTS);
+        break;
+      case 'glossary':
+        navigate(ROUTES.GLOSSARY);
+        break;
+      case 'announcements':
+        navigate(ROUTES.ANNOUNCEMENTS);
+        break;
+      case 'profile':
+        navigate(ROUTES.PROFILE);
+        break;
+      case 'admin_users':
+        navigate(ROUTES.ADMIN_USERS);
+        break;
+      case 'admin_announcements':
+        navigate(ROUTES.ADMIN_ANNOUNCEMENTS);
+        break;
+      case 'admin_ai_models':
+        navigate(ROUTES.ADMIN_AI_MODELS);
+        break;
+      case 'admin_status':
+        navigate(ROUTES.ADMIN_STATUS);
+        break;
+      default:
+        navigate(ROUTES.DASHBOARD);
+    }
+    setIsSidebarOpen(false);
+  };
+
+  // 返回 Dashboard 的处理
+  const handleBackToDashboard = () => {
+    setSelectedProject(null);
+    navigate(ROUTES.DASHBOARD);
+  };
+
+  // 返回用户列表的处理
+  const handleBackToUserList = () => {
+    setViewingUser(null);
+    navigate(ROUTES.ADMIN_USERS);
+  };
 
   // 1. 如果正在检查 Token，显示全局 Loading
   if (isLoading) {
@@ -154,56 +217,22 @@ const App: React.FC = () => {
     );
   }
 
-  // 2. 如果未认证，显示登录页
+  // 2. 如果未认证，只显示登录页
   if (!isAuthenticated) {
     return (
       <>
         <ToastContainer />
-        <Login onLogin={handleLogin} />
+        <Routes>
+          <Route path="/login" element={<Login onLogin={handleLogin} />} />
+          <Route path="*" element={<Navigate to="/login" replace />} />
+        </Routes>
       </>
     );
   }
 
-  // 3. 已认证，渲染主布局
-  const renderContent = () => {
-    if (currentUser?.role === UserRole.ADMIN) {
-      switch (activePage) {
-        case 'admin_users':
-          return <AdminPanel onViewUser={handleViewUser} />;
-        case 'admin_user_detail':
-          return viewingUser ? (
-            <UserProfile
-              user={viewingUser}
-              onBack={() => {
-                setViewingUser(null);
-                setActivePage('admin_users');
-              }}
-            />
-          ) : <AdminPanel onViewUser={handleViewUser} />;
-        case 'admin_announcements': return <AdminAnnouncements />;
-        case 'admin_ai_models': return <AdminAIModels />;
-        case 'admin_status': return <AdminStatus />;
-        case 'profile': return <Profile user={currentUser} onLogout={handleLogout} />;
-        default: return <AdminPanel onViewUser={handleViewUser} />;
-      }
-    } else {
-      if (activePage === 'workspace' && selectedProject) {
-        return <Workspace project={selectedProject} onBack={() => {
-          setSelectedProject(null);
-          setActivePage('dashboard');
-        }} />;
-      }
-
-      switch (activePage) {
-        case 'dashboard': return <Dashboard onProjectSelect={handleProjectSelect} />;
-        case 'reports': return <Reports projects={projects} />;
-        case 'glossary': return <Glossary />;
-        case 'announcements': return <Announcements />;
-        case 'profile': return <Profile user={currentUser} onLogout={handleLogout} />;
-        default: return <Dashboard onProjectSelect={handleProjectSelect} />;
-      }
-    }
-  };
+  // 3. 已认证，渲染主布局 + 路由
+  const isAdmin = currentUser?.role === UserRole.ADMIN;
+  const defaultRoute = isAdmin ? ROUTES.ADMIN_USERS : ROUTES.DASHBOARD;
 
   return (
     <div className="flex h-screen h-[100dvh] bg-[#f0f2f5] bg-[url('https://gw.alipayobjects.com/zos/rmsportal/TVYTbAXWheQpRcWDaDMu.svg')] bg-center bg-no-repeat bg-contain overflow-hidden">
@@ -217,18 +246,59 @@ const App: React.FC = () => {
         isOpen={isSidebarOpen}
         onClose={() => setIsSidebarOpen(false)}
         onLogout={handleLogout}
-        onNavigate={(page) => {
-          if (page !== 'admin_user_detail') setViewingUser(null);
-          setActivePage(page);
-          setIsSidebarOpen(false);
-        }}
+        onNavigate={handleNavigate}
       />
       <main className="flex-1 flex flex-col min-w-0 min-h-0">
-        <Header
-          onToggleSidebar={() => setIsSidebarOpen(!isSidebarOpen)}
-        />
+        <Header onToggleSidebar={() => setIsSidebarOpen(!isSidebarOpen)} />
         <div className="flex-1 overflow-hidden relative">
-          {renderContent()}
+          <Routes>
+            {/* 公共路由 - 两种角色都可访问 */}
+            <Route path="/profile" element={<Profile user={currentUser} onLogout={handleLogout} />} />
+
+            {/* 普通用户路由 - 仅非管理员可访问 */}
+            {!isAdmin && (
+              <>
+                <Route path="/dashboard" element={<Dashboard onProjectSelect={handleProjectSelect} />} />
+                <Route
+                  path="/workspace/:projectId"
+                  element={
+                    <WorkspaceWrapper
+                      selectedProject={selectedProject}
+                      onProjectSelect={handleSetSelectedProject}
+                      onBack={handleBackToDashboard}
+                    />
+                  }
+                />
+                <Route path="/reports" element={<Reports projects={projects} />} />
+                <Route path="/glossary" element={<Glossary />} />
+                <Route path="/announcements" element={<Announcements />} />
+              </>
+            )}
+
+            {/* 管理员路由 - 仅管理员可访问 */}
+            {isAdmin && (
+              <>
+                <Route path="/admin/users" element={<AdminPanel onViewUser={handleViewUser} />} />
+                <Route
+                  path="/admin/users/:userId"
+                  element={
+                    viewingUser ? (
+                      <UserProfile user={viewingUser} onBack={handleBackToUserList} />
+                    ) : (
+                      <Navigate to="/admin/users" replace />
+                    )
+                  }
+                />
+                <Route path="/admin/announcements" element={<AdminAnnouncements />} />
+                <Route path="/admin/ai-models" element={<AdminAIModels />} />
+                <Route path="/admin/status" element={<AdminStatus />} />
+              </>
+            )}
+
+            {/* 默认路由 & 未匹配路由 - 重定向到角色对应首页 */}
+            <Route path="/" element={<Navigate to={defaultRoute} replace />} />
+            <Route path="*" element={<Navigate to={defaultRoute} replace />} />
+          </Routes>
         </div>
       </main>
     </div>

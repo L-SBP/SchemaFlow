@@ -225,44 +225,4 @@ export function useGlobalZoomLevel(): GlobalZoomLevelInfo {
   return zoomInfo;
 }
 
-/**
- * 应用全局缩放因子（已禁用）
- * 
- * 此函数已禁用，不再应用全局缩放因子
- * 保留函数签名以保持向后兼容
- */
-export function applyGlobalScaleFactor(_scaleFactor: number, _enableTransition: boolean = true): void {
-  // 已禁用 - 不再应用全局缩放因子
-}
-
-/**
- * 启用全局缩放过渡（已禁用）
- */
-export function enableGlobalScaleTransition(_element: HTMLElement = document.documentElement): void {
-  // 已禁用
-}
-
-/**
- * 禁用全局缩放过渡（已禁用）
- */
-export function disableGlobalScaleTransition(_element: HTMLElement = document.documentElement): void {
-  // 已禁用
-}
-
-/**
- * 临时禁用过渡并执行操作（已禁用）
- */
-export function withoutTransition(callback: () => void, _element: HTMLElement = document.documentElement): void {
-  callback();
-}
-
-/**
- * 获取当前全局缩放因子
- * 
- * @returns 始终返回 1.0
- */
-export function getCurrentGlobalScaleFactor(): number {
-  return 1.0;
-}
-
 export default useGlobalZoomLevel;

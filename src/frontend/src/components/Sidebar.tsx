@@ -104,7 +104,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ role, user, selectedProject, a
                         <div className="flex items-center gap-3 min-w-0">
                             <div className="w-8 h-8 flex items-center justify-center overflow-hidden">
                                 <img
-                                    src="public/database-logo.svg"
+                                    src="/database-logo.svg"
                                     alt="AutoDB Logo"
                                     className="w-full h-full object-contain scale-125 transform"
                                 />

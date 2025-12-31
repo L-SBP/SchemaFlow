@@ -19,7 +19,7 @@ import {
 import { KnowledgeTerm, KnowledgeImportResponse } from '../types.ts';
 import { glossaryApi, CreateTermParams } from '../api/glossary.ts';
 import { fetchProjects, ProjectDTO } from '../api/project.ts';
-import { Button, Input, Modal, Card, message, ConfirmDialog } from '../components/UI.tsx';
+import { Button, Input, Modal, Card, message, ConfirmDialog, Select } from '../components/UI.tsx';
 import { Pagination } from '../components/Pagination.tsx';
 
 export const Glossary: React.FC = () => {
@@ -279,17 +279,15 @@ export const Glossary: React.FC = () => {
           </div>
           <div className="flex items-center gap-3 shrink-0">
             {/* 项目选择器 */}
-            <div className="flex items-center gap-2 bg-white px-3 py-2 rounded-md border border-gray-300 shadow-sm">
+            <div className="flex items-center gap-2 bg-white px-3 py-2 rounded-lg border border-gray-300 shadow-sm hover:border-gray-400 transition-colors">
               <Filter size={16} className="text-gray-400 shrink-0" />
-              <select
-                className="bg-transparent border-none text-sm font-medium text-gray-800 focus:ring-0 cursor-pointer min-w-0 outline-none"
+              <Select
+                variant="minimal"
+                className="min-w-[120px]"
                 value={selectedProjectId}
-                onChange={(e) => setSelectedProjectId(e.target.value)}
-              >
-                {projectList.map(p => (
-                  <option key={p.project_id} value={p.project_id}>{p.project_name}</option>
-                ))}
-              </select>
+                onChange={(val) => setSelectedProjectId(val)}
+                options={projectList.map(p => ({ value: String(p.project_id), label: p.project_name }))}
+              />
             </div>
             {/* 新增术语按钮 */}
             <Button variant="primary" onClick={() => openModal()} icon={<Plus size={16} />} className="shrink-0">

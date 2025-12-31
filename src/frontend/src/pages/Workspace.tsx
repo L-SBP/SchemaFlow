@@ -1,12 +1,11 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Project, Message, QueryResult, ChatSession, ChatResponse, AIModelOption } from '../types';
 import { Button, message as GlobalMessage, Modal, ConfirmDialog } from '../components/UI';
-import { Send, Plus, MessageSquare, Edit2, Trash2, Check, X, ChevronLeft, Loader2, Sparkles, AlertTriangle, Play, Ban, Table as TableIcon, Info, Bot, Database, PanelLeftClose, PanelLeftOpen, PanelRightClose, PanelRightOpen } from 'lucide-react';
+import { Send, Plus, MessageSquare, Edit2, Trash2, Check, X, ChevronLeft, Loader2, Sparkles, AlertTriangle, Play, Ban, Table as TableIcon, Info, Bot, Database } from 'lucide-react';
 import { sessionApi } from '../api/session';
 import { ProjectWizard } from '../components/ProjectWizard';
 import { PanelToggleButton } from '../components/PanelToggleButton';
 import DatabaseViewer from './DatabaseViewer';
-import { useZoomLevel } from '../hooks/useZoomLevel';
 import { useGlobalZoomLevel } from '../utils/globalZoomLevel';
 import { useViewportWidth } from '../hooks/useViewportWidth';
 
@@ -46,6 +45,107 @@ const Typewriter: React.FC<{ text: string; onComplete?: () => void }> = ({ text,
 
   // 使用 whitespace-pre-wrap 保持换行
   return <span className="whitespace-pre-wrap leading-relaxed">{displayedText}</span>;
+};
+
+// --- 组件: 模型选择器 ---
+// 自定义下拉选择器，用于选择 AI 模型
+interface ModelSelectorProps {
+  value: string;
+  onChange: (value: string) => void;
+  options: { value: string; label: string }[];
+  isMobile: boolean;
+}
+
+const ModelSelector: React.FC<ModelSelectorProps> = ({ value, onChange, options, isMobile }) => {
+  const [isOpen, setIsOpen] = useState(false);
+  const [menuPosition, setMenuPosition] = useState({ bottom: 0, left: 0 });
+  const selectorRef = useRef<HTMLDivElement>(null);
+  const buttonRef = useRef<HTMLButtonElement>(null);
+
+  // 点击外部关闭下拉菜单
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (selectorRef.current && !selectorRef.current.contains(event.target as Node)) {
+        setIsOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  // 计算下拉菜单位置
+  const handleToggle = () => {
+    if (!isOpen && buttonRef.current) {
+      const rect = buttonRef.current.getBoundingClientRect();
+      setMenuPosition({
+        bottom: window.innerHeight - rect.top + 4,
+        left: rect.left
+      });
+    }
+    setIsOpen(!isOpen);
+  };
+
+  const selectedOption = options.find(opt => opt.value === value);
+
+  return (
+    <div ref={selectorRef} className="relative">
+      <button
+        ref={buttonRef}
+        type="button"
+        onClick={handleToggle}
+        className={`model-selector-compact flex items-center bg-white border border-gray-200 rounded-lg shadow-sm hover:border-primary/50 transition-all shrink-0 gap-1.5 ${isMobile ? 'px-1.5 h-8' : 'px-2 h-9'
+          } ${isOpen ? 'border-primary/50 ring-1 ring-primary/20' : ''}`}
+        title={`当前模型: ${value}`}
+      >
+        <Bot size={isMobile ? 12 : 14} className="text-primary/60 shrink-0" />
+        <span className={`text-gray-700 font-medium truncate max-w-[100px] ${isMobile ? 'text-xs' : 'text-xs'}`}>
+          {selectedOption?.label || value}
+        </span>
+        <svg
+          className={`w-3 h-3 text-gray-400 transition-transform shrink-0 ${isOpen ? 'rotate-180' : ''}`}
+          fill="none"
+          stroke="currentColor"
+          viewBox="0 0 24 24"
+        >
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+        </svg>
+      </button>
+
+      {isOpen && (
+        <div
+          className="fixed min-w-[200px] bg-white border border-gray-200 rounded-lg shadow-md overflow-hidden animate-in fade-in zoom-in-95 duration-150"
+          style={{
+            zIndex: 9999,
+            bottom: menuPosition.bottom,
+            left: menuPosition.left
+          }}
+        >
+          <div className="overflow-y-auto py-1" style={{ maxHeight: 'calc(5 * 44px)' }}>
+            {options.map((option) => (
+              <div
+                key={option.value}
+                onClick={() => {
+                  onChange(option.value);
+                  setIsOpen(false);
+                }}
+                className={`px-3 py-2.5 text-sm cursor-pointer transition-colors flex items-center justify-between gap-3
+                  ${option.value === value
+                    ? 'bg-blue-50 text-primary font-medium'
+                    : 'text-gray-700 hover:bg-gray-50'
+                  }
+                `}
+              >
+                <span className="whitespace-nowrap">{option.label}</span>
+                {option.value === value && (
+                  <Check size={14} className="text-primary shrink-0" />
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
 };
 
 // --- 辅助函数: 消息转换 ---
@@ -128,8 +228,6 @@ export const Workspace: React.FC<WorkspaceProps> = ({ project, onBack }) => {
   const [sessions, setSessions] = useState<ChatSession[]>([]);
   const [activeSessionId, setActiveSessionId] = useState<string>('');
   const [loadingSessions, setLoadingSessions] = useState(false);
-  // loadingMessages 未直接使用在 JSX 中，但可用于后续扩展 loading 骨架屏
-  const [loadingMessages, setLoadingMessages] = useState(false);
 
   // 确认删除对话框状态
   const [isDeleteConfirmOpen, setIsDeleteConfirmOpen] = useState(false);
@@ -159,8 +257,7 @@ export const Workspace: React.FC<WorkspaceProps> = ({ project, onBack }) => {
   const { width: viewportWidth, breakpoint, is } = useViewportWidth();
 
   // 缩放级别检测
-  const { zoomLevel, isHighZoom } = useZoomLevel();
-  const { isExtremeZoom, thresholds } = useGlobalZoomLevel();
+  const { zoomLevel, isHighZoom, thresholds } = useGlobalZoomLevel();
 
   // 计算高缩放适配类名
   const getZoomAdaptiveClasses = (): string => {
@@ -386,6 +483,7 @@ export const Workspace: React.FC<WorkspaceProps> = ({ project, onBack }) => {
     loadModels();
   }, []);
 
+  // 切换会话时的处理（仅在 activeSessionId 变化时触发）
   useEffect(() => {
     // 切换会话时，重置首次滚动标记
     initialAutoScrollDoneRef.current = false;
@@ -398,7 +496,9 @@ export const Workspace: React.FC<WorkspaceProps> = ({ project, onBack }) => {
         setSelectedModel(session.current_model);
       }
     }
-  }, [activeSessionId, sessions, availableModels]);
+    // 注意：故意不将 sessions 加入依赖数组，避免发送消息时 sessions 更新导致模型被重置
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeSessionId, availableModels]);
 
   useEffect(() => {
     if (!activeSessionId) return;
@@ -524,7 +624,7 @@ export const Workspace: React.FC<WorkspaceProps> = ({ project, onBack }) => {
       const current = sessions.find(s => s.id === activeSessionId);
       if (current && current.messages.length > 0) return;
 
-      setLoadingMessages(true);
+      setLoadingSessions(true);
       try {
         // 调用后端获取消息历史 - API已更新为UnifiedResponse格式
         const res = await sessionApi.getMessages(Number(activeSessionId));
@@ -542,7 +642,7 @@ export const Workspace: React.FC<WorkspaceProps> = ({ project, onBack }) => {
         // 错误已由API客户端统一处理，这里只需记录日志
         GlobalMessage.error('获取消息历史失败，请稍后重试');
       } finally {
-        setLoadingMessages(false);
+        setLoadingSessions(false);
       }
     };
 
@@ -1097,31 +1197,20 @@ export const Workspace: React.FC<WorkspaceProps> = ({ project, onBack }) => {
                 // 响应式控件间距和内边距
                 is.mobile ? 'gap-1 px-1.5 py-1.5' : 'gap-1.5 px-2 py-2'
                 }`}>
-                {/* 模型选择器 - 响应式收缩 */}
-                <div className={`model-selector-compact flex items-center bg-white border border-gray-200 rounded-lg shadow-sm hover:border-gray-300 transition-colors shrink-0 overflow-hidden ${
-                  // 响应式模型选择器尺寸
-                  is.mobile ? 'px-1 h-8' : 'px-1.5 h-9'
-                  }`}>
-                  <Bot size={is.mobile ? 12 : 14} className="text-gray-400 shrink-0" />
-                  <span className="model-label text-gray-400 mx-1 select-none hidden sm:inline whitespace-nowrap" style={{
-                    fontSize: is.mobile ? '9px' : '10px'
-                  }}></span>
-                  <select
-                    value={selectedModel}
-                    onChange={(e) => setSelectedModel(e.target.value)}
-                    className={`model-select bg-transparent border-none focus:ring-0 text-gray-700 font-medium cursor-pointer outline-none p-0 pr-1 truncate min-w-0 overflow-hidden ${
-                      // 响应式选择器字体大小
-                      is.mobile ? 'text-xs' : 'text-xs'
-                      }`}
-                    title={`当前模型: ${selectedModel}`}
-                  >
-                    {availableModels.map((model) => (
-                      <option key={model.model_name} value={model.model_name} title={model.model_name}>
-                        {model.model_name}
-                      </option>
-                    ))}
-                  </select>
-                </div>
+                {/* 模型选择器 - 自定义下拉组件 */}
+                <ModelSelector
+                  value={selectedModel}
+                  onChange={(newModel) => {
+                    setSelectedModel(newModel);
+                    if (activeSessionId) {
+                      setSessions(prev => prev.map(s =>
+                        s.id === activeSessionId ? { ...s, current_model: newModel } : s
+                      ));
+                    }
+                  }}
+                  options={availableModels.map(m => ({ value: m.model_name, label: m.model_name }))}
+                  isMobile={is.mobile}
+                />
 
                 {/* 发送按钮 - 确保最小尺寸，不可压缩 */}
                 <button

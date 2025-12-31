@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { AIModelConfigResponse, AIModelConfigDetailResponse, AIModelConfigCreate, AIModelConfigUpdate } from '../types.ts';
-import { Card, Button, Tag, Modal, Input, message } from '../components/UI.tsx';
+import { Card, Button, Tag, Modal, Input, message, Select } from '../components/UI.tsx';
 import { Bot, Plus, Edit3, Trash2, Loader2, RefreshCw, Eye, EyeOff, Zap, CheckCircle, XCircle } from 'lucide-react';
 import { adminApi } from '../api/admin.ts';
 
@@ -466,20 +466,19 @@ export const AdminAIModels: React.FC = () => {
                         )}
                     </div>
 
-                    <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">模型类型</label>
-                        <select
-                            className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:ring-primary focus:border-primary"
-                            value={formData.model_type}
-                            onChange={(e) => {
-                                setFormData(prev => ({ ...prev, model_type: e.target.value as any }));
-                                setTestResult(null);
-                            }}
-                        >
-                            <option value="general_llm">通用 LLM</option>
-                            <option value="local_finetune">本地微调模型</option>
-                        </select>
-                    </div>
+                    <Select
+                        label="模型类型"
+                        className="w-full"
+                        value={formData.model_type}
+                        onChange={(val) => {
+                            setFormData(prev => ({ ...prev, model_type: val as any }));
+                            setTestResult(null);
+                        }}
+                        options={[
+                            { value: 'general_llm', label: '通用 LLM' },
+                            { value: 'local_finetune', label: '本地微调模型' }
+                        ]}
+                    />
                 </div>
             </Modal>
 

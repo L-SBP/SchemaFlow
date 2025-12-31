@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { User, UserRole, UserStatus, AdminUserListItem } from '../types.ts';
-import { Card, Button, Tag, Modal, Input, message } from '../components/UI.tsx';
-import { Search, Ban, CheckCircle, Users, Eye, Database, Edit3, Loader2, Filter, AlertTriangle } from 'lucide-react';
+import { Card, Button, Tag, Modal, Input, message, Select } from '../components/UI.tsx';
+import { Search, Ban, CheckCircle, Users, Eye, Database, Edit3, Loader2, Filter, AlertTriangle, ChevronDown } from 'lucide-react';
 import { adminApi } from '../api/admin.ts';
 
 interface AdminPanelProps {
@@ -33,8 +33,12 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onViewUser }) => {
     // 状态修改 (封禁/解封) 弹窗状态
     const [isStatusModalOpen, setIsStatusModalOpen] = useState(false);
     const [statusTargetUser, setStatusTargetUser] = useState<AdminUserListItem | null>(null);
+    const [targetStatusAction, setTargetStatusAction] = useState<'normal' | 'banned'>('normal'); // 目标状态
     const [statusReason, setStatusReason] = useState('');
     const [isSavingStatus, setIsSavingStatus] = useState(false);
+
+    // 下拉菜单状态
+    const [openDropdownUserId, setOpenDropdownUserId] = useState<number | null>(null);
 
     // --- 数据获取 ---
     const fetchUsers = async () => {
@@ -71,22 +75,24 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onViewUser }) => {
     /**
      * 打开状态修改弹窗
      */
-    const handleOpenStatusModal = (user: AdminUserListItem) => {
+    const handleOpenStatusModal = (user: AdminUserListItem, action: 'normal' | 'banned') => {
         setStatusTargetUser(user);
+        setTargetStatusAction(action);
         setStatusReason(''); // 重置原因输入
         setIsStatusModalOpen(true);
+        setOpenDropdownUserId(null); // 关闭下拉菜单
     };
 
     /**
-     * 确认提交状态修改 (封禁/解封)
+     * 确认提交状态修改 (封禁/解封/恢复正常)
      */
     const handleConfirmStatusChange = async () => {
         if (!statusTargetUser) return;
 
-        // 只有 banned 状态才能解封，suspended 和 normal 都是封禁操作
-        const isBanned = statusTargetUser.status === 'banned';
-        const targetStatus = isBanned ? 'normal' : 'banned';
-        const actionText = isBanned ? '解封' : '封禁';
+        const targetStatus = targetStatusAction;
+        const actionText = targetStatus === 'normal' ?
+            (statusTargetUser.status === 'banned' ? '解封' : '恢复正常') :
+            '封禁';
 
         // 简单的必填校验
         if (!statusReason.trim()) {
@@ -177,18 +183,20 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onViewUser }) => {
 
                 <div className="flex gap-2 w-full md:w-auto">
                     {/* 状态筛选 */}
-                    <div className="flex items-center gap-2 bg-white px-3 rounded-md border border-gray-300 shadow-sm h-[38px]">
+                    <div className="flex items-center gap-2 bg-white px-3 rounded-lg border border-gray-300 shadow-sm h-[38px] hover:border-gray-400 transition-colors">
                         <Filter size={16} className="text-gray-400" />
-                        <select
-                            className="bg-transparent border-none text-sm text-gray-700 focus:ring-0 outline-none cursor-pointer"
+                        <Select
+                            variant="minimal"
+                            className="min-w-[90px]"
                             value={statusFilter}
-                            onChange={(e) => { setStatusFilter(e.target.value as any); setPage(1); }}
-                        >
-                            <option value="all">全部状态</option>
-                            <option value="normal">正常</option>
-                            <option value="suspended">异常</option>
-                            <option value="banned">已封禁</option>
-                        </select>
+                            onChange={(val) => { setStatusFilter(val as any); setPage(1); }}
+                            options={[
+                                { value: 'all', label: '全部状态' },
+                                { value: 'normal', label: '正常' },
+                                { value: 'suspended', label: '异常' },
+                                { value: 'banned', label: '已封禁' }
+                            ]}
+                        />
                     </div>
 
                     {/* 搜索框 */}
@@ -196,7 +204,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onViewUser }) => {
                         <input
                             type="text"
                             placeholder="搜索用户名/邮箱 (回车)..."
-                            className="w-full h-[38px] pl-10 pr-4 border border-gray-300 rounded-md focus:ring-primary focus:border-primary text-sm"
+                            className="w-full h-[38px] pl-10 pr-4 border border-gray-300 rounded-lg focus:ring-primary focus:border-primary text-sm"
                             value={searchTerm}
                             onChange={(e) => setSearchTerm(e.target.value)}
                             onKeyDown={handleSearchKeyDown}
@@ -260,14 +268,71 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onViewUser }) => {
                                             >
                                                 <Eye size={16} />
                                             </Button>
-                                            <Button
-                                                variant={user.status !== 'banned' ? 'danger' : 'default'}
-                                                className="h-8 px-3 text-xs"
-                                                onClick={() => handleOpenStatusModal(user)}
-                                                icon={user.status !== 'banned' ? <Ban size={12} /> : <CheckCircle size={12} />}
-                                            >
-                                                {user.status !== 'banned' ? '封禁' : '解封'}
-                                            </Button>
+
+                                            {/* 正常用户：显示封禁按钮 */}
+                                            {user.status === 'normal' && (
+                                                <Button
+                                                    variant="danger"
+                                                    className="h-8 px-3 text-xs"
+                                                    onClick={() => handleOpenStatusModal(user, 'banned')}
+                                                    icon={<Ban size={12} />}
+                                                >
+                                                    封禁
+                                                </Button>
+                                            )}
+
+                                            {/* 已封禁用户：显示解封按钮 */}
+                                            {user.status === 'banned' && (
+                                                <Button
+                                                    variant="default"
+                                                    className="h-8 px-3 text-xs"
+                                                    onClick={() => handleOpenStatusModal(user, 'normal')}
+                                                    icon={<CheckCircle size={12} />}
+                                                >
+                                                    解封
+                                                </Button>
+                                            )}
+
+                                            {/* 异常用户：显示下拉菜单 */}
+                                            {user.status === 'suspended' && (
+                                                <div className="relative">
+                                                    <Button
+                                                        variant="default"
+                                                        className="h-8 px-3 text-xs flex items-center gap-1"
+                                                        onClick={() => setOpenDropdownUserId(openDropdownUserId === user.user_id ? null : user.user_id)}
+                                                    >
+                                                        操作
+                                                        <ChevronDown size={12} />
+                                                    </Button>
+
+                                                    {/* 下拉菜单 */}
+                                                    {openDropdownUserId === user.user_id && (
+                                                        <>
+                                                            {/* 遮罩层，点击关闭下拉菜单 */}
+                                                            <div
+                                                                className="fixed inset-0 z-10"
+                                                                onClick={() => setOpenDropdownUserId(null)}
+                                                            />
+                                                            <div className="absolute right-0 mt-1 w-24 bg-white border border-gray-200 rounded-lg shadow-lg z-20 overflow-hidden">
+                                                                <button
+                                                                    className="w-full px-4 py-2 text-left text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2"
+                                                                    onClick={() => handleOpenStatusModal(user, 'normal')}
+                                                                >
+                                                                    <CheckCircle size={14} className="text-green-600" />
+                                                                    恢复
+                                                                </button>
+                                                                <button
+                                                                    className="w-full px-4 py-2 text-left text-sm text-red-600 hover:bg-red-50 flex items-center gap-2"
+                                                                    onClick={() => handleOpenStatusModal(user, 'banned')}
+                                                                >
+                                                                    <Ban size={14} />
+                                                                    封禁
+                                                                </button>
+                                                            </div>
+                                                        </>
+                                                    )}
+                                                </div>
+                                            )}
                                         </td>
                                     </tr>
                                 ))}
@@ -336,33 +401,50 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onViewUser }) => {
             <Modal
                 isOpen={isStatusModalOpen}
                 onClose={() => setIsStatusModalOpen(false)}
-                title={statusTargetUser?.status !== 'banned' ? '封禁用户账号' : '解封用户账号'}
+                title={
+                    targetStatusAction === 'normal' ?
+                        (statusTargetUser?.status === 'banned' ? '解封用户账号' : '恢复用户为正常状态') :
+                        '封禁用户账号'
+                }
                 maxWidth="max-w-md"
                 footer={
                     <>
                         <Button onClick={() => setIsStatusModalOpen(false)}>取消</Button>
                         <Button
-                            variant={statusTargetUser?.status !== 'banned' ? 'danger' : 'primary'}
+                            variant={targetStatusAction === 'banned' ? 'danger' : 'primary'}
                             onClick={handleConfirmStatusChange}
                             disabled={isSavingStatus}
                         >
-                            {isSavingStatus ? '处理中...' : (statusTargetUser?.status !== 'banned' ? '确认封禁' : '确认解封')}
+                            {isSavingStatus ? '处理中...' : (
+                                targetStatusAction === 'normal' ?
+                                    (statusTargetUser?.status === 'banned' ? '确认解封' : '确认恢复正常') :
+                                    '确认封禁'
+                            )}
                         </Button>
                     </>
                 }
             >
                 <div className="space-y-4">
                     {/* 警告提示 */}
-                    <div className={`p-4 rounded-lg flex items-start gap-3 border ${statusTargetUser?.status !== 'banned' ? 'bg-red-50 border-red-100 text-red-800' : 'bg-green-50 border-green-100 text-green-800'}`}>
+                    <div className={`p-4 rounded-lg flex items-start gap-3 border ${targetStatusAction === 'banned' ? 'bg-red-50 border-red-100 text-red-800' :
+                        statusTargetUser?.status === 'banned' ? 'bg-green-50 border-green-100 text-green-800' :
+                            'bg-blue-50 border-blue-100 text-blue-800'
+                        }`}>
                         <AlertTriangle size={18} className="mt-0.5 shrink-0" />
                         <div className="text-sm">
                             <p className="font-bold mb-1">
-                                {statusTargetUser?.status !== 'banned' ? '高风险操作' : '解封操作'}
+                                {targetStatusAction === 'banned' ? '高风险操作' :
+                                    statusTargetUser?.status === 'banned' ? '解封操作' :
+                                        '恢复正常状态'}
                             </p>
                             <p>
                                 您正在对用户 <strong>{statusTargetUser?.username}</strong> 执行
-                                {statusTargetUser?.status !== 'banned' ? '封禁' : '解封'}操作。
-                                {statusTargetUser?.status !== 'banned' ? '封禁后该用户将无法登录系统或使用任何API服务。' : '解封后用户将恢复正常权限。'}
+                                {targetStatusAction === 'banned' ? '封禁' :
+                                    statusTargetUser?.status === 'banned' ? '解封' :
+                                        '恢复正常'}操作。
+                                {targetStatusAction === 'banned' ? '封禁后该用户将无法登录系统或使用任何API服务。' :
+                                    statusTargetUser?.status === 'banned' ? '解封后用户将恢复正常权限。' :
+                                        '恢复后用户将变为正常状态，移除异常标记。'}
                             </p>
                         </div>
                     </div>
@@ -370,11 +452,17 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onViewUser }) => {
                     {/* 原因输入 */}
                     <div className="space-y-2">
                         <label className="text-sm font-medium text-gray-700">
-                            {statusTargetUser?.status !== 'banned' ? '封禁原因' : '解封原因'} <span className="text-red-500">*</span>
+                            {targetStatusAction === 'banned' ? '封禁原因' :
+                                statusTargetUser?.status === 'banned' ? '解封原因' :
+                                    '恢复原因'} <span className="text-red-500">*</span>
                         </label>
                         <textarea
                             className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-primary focus:border-primary outline-none transition-colors min-h-[100px] resize-none"
-                            placeholder={statusTargetUser?.status !== 'banned' ? "请输入违规行为或封禁理由..." : "请输入解封理由或申诉处理结果..."}
+                            placeholder={
+                                targetStatusAction === 'banned' ? "请输入违规行为或封禁理由..." :
+                                    statusTargetUser?.status === 'banned' ? "请输入解封理由或申诉处理结果..." :
+                                        "请输入恢复正常的原因（如：确认为误判、用户行为已恢复正常等）..."
+                            }
                             value={statusReason}
                             onChange={(e) => setStatusReason(e.target.value)}
                         />

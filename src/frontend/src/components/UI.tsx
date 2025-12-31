@@ -93,6 +93,192 @@ export const Input: React.FC<InputProps> = ({ label, className = '', ...props })
     </div>
 );
 
+// --- Select Component ---
+
+/**
+ * 选项接口
+ */
+export interface SelectOption {
+    value: string;
+    label: string;
+    disabled?: boolean;
+}
+
+/**
+ * 选择框组件属性接口
+ */
+interface SelectProps {
+    /**
+     * 选择框上方的标签文本
+     */
+    label?: string;
+    /**
+     * 选项列表
+     */
+    options: SelectOption[];
+    /**
+     * 当前选中的值
+     */
+    value: string;
+    /**
+     * 值变化时的回调
+     */
+    onChange: (value: string) => void;
+    /**
+     * 选择框变体样式
+     * - 'default': 标准样式，带边框和背景
+     * - 'minimal': 简约样式，透明背景，适合嵌入其他容器
+     * @default 'default'
+     */
+    variant?: 'default' | 'minimal';
+    /**
+     * 自定义类名
+     */
+    className?: string;
+    /**
+     * 占位文本
+     */
+    placeholder?: string;
+    /**
+     * 是否禁用
+     */
+    disabled?: boolean;
+}
+
+/**
+ * 自定义选择框组件
+ * * 完全自定义的下拉菜单样式
+ * * 与系统整体风格保持一致
+ */
+export const Select: React.FC<SelectProps> = ({
+    label,
+    options,
+    value,
+    onChange,
+    variant = 'default',
+    className = '',
+    placeholder = '请选择',
+    disabled = false
+}) => {
+    const [isOpen, setIsOpen] = useState(false);
+    const [menuPosition, setMenuPosition] = useState({ top: 0, left: 0, width: 0 });
+    const selectRef = React.useRef<HTMLDivElement>(null);
+    const buttonRef = React.useRef<HTMLButtonElement>(null);
+
+    // 点击外部关闭下拉菜单
+    useEffect(() => {
+        const handleClickOutside = (event: MouseEvent) => {
+            if (selectRef.current && !selectRef.current.contains(event.target as Node)) {
+                setIsOpen(false);
+            }
+        };
+        document.addEventListener('mousedown', handleClickOutside);
+        return () => document.removeEventListener('mousedown', handleClickOutside);
+    }, []);
+
+    // 获取当前选中项的标签
+    const selectedOption = options.find(opt => opt.value === value);
+    const displayText = selectedOption?.label || placeholder;
+
+    const handleToggle = () => {
+        if (disabled) return;
+        if (!isOpen && buttonRef.current) {
+            // 对于 minimal 变体，找到最近的带边框的父容器
+            let targetElement: HTMLElement | null = buttonRef.current;
+            if (variant === 'minimal') {
+                // 向上查找带边框的父容器
+                let parent = buttonRef.current.parentElement;
+                while (parent && parent !== document.body) {
+                    const style = window.getComputedStyle(parent);
+                    if (style.borderWidth && parseFloat(style.borderWidth) > 0) {
+                        targetElement = parent;
+                        break;
+                    }
+                    parent = parent.parentElement;
+                }
+            }
+            const rect = targetElement!.getBoundingClientRect();
+            setMenuPosition({
+                top: rect.bottom + 4,
+                left: rect.left,
+                width: rect.width
+            });
+        }
+        setIsOpen(!isOpen);
+    };
+
+    const handleSelect = (optionValue: string) => {
+        onChange(optionValue);
+        setIsOpen(false);
+    };
+
+    const triggerStyles = variant === 'default'
+        ? `px-3 py-2.5 min-h-[44px] bg-white border border-gray-300 rounded-lg text-base sm:text-sm shadow-sm ${isOpen ? 'border-primary ring-2 ring-blue-100' : 'hover:border-gray-400'}`
+        : `bg-transparent text-sm font-medium text-gray-800 py-1 ${isOpen ? 'text-primary' : ''}`;
+
+    return (
+        <div className="flex flex-col gap-1.5" ref={selectRef}>
+            {label && <label className="text-sm font-medium text-gray-700">{label}</label>}
+            <div className={`relative ${className}`}>
+                {/* 触发器 */}
+                <button
+                    ref={buttonRef}
+                    type="button"
+                    onClick={handleToggle}
+                    disabled={disabled}
+                    className={`w-full flex items-center justify-between gap-2 transition-all cursor-pointer ${triggerStyles} ${disabled ? 'opacity-50 cursor-not-allowed' : ''}`}
+                >
+                    <span className={`truncate ${!selectedOption ? 'text-gray-400' : ''}`}>
+                        {displayText}
+                    </span>
+                    <svg
+                        className={`w-4 h-4 text-gray-400 transition-transform shrink-0 ${isOpen ? 'rotate-180' : ''}`}
+                        fill="none"
+                        stroke="currentColor"
+                        viewBox="0 0 24 24"
+                    >
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                    </svg>
+                </button>
+
+                {/* 下拉菜单 */}
+                {isOpen && (
+                    <div
+                        className="fixed bg-white border border-gray-200 rounded-lg shadow-md overflow-hidden animate-in fade-in zoom-in-95 duration-150"
+                        style={{
+                            zIndex: 9999,
+                            top: menuPosition.top,
+                            left: menuPosition.left,
+                            minWidth: menuPosition.width
+                        }}
+                    >
+                        <div className="overflow-y-auto py-1" style={{ maxHeight: 'calc(5 * 44px)' }}>
+                            {options.map((option) => (
+                                <div
+                                    key={option.value}
+                                    onClick={() => !option.disabled && handleSelect(option.value)}
+                                    className={`px-3 py-2.5 text-sm cursor-pointer transition-colors flex items-center justify-between gap-3
+                                        ${option.value === value
+                                            ? 'bg-blue-50 text-primary font-medium'
+                                            : 'text-gray-700 hover:bg-gray-50'
+                                        }
+                                        ${option.disabled ? 'opacity-50 cursor-not-allowed' : ''}
+                                    `}
+                                >
+                                    <span className="whitespace-nowrap">{option.label}</span>
+                                    {option.value === value && (
+                                        <Check size={16} className="text-primary shrink-0" />
+                                    )}
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+                )}
+            </div>
+        </div>
+    );
+};
+
 // --- Card Component ---
 
 /**

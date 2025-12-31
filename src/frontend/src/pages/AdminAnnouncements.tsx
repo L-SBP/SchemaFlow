@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Announcement } from '../types.ts';
-import { Card, Button, Tag, Input, Modal, message, ConfirmDialog } from '../components/UI.tsx';
+import { Card, Button, Tag, Input, Modal, message, ConfirmDialog, Select } from '../components/UI.tsx';
 import { Pagination } from '../components/Pagination.tsx';
 import { Plus, Edit, Trash, Bell, Loader2 } from 'lucide-react';
 import { announcementApi, CreateAnnouncementParams, UpdateAnnouncementParams } from '../api/announcement.ts';
@@ -229,21 +229,20 @@ export const AdminAnnouncements: React.FC = () => {
                         value={title}
                         onChange={(e) => setTitle(e.target.value)}
                     />
-                    <div className="flex flex-col gap-1">
-                        <label className="text-sm text-gray-600">状态</label>
-                        <select
-                            className="px-3 py-2 bg-white border border-gray-300 rounded-md text-sm focus:border-primary focus:ring-1 focus:ring-primary outline-none"
-                            value={status}
-                            onChange={(e) => setStatus(e.target.value as any)}
-                        >
-                            <option value="draft">存为草稿</option>
-                            <option value="published">立即发布</option>
-                        </select>
-                    </div>
-                    <div className="flex flex-col gap-1">
-                        <label className="text-sm text-gray-600">内容</label>
+                    <Select
+                        label="状态"
+                        className="w-full"
+                        value={status}
+                        onChange={(val) => setStatus(val as any)}
+                        options={[
+                            { value: 'draft', label: '存为草稿' },
+                            { value: 'published', label: '立即发布' }
+                        ]}
+                    />
+                    <div className="flex flex-col gap-1.5">
+                        <label className="text-sm font-medium text-gray-700">内容</label>
                         <textarea
-                            className="px-3 py-2 bg-white border border-gray-300 rounded-md text-sm focus:border-primary focus:ring-1 focus:ring-primary h-32 resize-none outline-none"
+                            className="px-3 py-2.5 bg-white border border-gray-300 rounded-lg text-sm focus:border-primary focus:ring-2 focus:ring-blue-100 h-32 resize-none outline-none transition-all shadow-sm"
                             placeholder="请输入公告内容..."
                             value={content}
                             onChange={(e) => setContent(e.target.value)}

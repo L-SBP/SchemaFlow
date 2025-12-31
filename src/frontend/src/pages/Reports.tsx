@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { Project, Report, ReportType } from '../types.ts';
-import { Card, Button, Modal, Input, Tag, Steps, message } from '../components/UI.tsx';
+import { Card, Button, Modal, Input, Tag, Steps, message, Select } from '../components/UI.tsx';
 import { Pagination } from '../components/Pagination.tsx';
 import { Plus, BarChart2, PieChart, TrendingUp, Download, Trash2, Filter, Database, ScatterChart, ArrowRight, ArrowLeft, Save, Loader2, FileText } from 'lucide-react';
 import { BarChart, Bar, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart as RePieChart, Pie, Cell, ScatterChart as ReScatterChart, Scatter, ZAxis } from 'recharts';
@@ -334,15 +334,15 @@ export const Reports: React.FC<ReportsProps> = ({ projects }) => {
           <p className="text-gray-500 text-sm hidden sm:block">基于数据库查询生成可视化报表</p>
         </div>
         <div className="flex items-center gap-3 shrink-0">
-          <div className="flex items-center gap-2 bg-white px-3 py-2 rounded-md border border-gray-300 shadow-sm">
+          <div className="flex items-center gap-2 bg-white px-3 py-2 rounded-lg border border-gray-300 shadow-sm hover:border-gray-400 transition-colors">
             <Filter size={16} className="text-gray-400 shrink-0" />
-            <select
-              className="bg-transparent border-none text-sm font-medium text-gray-800 focus:ring-0 cursor-pointer min-w-0 outline-none"
+            <Select
+              variant="minimal"
+              className="min-w-[120px]"
               value={selectedProjectId}
-              onChange={(e) => setSelectedProjectId(e.target.value)}
-            >
-              {availableProjects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
-            </select>
+              onChange={(val) => setSelectedProjectId(val)}
+              options={availableProjects.map(p => ({ value: p.id, label: p.name }))}
+            />
           </div>
           <Button variant="primary" icon={<Plus size={16} />} onClick={handleOpenModal} className="shrink-0">
             新建报表
@@ -593,43 +593,29 @@ export const Reports: React.FC<ReportsProps> = ({ projects }) => {
                   </div>
                 </div>
 
-                <div>
-                  <label className="text-sm font-medium text-gray-700 mb-1.5 block">X 轴 (分类/维度)</label>
-                  <select
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-100 focus:border-primary outline-none"
-                    value={xAxisKey}
-                    onChange={(e) => setXAxisKey(e.target.value)}
-                  >
-                    {(selectedQueryObj.result?.fields?.length
-                      ? selectedQueryObj.result.fields
-                      : (selectedQueryObj.result?.columns || []).map((c: string) => ({ name: c, type: 'string' as const }))
-                    ).map((f: any) => (
-                      <option key={f.name} value={f.name}>{f.name}</option>
-                    ))}
-                  </select>
-                </div>
+                <Select
+                  label="X 轴 (分类/维度)"
+                  className="w-full"
+                  value={xAxisKey}
+                  onChange={(val) => setXAxisKey(val)}
+                  options={(selectedQueryObj.result?.fields?.length
+                    ? selectedQueryObj.result.fields
+                    : (selectedQueryObj.result?.columns || []).map((c: string) => ({ name: c, type: 'string' as const }))
+                  ).map((f: any) => ({ value: f.name, label: f.name }))}
+                />
 
-                <div>
-                  <label className="text-sm font-medium text-gray-700 mb-1.5 block">Y 轴 (数值/指标)</label>
-                  <select
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-100 focus:border-primary outline-none"
-                    value={yAxisKey}
-                    onChange={(e) => setYAxisKey(e.target.value)}
-                  >
-                    {(
-                      (selectedQueryObj.result?.fields || []).filter((f: any) => f.type === 'number')
-                    ).length > 0 ? (
-                      (selectedQueryObj.result?.fields || []).filter((f: any) => f.type === 'number').map((f: any) => (
-                        <option key={f.name} value={f.name}>{f.name}</option>
-                      ))
-                    ) : (
-                      // 兜底：没有 number 字段时仍允许选择列，但预期用户换成折线/柱状会无效
-                      (selectedQueryObj.result?.columns || []).map((col: string) => (
-                        <option key={col} value={col}>{col}</option>
-                      ))
-                    )}
-                  </select>
-                </div>
+                <Select
+                  label="Y 轴 (数值/指标)"
+                  className="w-full"
+                  value={yAxisKey}
+                  onChange={(val) => setYAxisKey(val)}
+                  options={(
+                    (selectedQueryObj.result?.fields || []).filter((f: any) => f.type === 'number')
+                  ).length > 0
+                    ? (selectedQueryObj.result?.fields || []).filter((f: any) => f.type === 'number').map((f: any) => ({ value: f.name, label: f.name }))
+                    : (selectedQueryObj.result?.columns || []).map((col: string) => ({ value: col, label: col }))
+                  }
+                />
               </div>
 
               {/* Preview */}

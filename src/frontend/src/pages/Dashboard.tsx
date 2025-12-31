@@ -2,10 +2,11 @@ import React, { useState, useEffect } from 'react';
 import { ProjectDTO, fetchProjects, createProject, updateProject, confirmDeleteProject, deleteProject } from '../api/project';
 import { ProjectStatusEnum } from '../types';
 import { Button, Modal, Input, message } from '../components/UI';
-import { Plus, PlayCircle, Sparkles, AlertTriangle, LayoutDashboard, Database } from 'lucide-react';
+import { Plus, PlayCircle, Sparkles, AlertTriangle, LayoutDashboard } from 'lucide-react';
 import { ProjectWizard } from '../components/ProjectWizard';
 import { ProjectOverview } from '../project-overview-optimization/ProjectOverview';
 import { ProjectData } from '../types/project-overview';
+import DatabaseIcon from '../project-overview-optimization/DatabaseIcon';
 
 // 数据转换函数：将 ProjectDTO 转换为 ProjectData
 const convertProjectDTOToProjectData = (dto: ProjectDTO): ProjectData => {
@@ -246,12 +247,20 @@ export const Dashboard: React.FC<DashboardProps> = ({ onProjectSelect }) => {
                 <label className="text-sm font-medium text-gray-700">数据库类型</label>
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4">
                   {/* 更新：增加 SQLite 选项 */}
-                  {(['MySQL', 'PostgreSQL', 'SQLite'] as const).map(type => (
-                    <div key={type} onClick={() => setNewProjectType(type)} className={`cursor-pointer px-3 sm:px-4 py-2.5 sm:py-3 rounded-lg border flex items-center gap-2 sm:gap-3 transition-all ${newProjectType === type ? 'border-primary bg-blue-50 text-primary ring-1 ring-primary' : 'border-gray-200 hover:border-gray-300 hover:bg-gray-50'}`}>
-                      <Database size={18} className={newProjectType === type ? 'text-primary' : 'text-gray-400'} />
-                      <span className="text-sm font-medium">{type}</span>
-                    </div>
-                  ))}
+                  {(['MySQL', 'PostgreSQL', 'SQLite'] as const).map(type => {
+                    // 将显示名称映射为 DatabaseIcon 需要的 dbType
+                    const dbTypeMap: Record<string, string> = {
+                      'MySQL': 'mysql',
+                      'PostgreSQL': 'postgresql',
+                      'SQLite': 'sqlite'
+                    };
+                    return (
+                      <div key={type} onClick={() => setNewProjectType(type)} className={`cursor-pointer px-3 sm:px-4 py-2.5 sm:py-3 rounded-lg border flex items-center gap-2 sm:gap-3 transition-all ${newProjectType === type ? 'border-primary bg-blue-50 text-primary ring-1 ring-primary' : 'border-gray-200 hover:border-gray-300 hover:bg-gray-50'}`}>
+                        <DatabaseIcon dbType={dbTypeMap[type]} size={28} />
+                        <span className="text-sm font-medium">{type}</span>
+                      </div>
+                    );
+                  })}
                 </div>
               </div>
               <div className="flex flex-col gap-2">

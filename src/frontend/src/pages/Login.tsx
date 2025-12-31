@@ -230,7 +230,7 @@ export const Login: React.FC<LoginProps> = ({ onLogin }) => {
         <div className="text-center mb-6 sm:mb-8">
           {/* 响应式Logo尺寸 */}
           <img
-            src="public/database-logo.svg"
+            src="/database-logo.svg"
             alt="AutoDB Logo"
             className="w-16 h-16 sm:w-24 sm:h-24 mx-auto mb-3 sm:mb-4 object-contain hover:scale-105 transition-transform duration-300"
           />
