@@ -16,6 +16,7 @@ import {
   CheckCircle2,
   Database
 } from 'lucide-react';
+import * as XLSX from 'xlsx';
 import { KnowledgeTerm, KnowledgeImportResponse } from '../types.ts';
 import { glossaryApi, CreateTermParams } from '../api/glossary.ts';
 import { fetchProjects, ProjectDTO } from '../api/project.ts';
@@ -197,18 +198,48 @@ export const Glossary: React.FC = () => {
 
   // --- 导入导出 ---
 
-  const handleExport = async () => {
+  const handleExport = () => {
     if (!selectedProjectId) return;
-    try {
-      const res = await glossaryApi.exportTerms(selectedProjectId);
-      if (res.download_url) {
-        window.open(res.download_url, '_blank');
-      } else {
-        message.error("导出失败，未获取到下载链接");
-      }
-    } catch (error) {
-      message.error("导出请求失败");
+    
+    // 根据选中状态决定导出哪些数据
+    const termsToExport = selectedIds.size > 0 
+      ? terms.filter(t => selectedIds.has(t.knowledge_id))
+      : terms;
+    
+    if (termsToExport.length === 0) {
+      message.warning("没有可导出的术语数据");
+      return;
     }
+
+    // 转换数据格式
+    const exportData = termsToExport.map((term: KnowledgeTerm) => ({
+      '术语': term.term,
+      '定义': term.definition,
+      '示例': term.examples || '',
+      '创建时间': term.created_at ? new Date(term.created_at).toLocaleDateString('zh-CN') : ''
+    }));
+
+    // 创建工作簿和工作表
+    const worksheet = XLSX.utils.json_to_sheet(exportData);
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, '业务术语');
+
+    // 设置列宽
+    worksheet['!cols'] = [
+      { wch: 20 },  // 术语
+      { wch: 50 },  // 定义
+      { wch: 30 },  // 示例
+      { wch: 15 }   // 创建时间
+    ];
+
+    // 生成文件名
+    const projectName = projectList.find(p => String(p.project_id) === selectedProjectId)?.project_name || 'project';
+    const timestamp = new Date().toISOString().slice(0, 10);
+    const filename = `业务术语_${projectName}_${timestamp}.xlsx`;
+
+    // 下载文件
+    XLSX.writeFile(workbook, filename);
+    message.success(`成功导出 ${termsToExport.length} 条术语`);
   };
 
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -324,8 +355,13 @@ export const Glossary: React.FC = () => {
             )}
             <div className="h-6 w-px bg-gray-200 hidden sm:block"></div>
 
-            <Button variant="default" onClick={handleExport} icon={<Download size={16} />} className="h-9 text-xs hidden md:flex">
-              导出
+            <Button 
+              variant="default" 
+              onClick={handleExport} 
+              icon={<Download size={16} />} 
+              className="h-9 text-xs hidden md:flex"
+            >
+              {selectedIds.size > 0 ? `导出 (${selectedIds.size})` : '导出本页'}
             </Button>
 
             <Button

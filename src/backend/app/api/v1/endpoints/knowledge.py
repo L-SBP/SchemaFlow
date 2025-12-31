@@ -172,27 +172,3 @@ async def import_terms(
         db, project_id, current_user.user_id, file
     )
     return UnifiedResponse.success(data=result, message="批量导入术语成功")
-
-
-# ----------------------------------------------------------------------
-# 3.4.4. 导出术语
-# ----------------------------------------------------------------------
-@router.get("/projects/{project_id}/knowledge/export", response_model=UnifiedResponse[schemas.ExportResponse])
-async def export_terms(
-    project_id: int = Path(..., description="项目ID"),
-    db: Session = Depends(deps.get_db),
-    current_user: Any = Depends(deps.get_current_active_user),
-) -> Any:
-    """
-    导出术语库。
-
-    Args:
-        project_id (int): 项目 ID。
-        db (Session): 数据库会话。
-        current_user (Any): 当前登录用户。
-
-    Returns:
-        UnifiedResponse[schemas.ExportResponse]: 导出文件下载链接。
-    """
-    result = await knowledge_service.export_knowledge_service(db, project_id, current_user.user_id)
-    return UnifiedResponse.success(data=result, message="导出术语成功")

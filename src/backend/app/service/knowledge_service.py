@@ -1,18 +1,16 @@
 """
 术语服务。
 
-管理项目的领域术语，包括增删改查、导入/导出与分页；负责权限校验、数据校验
+管理项目的领域术语，包括增删改查、导入与分页；负责权限校验、数据校验
 与错误处理。
 """
 
 # backend/app/service/knowledge_service.py
 
-import os
 import pandas as pd
 from typing import List, Optional
 from fastapi import UploadFile
 from sqlalchemy.ext.asyncio import AsyncSession as Session
-from datetime import datetime, timedelta, timezone
 import io
 
 # 隐式绝对导入
@@ -21,16 +19,10 @@ from crud.crud_project import crud_project  # 用于检查项目权限
 from schema import knowledge as schemas
 from core.exceptions import ItemNotFoundException, ValidationException, \
     OperationNotPermittedException
-from core.config import config # 用于获取base_url
 from core.log import log
 
 # RAG 服务导入
 from service.rag_service import rag_service
-
-# 导出目录（确保存在）
-EXPORT_DIR = "static/exports"
-if not os.path.exists(EXPORT_DIR):
-    os.makedirs(EXPORT_DIR)
 
 # ----------------------------------------------------------------------
 # 术语创建
@@ -298,7 +290,7 @@ async def import_knowledge_service(
     df.rename(columns=rename_map, inplace=True)
 
     if not all(col in df.columns for col in required_cols):
-        raise ValidationException(f"Missing required columns: {required_cols}")
+        raise ValidationException("文件格式错误：缺少必需的列。请确保文件包含「术语」和「定义」两列")
 
     # 4. 遍历处理
     success_items = []
@@ -340,58 +332,3 @@ async def import_knowledge_service(
         failed_count=len(failures),
         failures=failures
     )
-
-# ----------------------------------------------------------------------
-# 术语导出
-# ----------------------------------------------------------------------
-async def export_knowledge_service(
-    db: Session, 
-    project_id: int, 
-    user_id: int
-) -> schemas.ExportResponse:
-    """
-    导出术语为 Excel 文件并返回下载 URL。
-
-    Args:
-        db (Session): 数据库会话。
-        project_id (int): 项目 ID。
-        user_id (int): 用户 ID。
-
-    Returns:
-        schemas.ExportResponse: 包含下载链接与过期时间。
-
-    Raises:
-        ItemNotFoundException: 项目不存在。
-    """
-    # 1. 权限检查
-    project = await crud_project.get(db, project_id)
-    if not project or project.user_id != user_id:
-        raise ItemNotFoundException("项目未找到")
-
-    # 2. 获取数据
-    all_terms = await crud_knowledge.get_all_by_project(db, project_id)
-
-    # 3. 转 DataFrame 并写入 Excel
-    data = []
-    for term in all_terms:
-        data.append({
-            "术语": term.term,
-            "定义": term.definition,
-            "示例": term.examples,
-            "创建时间": term.created_at.strftime("%Y-%m-%d")
-        })
-
-    df = pd.DataFrame(data)
-    filename = f"knowledge_proj_{project_id}_{int(datetime.now().timestamp())}.xlsx"
-    filepath = os.path.join(EXPORT_DIR, filename)
-    df.to_excel(filepath, index=False)
-
-    # 4. 生成 URL
-    # 这里假设您有 config.app.base_url，或者您可以硬编码本地测试地址
-    # 确保在 main.py 中 mount 了 static 目录
-    base_url = getattr(config.app, "base_url", "http://localhost:8000")
-    download_url = f"{base_url}/static/exports/{filename}"
-
-    expires_at = datetime.now(timezone.utc) + timedelta(hours=24)  # 文件保留24小时
-
-    return schemas.ExportResponse(download_url=download_url, expires_at=expires_at)

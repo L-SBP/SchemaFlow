@@ -2,8 +2,7 @@ import client from './client.ts';
 import {
   KnowledgeTerm,
   KnowledgeListResponse,
-  KnowledgeImportResponse,
-  KnowledgeExportResponse
+  KnowledgeImportResponse
 } from '../types.ts';
 
 // 对应接口文档的请求参数类型
@@ -75,13 +74,5 @@ export const glossaryApi = {
         'Content-Type': 'multipart/form-data'
       }
     });
-  },
-
-  /**
-   * 6. 导出术语
-   * GET /api/v1/projects/{project_id}/knowledge/export
-   */
-  exportTerms: (projectId: string) => {
-    return client.get<any, KnowledgeExportResponse>(`/v1/projects/${projectId}/knowledge/export`);
   }
 };
