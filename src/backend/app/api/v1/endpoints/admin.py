@@ -465,8 +465,31 @@ async def test_ai_model_connection(
     # 清理 URL 中的不可见字符（零宽空格、换行符等）
     import re
     clean_url = re.sub(r'[\x00-\x1f\x7f-\x9f\u200b-\u200d\ufeff]', '', data.api_url.strip())
-    clean_api_key = data.api_key.strip()
     clean_model_id = data.model_id.strip()
+    
+    # 获取 API 密钥：优先使用传入的密钥，否则从数据库获取
+    clean_api_key = None
+    if data.api_key and data.api_key.strip():
+        clean_api_key = data.api_key.strip()
+    elif data.config_id:
+        # 从数据库获取已保存的密钥
+        from crud.crud_ai_model_config import crud_ai_model_config
+        existing_config = await crud_ai_model_config.get(db, data.config_id)
+        if existing_config:
+            clean_api_key = existing_config.api_key
+        else:
+            return UnifiedResponse.success(AIModelTestConnectionResponse(
+                success=False,
+                message="配置不存在，无法获取已保存的密钥",
+                response_time_ms=0
+            ))
+    
+    if not clean_api_key:
+        return UnifiedResponse.success(AIModelTestConnectionResponse(
+            success=False,
+            message="请提供 API 密钥",
+            response_time_ms=0
+        ))
     
     try:
         # 构造简单的测试请求

@@ -116,10 +116,15 @@ class AIModelConfigListResponse(BaseModel):
 class AIModelTestConnectionRequest(BaseModel):
     """
     测试 AI 模型连接请求 Schema。
+    
+    支持两种模式：
+    1. 新建模式：传递 api_key
+    2. 编辑模式：传递 config_id，使用已保存的密钥
     """
     api_url: str = Field(..., min_length=1, max_length=500, description="API 接口地址")
-    api_key: str = Field(..., min_length=1, max_length=500, description="API 密钥")
+    api_key: Optional[str] = Field(None, max_length=500, description="API 密钥（新建模式必填）")
     model_id: str = Field(..., min_length=1, max_length=200, description="模型 ID")
+    config_id: Optional[int] = Field(None, description="配置 ID（编辑模式下使用已保存的密钥）")
 
     model_config = ConfigDict(protected_namespaces=())
 

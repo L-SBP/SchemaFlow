@@ -133,12 +133,15 @@ export const AdminAIModels: React.FC = () => {
             return;
         }
 
-        if (!formData.api_key.trim()) {
+        // 编辑模式下，如果使用已保存的密钥且没有输入新密钥，则使用 config_id 进行测试
+        const hasNewApiKey = formData.api_key.trim().length > 0;
+        
+        if (!editingModel && !hasNewApiKey) {
             message.error('请先输入 API 密钥再测试连接');
             return;
         }
 
-        if (!/^(sk-|ms-|ak-)[A-Za-z0-9\-]{10,}/i.test(formData.api_key.trim())) {
+        if (hasNewApiKey && !/^(sk-|ms-|ak-)[A-Za-z0-9\-]{10,}/i.test(formData.api_key.trim())) {
             message.error('API 密钥格式不正确，需以 sk-/ms-/ak- 开头');
             return;
         }
@@ -151,11 +154,22 @@ export const AdminAIModels: React.FC = () => {
         setIsTesting(true);
         setTestResult(null);
         try {
-            const res = await adminApi.testAIModelConnection({
-                api_url: formData.api_url,
-                api_key: formData.api_key,
-                model_id: formData.model_id
-            });
+            let res;
+            if (editingModel && !hasNewApiKey) {
+                // 编辑模式下使用已保存的密钥测试
+                res = await adminApi.testAIModelConnection({
+                    api_url: formData.api_url,
+                    model_id: formData.model_id,
+                    config_id: editingModel.config_id // 传递 config_id 让后端使用已保存的密钥
+                });
+            } else {
+                // 新建模式或输入了新密钥
+                res = await adminApi.testAIModelConnection({
+                    api_url: formData.api_url,
+                    api_key: formData.api_key,
+                    model_id: formData.model_id
+                });
+            }
             setTestResult(res);
             if (res.success) {
                 message.success(`连接成功！响应时间: ${res.response_time_ms}ms`);
@@ -191,11 +205,13 @@ export const AdminAIModels: React.FC = () => {
             return;
         }
 
+        // 新建模式必须输入密钥
         if (!editingModel && !formData.api_key.trim()) {
             message.error('请输入 API 密钥');
             return;
         }
 
+        // 如果输入了新密钥，校验格式
         if (formData.api_key.trim()) {
             const key = formData.api_key.trim();
             if (!/^(sk-|ms-|ak-)[A-Za-z0-9\-]{10,}/i.test(key)) {
@@ -421,9 +437,9 @@ export const AdminAIModels: React.FC = () => {
 
                     <div className="relative">
                         <Input
-                            label={editingModel ? "API 密钥 (留空则不修改)" : "API 密钥"}
+                            label={editingModel ? "API 密钥 (留空则使用已保存的密钥)" : "API 密钥"}
                             type={showApiKey ? "text" : "password"}
-                            placeholder={editingModel ? "留空则保持原密钥不变" : "sk-xxxxx"}
+                            placeholder={editingModel ? "输入新密钥或留空使用已保存的" : "sk-xxxxx"}
                             value={formData.api_key}
                             onChange={(e) => {
                                 setFormData(prev => ({ ...prev, api_key: e.target.value }));
@@ -437,10 +453,10 @@ export const AdminAIModels: React.FC = () => {
                         >
                             {showApiKey ? <EyeOff size={16} /> : <Eye size={16} />}
                         </button>
-                        {editingModel && (
-                            <p className="text-xs text-gray-500 mt-1">
-                                当前密钥: {editingModel.api_key_masked}
-                            </p>
+                        {editingModel && !formData.api_key.trim() && (
+                            <div className="mt-1">
+                                <span className="text-xs text-blue-600 bg-blue-50 px-2 py-0.5 rounded">将使用已保存的密钥</span>
+                            </div>
                         )}
                     </div>
 

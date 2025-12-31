@@ -432,8 +432,9 @@ export interface AIModelConfigUpdate {
 // 测试连接请求/响应
 export interface AIModelTestConnectionRequest {
   api_url: string;
-  api_key: string;
+  api_key?: string;  // 可选，编辑模式下可以使用已保存的密钥
   model_id: string;
+  config_id?: number;  // 可选，编辑模式下传递以使用已保存的密钥
 }
 
 export interface AIModelTestConnectionResponse {

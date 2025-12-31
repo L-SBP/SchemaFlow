@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { User, UserRole, UserStatus, AdminUserListItem } from '../types.ts';
 import { Card, Button, Tag, Modal, Input, message, Select } from '../components/UI.tsx';
-import { Search, Ban, CheckCircle, Users, Eye, Database, Edit3, Loader2, Filter, AlertTriangle, ChevronDown } from 'lucide-react';
+import { Search, Ban, CheckCircle, Users, Eye, Database, Edit3, Loader2, Filter, AlertTriangle } from 'lucide-react';
 import { adminApi } from '../api/admin.ts';
 
 interface AdminPanelProps {
@@ -36,9 +36,6 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onViewUser }) => {
     const [targetStatusAction, setTargetStatusAction] = useState<'normal' | 'banned'>('normal'); // 目标状态
     const [statusReason, setStatusReason] = useState('');
     const [isSavingStatus, setIsSavingStatus] = useState(false);
-
-    // 下拉菜单状态
-    const [openDropdownUserId, setOpenDropdownUserId] = useState<number | null>(null);
 
     // --- 数据获取 ---
     const fetchUsers = async () => {
@@ -80,7 +77,6 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onViewUser }) => {
         setTargetStatusAction(action);
         setStatusReason(''); // 重置原因输入
         setIsStatusModalOpen(true);
-        setOpenDropdownUserId(null); // 关闭下拉菜单
     };
 
     /**
@@ -259,80 +255,63 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onViewUser }) => {
                                         <td className="px-6 py-4 text-gray-500 whitespace-nowrap">
                                             {user.last_login_at ? new Date(user.last_login_at).toLocaleString() : '-'}
                                         </td>
-                                        <td className="px-6 py-4 text-right flex justify-end gap-2 whitespace-nowrap">
-                                            <Button
-                                                variant="text"
-                                                className="h-8 px-2 text-gray-500 hover:text-primary"
-                                                onClick={() => onViewUser(mapToUser(user))}
-                                                title="查看详情"
-                                            >
-                                                <Eye size={16} />
-                                            </Button>
-
-                                            {/* 正常用户：显示封禁按钮 */}
-                                            {user.status === 'normal' && (
+                                        <td className="px-6 py-4 text-right whitespace-nowrap">
+                                            <div className="flex justify-end items-center gap-2">
                                                 <Button
-                                                    variant="danger"
-                                                    className="h-8 px-3 text-xs"
-                                                    onClick={() => handleOpenStatusModal(user, 'banned')}
-                                                    icon={<Ban size={12} />}
+                                                    variant="text"
+                                                    className="h-8 px-2 text-gray-500 hover:text-primary"
+                                                    onClick={() => onViewUser(mapToUser(user))}
+                                                    title="查看详情"
                                                 >
-                                                    封禁
+                                                    <Eye size={16} />
                                                 </Button>
-                                            )}
 
-                                            {/* 已封禁用户：显示解封按钮 */}
-                                            {user.status === 'banned' && (
-                                                <Button
-                                                    variant="default"
-                                                    className="h-8 px-3 text-xs"
-                                                    onClick={() => handleOpenStatusModal(user, 'normal')}
-                                                    icon={<CheckCircle size={12} />}
-                                                >
-                                                    解封
-                                                </Button>
-                                            )}
+                                                {/* 正常用户：显示封禁按钮 */}
+                                                {user.status === 'normal' && (
+                                                    <Button
+                                                        variant="danger"
+                                                        className="h-8 px-3 text-xs"
+                                                        onClick={() => handleOpenStatusModal(user, 'banned')}
+                                                        icon={<Ban size={12} />}
+                                                    >
+                                                        封禁
+                                                    </Button>
+                                                )}
 
-                                            {/* 异常用户：显示下拉菜单 */}
-                                            {user.status === 'suspended' && (
-                                                <div className="relative">
+                                                {/* 已封禁用户：显示解封按钮 */}
+                                                {user.status === 'banned' && (
                                                     <Button
                                                         variant="default"
-                                                        className="h-8 px-3 text-xs flex items-center gap-1"
-                                                        onClick={() => setOpenDropdownUserId(openDropdownUserId === user.user_id ? null : user.user_id)}
+                                                        className="h-8 px-3 text-xs border-green-200 text-green-600 hover:bg-green-50"
+                                                        onClick={() => handleOpenStatusModal(user, 'normal')}
+                                                        icon={<CheckCircle size={12} />}
                                                     >
-                                                        操作
-                                                        <ChevronDown size={12} />
+                                                        解封
                                                     </Button>
+                                                )}
 
-                                                    {/* 下拉菜单 */}
-                                                    {openDropdownUserId === user.user_id && (
-                                                        <>
-                                                            {/* 遮罩层，点击关闭下拉菜单 */}
-                                                            <div
-                                                                className="fixed inset-0 z-10"
-                                                                onClick={() => setOpenDropdownUserId(null)}
-                                                            />
-                                                            <div className="absolute right-0 mt-1 w-24 bg-white border border-gray-200 rounded-lg shadow-lg z-20 overflow-hidden">
-                                                                <button
-                                                                    className="w-full px-4 py-2 text-left text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2"
-                                                                    onClick={() => handleOpenStatusModal(user, 'normal')}
-                                                                >
-                                                                    <CheckCircle size={14} className="text-green-600" />
-                                                                    恢复
-                                                                </button>
-                                                                <button
-                                                                    className="w-full px-4 py-2 text-left text-sm text-red-600 hover:bg-red-50 flex items-center gap-2"
-                                                                    onClick={() => handleOpenStatusModal(user, 'banned')}
-                                                                >
-                                                                    <Ban size={14} />
-                                                                    封禁
-                                                                </button>
-                                                            </div>
-                                                        </>
-                                                    )}
-                                                </div>
-                                            )}
+                                                {/* 异常用户：显示恢复和封禁两个按钮 */}
+                                                {user.status === 'suspended' && (
+                                                    <>
+                                                        <Button
+                                                            variant="default"
+                                                            className="h-8 px-3 text-xs border-green-200 text-green-600 hover:bg-green-50"
+                                                            onClick={() => handleOpenStatusModal(user, 'normal')}
+                                                            icon={<CheckCircle size={12} />}
+                                                        >
+                                                            恢复
+                                                        </Button>
+                                                        <Button
+                                                            variant="danger"
+                                                            className="h-8 px-3 text-xs"
+                                                            onClick={() => handleOpenStatusModal(user, 'banned')}
+                                                            icon={<Ban size={12} />}
+                                                        >
+                                                            封禁
+                                                        </Button>
+                                                    </>
+                                                )}
+                                            </div>
                                         </td>
                                     </tr>
                                 ))}
