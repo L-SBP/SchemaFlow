@@ -157,8 +157,8 @@ def build_postgresql_url(
     db_username: str,
     db_password: str,
     db_name: str,
-    host: str = "localhost",
-    port: int = 2345
+    host: str = None,
+    port: int = None
 ) -> URL:
     """
     构建 PostgreSQL 连接 URL。
@@ -167,13 +167,20 @@ def build_postgresql_url(
         db_username (str): 用户名。
         db_password (str): 明文密码。
         db_name (str): 数据库名称。
-        host (str): 主机地址。
-        port (int): 端口号。
+        host (str): 主机地址。如果为 None，则使用配置文件中的值。
+        port (int): 端口号。如果为 None，则使用配置文件中的值。
 
     Returns:
         URL: SQLAlchemy URL 对象。
     """
     from urllib.parse import quote
+    
+    # 使用配置文件中的 host 和 port 作为默认值
+    if host is None:
+        host = config.postgresql.host
+    if port is None:
+        port = config.postgresql.port
+    
     encoded_password = quote(db_password, safe='')
     return URL.create(
         drivername="postgresql+asyncpg",
