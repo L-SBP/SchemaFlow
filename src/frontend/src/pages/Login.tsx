@@ -225,7 +225,7 @@ export const Login: React.FC<LoginProps> = ({ onLogin }) => {
   };
 
   return (
-    <div className="min-h-screen min-h-[100dvh] flex items-center justify-center bg-[#f0f2f5] bg-[url('https://gw.alipayobjects.com/zos/rmsportal/TVYTbAXWheQpRcWDaDMu.svg')] bg-center bg-no-repeat bg-contain p-4">
+    <div className="min-h-screen min-h-[100dvh] flex items-center justify-center bg-[#f0f2f5] bg-[url('/background.svg')] bg-center bg-no-repeat bg-contain p-4">
       <div className="w-full max-w-sm bg-white p-6 sm:p-8 rounded-xl shadow-lg animate-in fade-in zoom-in duration-300">
         <div className="text-center mb-6 sm:mb-8">
           {/* 响应式Logo尺寸 */}
