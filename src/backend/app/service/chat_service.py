@@ -314,6 +314,54 @@ async def _convert_rag_knowledge_to_domain(
     return ordered_knowledge
 
 
+def _build_ddl_from_rag_results(rag_results: List[Dict[str, Any]]) -> str:
+    """
+    从 RAG 检索结果构建 DDL 文本。
+    
+    将分片检索的表DDL重新组合为完整的DDL文本。
+    外键关联的表会自动包含在结果中（由RAG服务保证）。
+    
+    Args:
+        rag_results: RAG 检索结果列表
+        
+    Returns:
+        str: 组合后的DDL文本
+    """
+    if not rag_results:
+        return "-- No DDL found"
+    
+    ddl_fragments = []
+    seen_tables = set()
+    
+    for result in rag_results:
+        # 从不同可能的字段中获取DDL内容
+        ddl_content = (
+            result.get("content") or 
+            result.get("document") or 
+            result.get("metadata", {}).get("ddl_fragment") or
+            ""
+        )
+        
+        # 获取表名（用于去重）
+        table_name = (
+            result.get("metadata", {}).get("table_name") or
+            result.get("table_name") or
+            ""
+        )
+        
+        if ddl_content and table_name.lower() not in seen_tables:
+            ddl_fragments.append(ddl_content.strip())
+            if table_name:
+                seen_tables.add(table_name.lower())
+    
+    if not ddl_fragments:
+        return "-- No DDL found"
+    
+    # 添加注释说明这是RAG检索的部分DDL
+    header = "-- [RAG Retrieved Schema - Related Tables]\n"
+    return header + "\n\n".join(ddl_fragments)
+
+
 # =========================================================
 # 4. AI 调用（事务外执行）
 # =========================================================
@@ -725,16 +773,30 @@ async def process_chat(
     await _update_session_model(db, session_obj, final_model_key)
     log.info("Session {} using model: {}", session_id, final_model_key)
     
-    # 获取历史和领域知识（使用 RAG 检索优化）
-    # RAG 优化已实现：
-    #   1. 将历史消息向量化存储（Embedding）
-    #   2. 根据当前 user_input 进行语义相似度检索
-    #   3. 只召回与当前问题相关的历史对话（Top-K）
-    #   4. 领域知识也通过向量检索获取相关条目
+    # 获取项目信息
+    project = await crud_project.get(db, project_id)
+    full_ddl_text = project.ddl_statement if project and project.ddl_statement else ""
+    instance_id = project.instance_id
     
-    # 尝试使用 RAG 检索，失败时降级为传统方式
+    # 获取数据库类型
+    db_type = None
+    if instance_id:
+        database_instance = await crud_database_instance.get(db, instance_id)
+        if database_instance:
+            db_type = database_instance.db_type
+    
+    # === RAG 检索优化 ===
+    # 1. 历史对话：向量检索与当前问题相关的历史
+    # 2. 领域知识：向量检索相关业务术语
+    # 3. DDL分片：向量检索相关表DDL，并自动扩展外键关联表
+    
     history_context = []
     knowledge_context = []
+    ddl_text = "-- No DDL found"
+    
+    # 判断是否使用DDL分片检索（表数量阈值）
+    table_count = full_ddl_text.upper().count("CREATE TABLE") if full_ddl_text else 0
+    use_ddl_rag = table_count > 5  # 表数量超过5个时启用DDL分片检索
     
     try:
         # 使用 RAG 检索相关上下文
@@ -743,7 +805,9 @@ async def process_chat(
             project_id=project_id,
             session_id=session_id,
             history_top_k=5,
-            knowledge_top_k=5
+            knowledge_top_k=5,
+            enable_ddl=use_ddl_rag,
+            ddl_top_k=5
         )
         
         # 将 RAG 检索结果转换为兼容格式
@@ -759,39 +823,36 @@ async def process_chat(
                 db, rag_context.relevant_knowledge
             )
         
-        log.info(f"RAG retrieved {len(history_context)} history, {len(knowledge_context)} knowledge")
+        # DDL：从向量检索结果构建DDL文本
+        if use_ddl_rag and rag_context.relevant_ddl:
+            ddl_text = _build_ddl_from_rag_results(rag_context.relevant_ddl)
+            # 详细日志：显示检索到的表名
+            retrieved_tables = [
+                r.get("metadata", {}).get("table_name") or r.get("table_name", "unknown")
+                for r in rag_context.relevant_ddl
+            ]
+            log.info(f"[RAG-DDL] Retrieved {len(rag_context.relevant_ddl)} tables: {retrieved_tables}")
+        else:
+            # 表数量少时使用全量DDL
+            ddl_text = full_ddl_text if full_ddl_text else "-- No DDL found"
+            log.info(f"[RAG-DDL] Using full DDL (table_count={table_count}, threshold=5)")
+        
+        # 详细日志：显示检索到的历史和知识
+        if rag_context.relevant_history:
+            history_contents = [r.get("content", "")[:50] + "..." for r in rag_context.relevant_history[:3]]
+            log.info(f"[RAG-History] Retrieved {len(rag_context.relevant_history)} items: {history_contents}")
+        
+        log.info(f"[RAG-Summary] history={len(history_context)}, knowledge={len(knowledge_context)}, DDL_RAG={use_ddl_rag}")
         
     except Exception as e:
         # RAG 检索失败，降级为传统方式
         log.warning(f"RAG retrieval failed, falling back to traditional method: {e}")
         history_context = await crud_message.get_recent_messages(db, session_id, limit=20)
         knowledge_context = await crud_knowledge.get_all_by_project(db, project_id)
+        ddl_text = full_ddl_text if full_ddl_text else "-- No DDL found"
     
     # 保存用户消息
     await _save_user_message(db, session_id, user_input)
-    
-    # 获取 DDL
-    # TODO: [RAG] Schema/DDL 检索优化（针对大型数据库）
-    # 当前实现：全量注入完整 DDL
-    # 后续优化（当表数量 > 阈值时启用）：
-    #   1. 将每张表的 DDL 片段单独向量化
-    #   2. 根据 user_input 检索相关表（Top-K）
-    #   3. 只注入相关表的 DDL，减少 Token 消耗
-    #   4. 保留表间外键关系的完整性
-    # TODO: [Celery] DDL 向量化后台任务
-    #   1. 项目部署成功后，异步触发 DDL 分片 + 向量化
-    #   2. DDL 变更时自动更新向量索引
-    #   3. 支持增量更新，避免全量重建
-    project = await crud_project.get(db, project_id)
-    ddl_text = project.ddl_statement if project and project.ddl_statement else "-- No DDL found"
-    instance_id = project.instance_id
-    
-    # 获取数据库类型
-    db_type = None
-    if instance_id:
-        database_instance = await crud_database_instance.get(db, instance_id)
-        if database_instance:
-            db_type = database_instance.db_type
 
     # 提交事务1，释放数据库连接
     await db.commit()

@@ -56,10 +56,12 @@ class RAGService:
     # 检索参数配置
     DEFAULT_HISTORY_TOP_K = 5       # 历史对话检索数量
     DEFAULT_KNOWLEDGE_TOP_K = 3     # 领域知识检索数量
-    DEFAULT_DDL_TOP_K = 10          # DDL 片段检索数量
+    DEFAULT_DDL_TOP_K = 5           # DDL 片段检索数量（初始检索）
+    DEFAULT_DDL_MAX_TABLES = 10     # DDL 最终返回最大表数（包含外键关联表）
     
     # 相似度阈值（余弦距离，越小越相似）
     SIMILARITY_THRESHOLD = 0.8      # 过滤掉距离大于此值的结果
+    DDL_FK_BOOST_THRESHOLD = 0.9    # 外键关联表的放宽阈值
     
     def __init__(self):
         """初始化 RAG 服务。"""
@@ -138,16 +140,26 @@ class RAGService:
             except Exception as e:
                 log.warning(f"Knowledge retrieval failed: {e}")
         
-        # DDL 检索
+        # DDL 检索（含外键关联表权重提升）
         if enable_ddl:
             try:
                 results = await search_relevant_ddl(
                     query_embedding=query_embedding,
                     project_id=project_id,
-                    top_k=ddl_top_k
+                    top_k=ddl_top_k * 2  # 先多检索一些，后续会扩展外键表
                 )
                 relevant_ddl = self._filter_by_threshold(results)
-                log.debug(f"Retrieved {len(relevant_ddl)} relevant DDL items")
+                initial_tables = [r.get("metadata", {}).get("table_name", "?") for r in relevant_ddl]
+                log.info(f"[RAG-DDL-Initial] Found {len(relevant_ddl)} tables before FK expansion: {initial_tables}")
+                
+                # 外键关联表扩展：确保被引用的表也被包含
+                if relevant_ddl:
+                    relevant_ddl = await self._expand_foreign_key_tables(
+                        relevant_ddl, project_id, self.DEFAULT_DDL_MAX_TABLES
+                    )
+                    final_tables = [r.get("metadata", {}).get("table_name", "?") for r in relevant_ddl]
+                    log.info(f"[RAG-DDL-Final] After FK expansion: {len(relevant_ddl)} tables: {final_tables}")
+                
             except Exception as e:
                 log.warning(f"DDL retrieval failed: {e}")
         
@@ -167,6 +179,98 @@ class RAGService:
             r for r in results
             if r.get("distance", 1.0) <= self.SIMILARITY_THRESHOLD
         ]
+    
+    async def _expand_foreign_key_tables(
+        self,
+        ddl_results: List[Dict[str, Any]],
+        project_id: int,
+        max_tables: int
+    ) -> List[Dict[str, Any]]:
+        """
+        扩展外键关联表。
+        
+        分析已检索的DDL中的外键引用，确保被引用的表也被包含。
+        这样可以保证SQL生成时有完整的表关联信息。
+        
+        Args:
+            ddl_results: 已检索的DDL结果
+            project_id: 项目ID
+            max_tables: 最大表数量
+            
+        Returns:
+            扩展后的DDL结果列表
+        """
+        if not ddl_results:
+            return ddl_results
+        
+        # 收集已有的表名
+        existing_tables = set()
+        for r in ddl_results:
+            table_name = r.get("metadata", {}).get("table_name") or r.get("table_name")
+            if table_name:
+                existing_tables.add(table_name.lower())
+        
+        # 从DDL中提取外键引用的表
+        referenced_tables = set()
+        for r in ddl_results:
+            ddl_content = r.get("content") or r.get("document") or ""
+            refs = self._extract_foreign_key_references(ddl_content)
+            for ref_table in refs:
+                if ref_table.lower() not in existing_tables:
+                    referenced_tables.add(ref_table)
+        
+        # 如果有未包含的外键引用表，尝试检索它们
+        if referenced_tables and len(ddl_results) < max_tables:
+            remaining_slots = max_tables - len(ddl_results)
+            try:
+                for ref_table in list(referenced_tables)[:remaining_slots]:
+                    # 用表名作为查询检索对应的DDL
+                    ref_embedding = await self.embedding.embed_text(f"CREATE TABLE {ref_table}")
+                    ref_results = await search_relevant_ddl(
+                        query_embedding=ref_embedding,
+                        project_id=project_id,
+                        top_k=3
+                    )
+                    
+                    # 找到匹配的表
+                    for ref_r in ref_results:
+                        ref_table_name = ref_r.get("metadata", {}).get("table_name") or ref_r.get("table_name")
+                        if ref_table_name and ref_table_name.lower() == ref_table.lower():
+                            # 使用放宽的阈值
+                            if ref_r.get("distance", 1.0) <= self.DDL_FK_BOOST_THRESHOLD:
+                                ddl_results.append(ref_r)
+                                existing_tables.add(ref_table.lower())
+                                log.debug(f"Added FK referenced table: {ref_table}")
+                            break
+            except Exception as e:
+                log.warning(f"Failed to expand FK tables: {e}")
+        
+        return ddl_results[:max_tables]
+    
+    def _extract_foreign_key_references(self, ddl_content: str) -> List[str]:
+        """
+        从DDL中提取外键引用的表名。
+        
+        Args:
+            ddl_content: DDL内容
+            
+        Returns:
+            被引用的表名列表
+        """
+        referenced = []
+        
+        # 匹配 REFERENCES table_name 模式
+        # 支持: REFERENCES table(col), REFERENCES `table`(col), REFERENCES "table"(col)
+        pattern = r'REFERENCES\s+[`"\[]?(\w+)[`"\]]?\s*\('
+        matches = re.findall(pattern, ddl_content, re.IGNORECASE)
+        referenced.extend(matches)
+        
+        # 匹配 FOREIGN KEY ... REFERENCES 模式
+        pattern2 = r'FOREIGN\s+KEY\s*\([^)]+\)\s*REFERENCES\s+[`"\[]?(\w+)[`"\]]?'
+        matches2 = re.findall(pattern2, ddl_content, re.IGNORECASE)
+        referenced.extend(matches2)
+        
+        return list(set(referenced))
     
     # =========================================================
     # 索引相关方法（写入向量数据库）
@@ -392,12 +496,15 @@ async def retrieve_chat_context(
     project_id: int,
     session_id: int,
     history_top_k: int = 5,
-    knowledge_top_k: int = 5
+    knowledge_top_k: int = 5,
+    enable_ddl: bool = True,
+    ddl_top_k: int = 5
 ) -> RAGContext:
     """
     检索聊天所需的上下文（便捷函数）。
     
-    专门为 chat_service 设计，默认启用历史和知识检索。
+    专门为 chat_service 设计，默认启用历史、知识和DDL检索。
+    DDL检索会自动扩展外键关联表。
     
     Args:
         query: 用户问题
@@ -405,6 +512,8 @@ async def retrieve_chat_context(
         session_id: 会话 ID
         history_top_k: 历史检索数量
         knowledge_top_k: 知识检索数量
+        enable_ddl: 是否启用DDL检索
+        ddl_top_k: DDL检索数量
         
     Returns:
         RAGContext: 检索结果
@@ -415,9 +524,10 @@ async def retrieve_chat_context(
         session_id=session_id,
         history_top_k=history_top_k,
         knowledge_top_k=knowledge_top_k,
+        ddl_top_k=ddl_top_k,
         enable_history=True,
         enable_knowledge=True,
-        enable_ddl=False
+        enable_ddl=enable_ddl
     )
 
 
