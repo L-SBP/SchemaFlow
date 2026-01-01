@@ -5,6 +5,22 @@ import { Button, ProgressBar } from './UI';
 import { Loader2, CheckCircle2, AlertTriangle, FileJson, Code2, Play, RefreshCw } from 'lucide-react';
 import { InteractiveERRenderer } from './InteractiveERRenderer';
 
+// 定义阶段顺序，用于防止状态回退
+const STAGE_ORDER = [
+  CreationStageEnum.INITIALIZING,
+  CreationStageEnum.GENERATING_SCHEMA,
+  CreationStageEnum.SCHEMA_GENERATED,
+  CreationStageEnum.GENERATING_DDL,
+  CreationStageEnum.DDL_GENERATED,
+  CreationStageEnum.EXECUTING_DDL,
+  CreationStageEnum.COMPLETED
+];
+
+const getStageIndex = (stage: CreationStageEnum | undefined | null): number => {
+  if (!stage) return -1;
+  return STAGE_ORDER.indexOf(stage);
+};
+
 interface ProjectWizardProps {
   projectId: string | number;
   onComplete: () => void;
@@ -75,6 +91,9 @@ export const ProjectWizard: React.FC<ProjectWizardProps> = ({ projectId, onCompl
   });
   const restoredSnapshotRef = useRef<{ stage: CreationStageEnum | null; progress: number } | null>(null);
 
+  // Track the latest stage index to prevent regression
+  const latestStageRef = useRef<number>(-1);
+
   // Polling
   useEffect(() => {
     let intervalId: NodeJS.Timeout | null = null;
@@ -82,6 +101,14 @@ export const ProjectWizard: React.FC<ProjectWizardProps> = ({ projectId, onCompl
     const fetchProject = async () => {
       try {
         const data = await getProjectDetail(projectId);
+
+        // Prevent stage regression (e.g. polling returns old status after optimistic update)
+        const currentStageIndex = getStageIndex(data.creation_stage);
+        if (currentStageIndex < latestStageRef.current) {
+          return;
+        }
+
+        latestStageRef.current = currentStageIndex;
         setProject(data);
 
         // Initialize edit states if empty - 在任何需要显示的阶段都初始化数据
@@ -263,7 +290,10 @@ export const ProjectWizard: React.FC<ProjectWizardProps> = ({ projectId, onCompl
 
       // 乐观更新：立即切换到生成 DDL 状态，显示进度条
       // 注意：先更新 project 状态，再重置进度，避免进度条动画逻辑的干扰
-      setProject(prev => prev ? { ...prev, creation_stage: CreationStageEnum.GENERATING_DDL } : null);
+      const nextStage = CreationStageEnum.GENERATING_DDL;
+      latestStageRef.current = getStageIndex(nextStage);
+
+      setProject(prev => prev ? { ...prev, creation_stage: nextStage } : null);
       setVisualProgress(0); // Reset progress for next stage
 
       await generateDDL(project.project_id, editedSchema, requirements);
@@ -279,17 +309,34 @@ export const ProjectWizard: React.FC<ProjectWizardProps> = ({ projectId, onCompl
     try {
       // 清除恢复快照，确保进度从0开始
       restoredSnapshotRef.current = null;
-      setShouldPoll(true); // 重新开启轮询
+
+      // 关键修改 1: 部署期间暂停轮询，防止状态跳变
+      setShouldPoll(false);
 
       // 乐观更新：立即切换到执行 DDL 状态，显示进度条
-      setProject(prev => prev ? { ...prev, creation_stage: CreationStageEnum.EXECUTING_DDL } : null);
+      const nextStage = CreationStageEnum.EXECUTING_DDL;
+      latestStageRef.current = getStageIndex(nextStage);
+
+      setProject(prev => prev ? { ...prev, creation_stage: nextStage } : null);
       setVisualProgress(0); // Reset progress for next stage
 
-      await deployProject(project.project_id, editedDDL);
-      // State update will happen on next poll
+      // 关键修改 2: 获取返回值并直接更新状态
+      const updatedProject = await deployProject(project.project_id, editedDDL);
+
+      if (updatedProject) {
+        const newStageIndex = getStageIndex(updatedProject.creation_stage);
+        if (newStageIndex >= latestStageRef.current) {
+          latestStageRef.current = newStageIndex;
+          setProject(updatedProject);
+        }
+      }
+
+      // 部署完成后再恢复轮询
+      setShouldPoll(true);
     } catch (err) {
       console.error("Failed to deploy project:", err);
       setError("部署项目失败。");
+      setShouldPoll(true); // 出错时恢复轮询
     }
   }, [project, editedDDL]);
 
@@ -479,9 +526,9 @@ export const ProjectWizard: React.FC<ProjectWizardProps> = ({ projectId, onCompl
             <div className="flex justify-between items-center mb-4 shrink-0">
               <h3 className="text-lg font-medium flex items-center gap-2">
                 <Code2 className="w-5 h-5 text-purple-500" />
-                审查 DDL
+                查看 DDL
               </h3>
-              <span className="text-sm text-gray-500">请在部署前审查 SQL 语句。</span>
+              <span className="text-sm text-gray-500"></span>
             </div>
 
             <div className="h-[500px] border rounded-md overflow-y-auto bg-gray-50">
