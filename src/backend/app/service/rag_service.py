@@ -55,7 +55,7 @@ class RAGService:
     
     # 检索参数配置
     DEFAULT_HISTORY_TOP_K = 5       # 历史对话检索数量
-    DEFAULT_KNOWLEDGE_TOP_K = 5     # 领域知识检索数量
+    DEFAULT_KNOWLEDGE_TOP_K = 3     # 领域知识检索数量
     DEFAULT_DDL_TOP_K = 10          # DDL 片段检索数量
     
     # 相似度阈值（余弦距离，越小越相似）

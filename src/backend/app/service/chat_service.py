@@ -617,10 +617,14 @@ async def _save_ai_response(
     sql_type: str,
     requires_confirm: bool,
     execution_status: str,
-    data: List[Dict]
+    data: List[Dict],
+    error_message: str = None
 ) -> Tuple[MessageModel, AIGeneratedStatement]:
     """
     保存 AI 响应和执行结果（独立事务），并异步触发向量索引。
+    
+    Args:
+        error_message: 执行失败时的错误信息，如果提供则保存错误内容
     """
     # 确保sql_text是干净的，不包含前缀
     clean_sql_text = sql_text
@@ -636,23 +640,30 @@ async def _save_ai_response(
         if clean_sql_text.startswith(prefix):
             clean_sql_text = clean_sql_text[len(prefix):].strip()
     
-    # 构建回复内容，确保只有一个前缀
-    reply_content = f"已生成SQL语句：\n{clean_sql_text}"
+    # 根据执行状态构建回复内容
+    if execution_status == "failed" and error_message:
+        reply_content = f"❌ 执行失败：\n{error_message}"
+    else:
+        reply_content = f"已生成SQL语句：\n{clean_sql_text}"
+    
     ai_message = await crud_message.create_message(db, session_id, reply_content, role="assistant")
     
-    # 异步触发 AI 回复的向量索引
-    try:
-        import asyncio
-        asyncio.create_task(
-            index_new_message(
-                session_id=session_id,
-                message_id=ai_message.message_id,
-                content=reply_content,
-                role="assistant"
+    # 仅对执行失败的SQL进行向量索引，帮助AI避免类似错误
+    # 正常执行成功的SQL不索引
+    if execution_status == "failed" and error_message:
+        try:
+            import asyncio
+            index_content = f"错误SQL案例：\nSQL语句：{clean_sql_text}\n执行错误：{error_message}"
+            asyncio.create_task(
+                index_new_message(
+                    session_id=session_id,
+                    message_id=ai_message.message_id,
+                    content=index_content,
+                    role="assistant"
+                )
             )
-        )
-    except Exception as e:
-        log.warning(f"Failed to trigger AI response indexing: {e}")
+        except Exception as e:
+            log.warning(f"Failed to trigger error case indexing: {e}")
     
     if requires_confirm:
         ai_message.requires_confirmation = True
@@ -816,18 +827,28 @@ async def process_chat(
     if _is_forbidden_sql_type(sql_type):
         execution_status = "failed"
         execution_error = f"执行失败：此类别sql无法使用"
+        data = [{"error": execution_error}]
     elif not requires_confirm:
         data, execution_status = await _try_execute_sql(
             db, sql_text, sql_type, instance_id, user_id
         )
+        # 如果执行失败，从data中提取错误信息
+        if execution_status == "failed" and data and isinstance(data, list) and len(data) > 0:
+            if isinstance(data[0], dict) and "error" in data[0]:
+                execution_error = data[0]["error"]
     
     ai_message, _ = await _save_ai_response(
-        db, session_id, sql_text, sql_type, False if _is_forbidden_sql_type(sql_type) else requires_confirm, execution_status, data
+        db, session_id, sql_text, sql_type, 
+        False if _is_forbidden_sql_type(sql_type) else requires_confirm, 
+        execution_status, data, 
+        error_message=execution_error  # 传入错误信息
     )
     
     # 构建响应内容
     if execution_error:
-        response_content = f"❌ {execution_error}"
+        response_content = f"❌ 执行失败：\n{execution_error}"
+    elif execution_status == "failed":
+        response_content = f"❌ 执行失败"
     else:
         response_content = f"已生成SQL语句：\n{sql_text}"
     
@@ -959,7 +980,12 @@ async def _try_execute_sql(
         return data, "success"
     except Exception as e:
         log.error("SQL Execution Error: {}", str(e))
-        return [], "failed"
+        # 返回错误信息，便于后续处理
+        error_msg = str(e)
+        if hasattr(e, 'detail') and e.detail:
+            error_msg = str(e.detail)
+        friendly_msg = _get_friendly_error_message(error_msg)
+        return [{"error": friendly_msg}], "failed"
 
 
 # =========================================================
@@ -1033,7 +1059,7 @@ async def _handle_execution_error(
     original_message_id: int,
     error: Exception
 ) -> ChatResponse:
-    """处理执行错误并返回错误响应，不创建新消息。"""
+    """处理执行错误并返回错误响应，同时更新数据库状态。"""
     # 优先获取 detail，因为 BusinessException/AppException 的 message 可能是类属性默认值"内部错误"
     error_msg = str(error)
     if hasattr(error, 'detail') and error.detail:
@@ -1045,14 +1071,59 @@ async def _handle_execution_error(
     friendly_msg = _get_friendly_error_message(error_msg)
     content = f"❌ 执行失败：\n{friendly_msg}"
     
+    # 获取原消息并更新状态
+    stmt = select(MessageModel).where(MessageModel.message_id == original_message_id)
+    result = await db.execute(stmt)
+    message = result.scalar_one_or_none()
+    
+    sql_text = None
+    session_id = None
+    if message:
+        # 提取SQL文本用于返回（在更新内容之前）
+        sql_text = _extract_sql_from_content(message.content)
+        session_id = message.session_id
+        
+        # 标记消息为已确认（执行过了，虽然失败），直接更新为错误内容
+        message.user_confirmed = True
+        message.content = content  # 直接替换为错误信息，保持刷新后显示一致
+        db.add(message)
+    
+    # 更新关联的 AIGeneratedStatement 状态为 failed
+    await db.execute(
+        update(AIGeneratedStatement)
+        .where(AIGeneratedStatement.message_id == original_message_id)
+        .values(
+            execution_status="failed",
+            execution_result=[{"error": friendly_msg}]
+        )
+    )
+    
+    await db.commit()
+    
+    # 索引错误案例到向量数据库，帮助AI避免类似错误
+    if session_id and sql_text:
+        try:
+            import asyncio
+            index_content = f"错误SQL案例：\nSQL语句：{sql_text}\n执行错误：{friendly_msg}"
+            asyncio.create_task(
+                index_new_message(
+                    session_id=session_id,
+                    message_id=original_message_id,
+                    content=index_content,
+                    role="assistant"
+                )
+            )
+        except Exception as e:
+            log.warning(f"Failed to index error case: {e}")
+    
     return ChatResponse(
         message_id=original_message_id,  # 使用原始消息ID
         content=content,
         message_type=MessageType.ASSISTANT,
-        sql_text=None,
+        sql_text=sql_text,
         sql_type="ERROR",
         requires_confirmation=False,
-        data=None
+        data=[{"error": friendly_msg}]
     )
 
 
