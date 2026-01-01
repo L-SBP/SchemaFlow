@@ -85,7 +85,12 @@ interface InputProps extends React.InputHTMLAttributes<HTMLInputElement> {
  */
 export const Input: React.FC<InputProps> = ({ label, className = '', ...props }): JSX.Element => (
     <div className="flex flex-col gap-1.5">
-        {label && <label className="text-sm font-medium text-gray-700">{label}</label>}
+        {label && (
+            <label className="text-sm font-medium text-gray-700">
+                {label}
+                {props.required && <span className="text-red-500 ml-1">*</span>}
+            </label>
+        )}
         <input
             className={`px-3 py-2.5 min-h-[44px] bg-white border border-gray-300 rounded-lg text-base sm:text-sm focus:outline-none focus:border-primary focus:ring-2 focus:ring-blue-100 transition-all shadow-sm ${className}`}
             {...props}
@@ -143,6 +148,10 @@ interface SelectProps {
      * 是否禁用
      */
     disabled?: boolean;
+    /**
+     * 是否必填
+     */
+    required?: boolean;
 }
 
 /**
@@ -158,7 +167,8 @@ export const Select: React.FC<SelectProps> = ({
     variant = 'default',
     className = '',
     placeholder = '请选择',
-    disabled = false
+    disabled = false,
+    required = false
 }) => {
     const [isOpen, setIsOpen] = useState(false);
     const [menuPosition, setMenuPosition] = useState({ top: 0, left: 0, width: 0 });
@@ -218,7 +228,12 @@ export const Select: React.FC<SelectProps> = ({
 
     return (
         <div className="flex flex-col gap-1.5" ref={selectRef}>
-            {label && <label className="text-sm font-medium text-gray-700">{label}</label>}
+            {label && (
+                <label className="text-sm font-medium text-gray-700">
+                    {label}
+                    {required && <span className="text-red-500 ml-1">*</span>}
+                </label>
+            )}
             <div className={`relative ${className}`}>
                 {/* 触发器 */}
                 <button

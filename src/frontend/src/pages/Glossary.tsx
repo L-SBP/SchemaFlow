@@ -200,12 +200,12 @@ export const Glossary: React.FC = () => {
 
   const handleExport = () => {
     if (!selectedProjectId) return;
-    
+
     // 根据选中状态决定导出哪些数据
-    const termsToExport = selectedIds.size > 0 
+    const termsToExport = selectedIds.size > 0
       ? terms.filter(t => selectedIds.has(t.knowledge_id))
       : terms;
-    
+
     if (termsToExport.length === 0) {
       message.warning("没有可导出的术语数据");
       return;
@@ -355,10 +355,10 @@ export const Glossary: React.FC = () => {
             )}
             <div className="h-6 w-px bg-gray-200 hidden sm:block"></div>
 
-            <Button 
-              variant="default" 
-              onClick={handleExport} 
-              icon={<Download size={16} />} 
+            <Button
+              variant="default"
+              onClick={handleExport}
+              icon={<Download size={16} />}
               className="h-9 text-xs hidden md:flex"
             >
               {selectedIds.size > 0 ? `导出 (${selectedIds.size})` : '导出本页'}
@@ -500,7 +500,7 @@ export const Glossary: React.FC = () => {
             required
           />
           <div className="flex flex-col gap-1.5">
-            <label className="text-sm font-medium text-gray-700">定义描述 <span className="text-red-500"></span></label>
+            <label className="text-sm font-medium text-gray-700">定义描述 <span className="text-red-500 ml-1">*</span></label>
             <textarea
               className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary outline-none transition-colors min-h-[100px] text-sm"
               value={formData.definition}

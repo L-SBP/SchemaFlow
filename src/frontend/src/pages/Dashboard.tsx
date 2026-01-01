@@ -242,9 +242,9 @@ export const Dashboard: React.FC<DashboardProps> = ({ onProjectSelect }) => {
               </div>
             </div>
             <div className="space-y-6">
-              <Input label="项目名称" placeholder="例如：企业级 CRM 客户管理系统" value={newProjectName} onChange={(e) => setNewProjectName(e.target.value)} />
+              <Input label="项目名称" placeholder="例如：企业级 CRM 客户管理系统" value={newProjectName} onChange={(e) => setNewProjectName(e.target.value)} required />
               <div className="flex flex-col gap-2">
-                <label className="text-sm font-medium text-gray-700">数据库类型</label>
+                <label className="text-sm font-medium text-gray-700">数据库类型<span className="text-red-500 ml-1">*</span></label>
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4">
                   {/* 更新：增加 SQLite 选项 */}
                   {(['MySQL', 'PostgreSQL', 'SQLite'] as const).map(type => {
@@ -264,7 +264,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ onProjectSelect }) => {
                 </div>
               </div>
               <div className="flex flex-col gap-2">
-                <label className="text-sm font-medium text-gray-700">业务场景描述</label>
+                <label className="text-sm font-medium text-gray-700">业务场景描述<span className="text-red-500 ml-1">*</span></label>
                 <textarea className="px-4 py-3 bg-white border border-gray-300 rounded-lg text-sm focus:border-primary focus:ring-2 focus:ring-blue-100 transition-all h-32 resize-none leading-relaxed" placeholder="请详细描述实体及关系..." value={newProjectDesc} onChange={(e) => setNewProjectDesc(e.target.value)}></textarea>
               </div>
             </div>
@@ -304,7 +304,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ onProjectSelect }) => {
           </div>
           <div className="space-y-2">
             <label className="text-sm font-medium text-gray-700">
-              请在此输入DELETE以确认删除：
+              请在此输入DELETE以确认删除：<span className="text-red-500 ml-1">*</span>
             </label>
             <Input
               value={deleteConfirmation}
@@ -335,9 +335,10 @@ export const Dashboard: React.FC<DashboardProps> = ({ onProjectSelect }) => {
             value={editName}
             onChange={(e) => setEditName(e.target.value)}
             placeholder="项目名称"
+            required
           />
           <div className="flex flex-col gap-2">
-            <label className="text-sm font-medium text-gray-700">项目描述</label>
+            <label className="text-sm font-medium text-gray-700">项目描述<span className="text-red-500 ml-1">*</span></label>
             <textarea
               className="px-3 py-2 bg-white border border-gray-300 rounded-lg text-sm focus:border-primary focus:ring-2 focus:ring-blue-100 transition-all h-24 resize-none leading-relaxed"
               value={editDesc}
