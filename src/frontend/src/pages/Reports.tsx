@@ -569,11 +569,12 @@ export const Reports: React.FC<ReportsProps> = ({ projects }) => {
                   label="报表名称"
                   value={reportName}
                   onChange={(e) => setReportName(e.target.value)}
+                  required
                 />
 
                 {/* ... (图表类型选择逻辑保持不变，省略以节省空间，直接复用原代码) ... */}
                 <div>
-                  <label className="text-sm font-medium text-gray-700 mb-1.5 block">图表类型</label>
+                  <label className="text-sm font-medium text-gray-700 mb-1.5 block">图表类型<span className="text-red-500 ml-1">*</span></label>
                   <div className="grid grid-cols-2 gap-2">
                     {[
                       { id: 'bar', label: '柱状图', icon: <BarChart2 size={14} /> },
@@ -598,6 +599,7 @@ export const Reports: React.FC<ReportsProps> = ({ projects }) => {
                   className="w-full"
                   value={xAxisKey}
                   onChange={(val) => setXAxisKey(val)}
+                  required
                   options={(selectedQueryObj.result?.fields?.length
                     ? selectedQueryObj.result.fields
                     : (selectedQueryObj.result?.columns || []).map((c: string) => ({ name: c, type: 'string' as const }))
@@ -609,6 +611,7 @@ export const Reports: React.FC<ReportsProps> = ({ projects }) => {
                   className="w-full"
                   value={yAxisKey}
                   onChange={(val) => setYAxisKey(val)}
+                  required
                   options={(
                     (selectedQueryObj.result?.fields || []).filter((f: any) => f.type === 'number')
                   ).length > 0

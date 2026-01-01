@@ -411,6 +411,7 @@ export const AdminAIModels: React.FC = () => {
                             setFormData(prev => ({ ...prev, model_name: e.target.value }));
                             setTestResult(null);
                         }}
+                        required
                     />
 
                     <div>
@@ -419,6 +420,7 @@ export const AdminAIModels: React.FC = () => {
                             placeholder="https://api.example.com/v1/chat/completions"
                             value={formData.api_url}
                             onChange={(e) => handleApiUrlChange(e.target.value)}
+                            required
                         />
                         {formErrors.api_url && (
                             <p className="text-xs text-red-500 mt-1">{formErrors.api_url}</p>
@@ -433,6 +435,7 @@ export const AdminAIModels: React.FC = () => {
                             setFormData(prev => ({ ...prev, model_id: e.target.value }));
                             setTestResult(null);
                         }}
+                        required
                     />
 
                     <div className="relative">
@@ -445,6 +448,7 @@ export const AdminAIModels: React.FC = () => {
                                 setFormData(prev => ({ ...prev, api_key: e.target.value }));
                                 setTestResult(null);
                             }}
+                            required={!editingModel}
                         />
                         <button
                             type="button"
@@ -490,6 +494,7 @@ export const AdminAIModels: React.FC = () => {
                             setFormData(prev => ({ ...prev, model_type: val as any }));
                             setTestResult(null);
                         }}
+                        required
                         options={[
                             { value: 'general_llm', label: '通用 LLM' },
                             { value: 'local_finetune', label: '本地微调模型' }

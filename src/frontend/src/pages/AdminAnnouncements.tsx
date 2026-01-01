@@ -228,19 +228,21 @@ export const AdminAnnouncements: React.FC = () => {
                         placeholder="请输入标题"
                         value={title}
                         onChange={(e) => setTitle(e.target.value)}
+                        required
                     />
                     <Select
                         label="状态"
                         className="w-full"
                         value={status}
                         onChange={(val) => setStatus(val as any)}
+                        required
                         options={[
                             { value: 'draft', label: '存为草稿' },
                             { value: 'published', label: '立即发布' }
                         ]}
                     />
                     <div className="flex flex-col gap-1.5">
-                        <label className="text-sm font-medium text-gray-700">内容</label>
+                        <label className="text-sm font-medium text-gray-700">内容<span className="text-red-500 ml-1">*</span></label>
                         <textarea
                             className="px-3 py-2.5 bg-white border border-gray-300 rounded-lg text-sm focus:border-primary focus:ring-2 focus:ring-blue-100 h-32 resize-none outline-none transition-all shadow-sm"
                             placeholder="请输入公告内容..."

@@ -112,13 +112,13 @@ export const Profile: React.FC<ProfileProps> = ({ onLogout }) => {
 
   const handleUpdateUsername = async () => {
     if (!editNameValue.trim()) return;
-    
+
     // 前端校验：新用户名不能和当前用户名相同
     if (editNameValue.trim() === userProfile?.username) {
       message.warning('新用户名不能与当前用户名相同');
       return;
     }
-    
+
     try {
       const res = await updateUsername(editNameValue) as any;
       // 修正：PATCH /user/me 返回 UserMe 对象
@@ -406,6 +406,7 @@ export const Profile: React.FC<ProfileProps> = ({ onLogout }) => {
                       value={currentPassword}
                       onChange={e => setCurrentPassword(e.target.value)}
                       placeholder="请输入旧密码"
+                      required
                     />
                     <Input
                       label="新密码"
@@ -413,6 +414,7 @@ export const Profile: React.FC<ProfileProps> = ({ onLogout }) => {
                       value={newPassword}
                       onChange={e => setNewPassword(e.target.value)}
                       placeholder="6-50位字符"
+                      required
                     />
                     <Input
                       label="确认新密码"
@@ -420,6 +422,7 @@ export const Profile: React.FC<ProfileProps> = ({ onLogout }) => {
                       value={confirmPasswordInput}
                       onChange={e => setConfirmPasswordInput(e.target.value)}
                       placeholder="再次输入新密码"
+                      required
                     />
                     <div className="pt-4 flex justify-end">
                       <Button
@@ -449,6 +452,7 @@ export const Profile: React.FC<ProfileProps> = ({ onLogout }) => {
                         placeholder="example@email.com"
                         value={newEmail}
                         onChange={e => setNewEmail(e.target.value)}
+                        required
                       />
                       <div className="pt-4 flex justify-end">
                         <Button
@@ -477,6 +481,7 @@ export const Profile: React.FC<ProfileProps> = ({ onLogout }) => {
                         onChange={e => setVerificationCode(e.target.value)}
                         className="text-center tracking-widest text-lg"
                         maxLength={6}
+                        required
                       />
                       <div className="pt-4 flex justify-between items-center">
                         <button

@@ -370,6 +370,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onViewUser }) => {
                             onChange={(e) => setNewQuota(e.target.value)}
                             placeholder="请输入整数"
                             min={0}
+                            required
                         />
                         {quotaError && <p className="text-red-500 text-xs mt-1">{quotaError}</p>}
                     </div>
