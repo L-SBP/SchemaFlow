@@ -366,7 +366,7 @@ const DatabaseViewer: React.FC<DatabaseViewerProps> = ({ sessionId, projectId, c
               <div className="flex-1 overflow-auto">
                 <table className="w-full text-sm text-left">
                   {/* 确保列头 sticky 定位正常工作 */}
-                  <thead className="text-xs text-gray-700 uppercase bg-gray-50 border-b border-gray-200 sticky top-0 z-10">
+                  <thead className="text-xs text-gray-700 bg-gray-50 border-b border-gray-200 sticky top-0 z-10">
                     <tr>
                       {columns.map((col) => (
                         <th key={col.field} className="px-6 py-3 font-medium whitespace-nowrap bg-gray-50">
