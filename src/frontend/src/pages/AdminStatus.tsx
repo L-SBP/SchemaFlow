@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Card, Tag } from '../components/UI.tsx';
-import { LayoutDashboard, Server, Users, AlertTriangle, Zap, ShieldAlert } from 'lucide-react';
+import { LayoutDashboard, Users, AlertTriangle, Zap, ShieldAlert, Folder } from 'lucide-react';
 import { AdminStats, AdminListItem, ViolationLogListItem } from '../types.ts';
 import { adminApi } from '../api/admin.ts';
 
@@ -56,20 +56,7 @@ export const AdminStatus: React.FC = () => {
             </div>
 
             {/* 1. 核心指标卡片 (Real API Data: GET /dashboard/stats) */}
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-                <Card className={`bg-gradient-to-br from-blue-50 to-white border-blue-100 ${isLoading ? 'animate-pulse' : ''}`}>
-                    <div className="flex items-center gap-3 mb-2 text-blue-600">
-                        <Server size={20} />
-                        <span className="font-bold">系统健康度</span>
-                    </div>
-                    <div className="text-2xl font-bold text-gray-800 capitalize">
-                        {stats?.system_health || '-'}
-                    </div>
-                    <p className={`text-xs mt-1 flex items-center gap-1 font-medium ${stats?.system_health === 'good' ? 'text-green-600' : 'text-red-500'}`}>
-                        状态: {stats?.system_health === 'good' ? '良好' : '异常'}
-                    </p>
-                </Card>
-
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                 <Card className="bg-gradient-to-br from-purple-50 to-white border-purple-100">
                     <div className="flex items-center gap-3 mb-2 text-purple-600">
                         <Users size={20} />
@@ -88,13 +75,13 @@ export const AdminStatus: React.FC = () => {
                     <p className="text-xs text-green-600 mt-1">Queries Processed</p>
                 </Card>
 
-                <Card className="bg-gradient-to-br from-orange-50 to-white border-orange-100">
-                    <div className="flex items-center gap-3 mb-2 text-orange-600">
-                        <AlertTriangle size={20} />
-                        <span className="font-bold">高危拦截</span>
+                <Card className="bg-gradient-to-br from-blue-50 to-white border-blue-100">
+                    <div className="flex items-center gap-3 mb-2 text-blue-600">
+                        <Folder size={20} />
+                        <span className="font-bold">项目总数</span>
                     </div>
-                    <div className="text-2xl font-bold text-gray-800">{stats?.high_risk_operations_today ?? 0}</div>
-                    <p className="text-xs text-orange-600 mt-1">Blocked Operations</p>
+                    <div className="text-2xl font-bold text-gray-800">{stats?.total_projects ?? 0}</div>
+                    <p className="text-xs text-blue-600 mt-1">Total Projects</p>
                 </Card>
             </div>
 
