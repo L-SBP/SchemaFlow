@@ -113,6 +113,18 @@ export const UserProfile: React.FC<UserProfileProps> = ({ user, onBack }) => {
     return Number.isNaN(date.getTime()) ? last : date.toLocaleString();
   }, [detail?.last_login_at]);
 
+  const normalizeStatus = (status: UserStatus | AdminUserDetailResponse['status'] | undefined): UserStatus => {
+    const normalized = (status ?? '').toString().toLowerCase();
+    if (normalized === 'normal') return UserStatus.NORMAL;
+    if (normalized === 'suspended') return UserStatus.SUSPENDED;
+    if (normalized === 'banned') return UserStatus.BANNED;
+    return UserStatus.NORMAL;
+  };
+
+  const currentStatus = normalizeStatus(detail?.status ?? user.status);
+  const statusLabel = currentStatus === UserStatus.NORMAL ? '状态正常' : currentStatus === UserStatus.SUSPENDED ? '异常' : '已封禁';
+  const statusColor = currentStatus === UserStatus.NORMAL ? 'green' : currentStatus === UserStatus.SUSPENDED ? 'orange' : 'red';
+
   if (loading) {
     return (
       <div className="p-8 max-w-7xl mx-auto h-full overflow-y-auto">
@@ -157,8 +169,8 @@ export const UserProfile: React.FC<UserProfileProps> = ({ user, onBack }) => {
                 <Tag color={user.role === UserRole.ADMIN ? 'orange' : 'blue'}>
                   {user.role === UserRole.ADMIN ? '管理员' : '普通用户'}
                 </Tag>
-                <Tag color={user.status === UserStatus.NORMAL ? 'green' : 'red'}>
-                  {user.status === UserStatus.NORMAL ? '状态正常' : '已封禁'}
+                <Tag color={statusColor}>
+                  {statusLabel}
                 </Tag>
               </h2>
               <div className="text-gray-500 mt-2 flex items-center gap-6 text-sm">
