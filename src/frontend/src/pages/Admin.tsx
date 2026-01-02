@@ -155,13 +155,25 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onViewUser }) => {
         }
     };
 
+    const mapStatusToUserStatus = (status: AdminUserListItem['status']): UserStatus => {
+        switch (status) {
+            case 'normal':
+                return UserStatus.NORMAL;
+            case 'suspended':
+                return UserStatus.SUSPENDED;
+            case 'banned':
+            default:
+                return UserStatus.BANNED;
+        }
+    };
+
     // 辅助：将 AdminUserListItem 转换为 User 对象以适配 UserProfile 组件
     const mapToUser = (item: AdminUserListItem): User => ({
         id: item.user_id.toString(),
         username: item.username,
         email: item.email,
         role: UserRole.USER, // 列表默认视为普通用户，详情页可细化
-        status: item.status === 'normal' ? UserStatus.NORMAL : UserStatus.BANNED,
+        status: mapStatusToUserStatus(item.status),
         lastLogin: item.last_login_at ? new Date(item.last_login_at).toLocaleString() : '从未登录',
         projectQuota: item.max_databases
     });
