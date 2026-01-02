@@ -63,17 +63,21 @@ async def _execute_raw_sql(sql: str, db_name: Optional[str] = None) -> None:
     # 验证 SQL 安全性
     validate_safe_sql(sql, is_root=True)
 
-    # 如果指定了库名，则获取该库的 root 引擎
+    # 如果指定了库名，则获取该库的 root 引擎（临时引擎）
     if db_name:
-        # 注意：需要确保 PostgresHelper 实现了通过库名获取 root 引擎的方法
-        # 或者在此处根据 config.postgresql 动态构建 URL
         engine = await PostgresHelper.get_root_engine_by_db(db_name)
+        try:
+            async with engine.connect() as conn:
+                await conn.execute(text(sql))
+                await conn.commit()
+        finally:
+            # 临时引擎使用后需要释放
+            await engine.dispose()
     else:
         engine = await PostgresHelper.get_root_engine()
-
-    async with engine.connect() as conn:
-        await conn.execute(text(sql))
-        await conn.commit()
+        async with engine.connect() as conn:
+            await conn.execute(text(sql))
+            await conn.commit()
 
 
 async def create_postgresql_user(

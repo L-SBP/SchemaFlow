@@ -109,6 +109,12 @@ async def _invalidate_project_cache(project_id: int, user_id: int = None) -> boo
                 list_cache_deleted = False
                 log.warning(f"[Cache] Failed to delete project list cache pattern {project_list_pattern}")
                 logger.warning(f"[Task] Failed to clear project list cache for user {user_id}")
+            
+            # 3. 清除用户信息缓存（包含 used_databases 项目计数）
+            user_info_key = redis_key_manager.get_user_info_key(user_id)
+            log.info(f"[Cache] Attempting to delete user info cache key: {user_info_key}")
+            user_cache_deleted = await cache_service.delete(user_info_key)
+            log.info(f"[Cache] Delete operation result for user info cache {user_info_key}: {user_cache_deleted}")
 
         log.info(f"[Cache] Completed cache invalidation for project {project_id}, user {user_id}")
         return cache_deleted and list_cache_deleted

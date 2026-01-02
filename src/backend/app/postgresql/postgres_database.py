@@ -157,6 +157,51 @@ class PostgresHelper:
         return cls._root_engine
 
     @classmethod
+    async def get_root_engine_by_db(cls, db_name: str) -> AsyncEngine:
+        """
+        获取连接到特定数据库的 root 用户引擎。
+        用于在特定数据库上执行需要 root 权限的操作（如 GRANT 语句）。
+        
+        注意：此方法创建的引擎是临时的，调用者需要在使用后自行 dispose。
+        
+        Args:
+            db_name: 目标数据库名称
+            
+        Returns:
+            AsyncEngine: 连接到指定数据库的异步引擎
+            
+        Raises:
+            InvalidOperationException: 如果 root 引擎尚未初始化
+        """
+        if cls._root_engine is None:
+            raise InvalidOperationException("请先初始化root用户引擎")
+        
+        from core.config import config
+        
+        # 基于现有配置构建连接到特定数据库的 URL
+        db_url = url.URL.create(
+            drivername=config.postgresql.driver,
+            username=config.postgresql.username,
+            password=config.postgresql.password,
+            host=config.postgresql.host,
+            port=config.postgresql.port,
+            database=db_name
+        )
+        
+        log.info(f"Creating root engine for database: {db_name}")
+        
+        # 创建临时引擎连接到指定数据库
+        engine = create_async_engine(
+            db_url,
+            pool_size=1,  # 临时引擎使用较小的连接池
+            max_overflow=0,
+            pool_timeout=config.postgresql.pool_timeout,
+            pool_recycle=config.postgresql.pool_recycle
+        )
+        
+        return engine
+
+    @classmethod
     async def get_user_engine(cls, database_instance: DatabaseInstance) -> AsyncEngine:
         """
         获取用户引擎

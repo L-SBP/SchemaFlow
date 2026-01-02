@@ -10,7 +10,7 @@ from typing import List, Literal, Tuple, Dict, Any, Optional
 from datetime import datetime, date
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
-from sqlalchemy import func, or_, desc, cast, Date
+from sqlalchemy import func, or_, desc, cast, Date, and_
 
 from core.exceptions import DatabaseOperationFailedException
 
@@ -60,14 +60,20 @@ class CRUDAdminData:
             DatabaseOperationFailedException: 数据库查询失败时抛出。
         """
         try:
-            # 1. 构建基础查询：选择用户列 + 项目计数
+            # 1. 构建基础查询：选择用户列 + 项目计数（排除已删除项目）
             # SELECT u.*, count(p.project_id) FROM user_account u LEFT JOIN project p ON ...
             stmt = (
                 select(
                     UserAccount,
                     func.count(Project.project_id).label("project_count")
                 )
-                .outerjoin(Project, UserAccount.user_id == Project.user_id)
+                .outerjoin(
+                    Project, 
+                    and_(
+                        UserAccount.user_id == Project.user_id,
+                        Project.project_status != 'deleted'
+                    )
+                )
                 .group_by(UserAccount.user_id)
             )
 
@@ -184,8 +190,10 @@ class CRUDAdminData:
                 .where(cast(UserLoginHistory.login_time, Date) == today)
             active_users_today = await db.scalar(active_users_query) or 0
 
-            # 2. 项目总数
-            total_projects_query = select(func.count(Project.project_id))
+            # 2. 项目总数（排除已删除项目，包括部署中和已部署完成的）
+            total_projects_query = select(func.count(Project.project_id)).where(
+                Project.project_status != 'deleted'
+            )
             total_projects = await db.scalar(total_projects_query) or 0
 
             # 3. 今日查询数 (AI 生成语句的数量作为近似值)
