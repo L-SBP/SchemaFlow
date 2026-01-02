@@ -160,9 +160,17 @@ export const AdminStatus: React.FC = () => {
                                 <div key={admin.user_id} className="flex items-center justify-between border-b border-gray-50 pb-3 last:border-0">
                                     <div className="flex items-center gap-3">
                                         <div className="relative">
-                                            <div className="w-10 h-10 rounded-full bg-blue-50 flex items-center justify-center text-blue-600 font-bold text-sm">
-                                                {admin.username.charAt(0).toUpperCase()}
-                                            </div>
+                                            {admin.avatar_url ? (
+                                                <img 
+                                                    src={admin.avatar_url} 
+                                                    alt={admin.username} 
+                                                    className="w-10 h-10 rounded-full object-cover border border-gray-200"
+                                                />
+                                            ) : (
+                                                <div className="w-10 h-10 rounded-full bg-blue-50 flex items-center justify-center text-blue-600 font-bold text-sm">
+                                                    {admin.username.charAt(0).toUpperCase()}
+                                                </div>
+                                            )}
                                             <div className={`absolute bottom-0 right-0 w-3 h-3 rounded-full border-2 border-white ${admin.is_online ? 'bg-green-500' : 'bg-gray-300'}`}></div>
                                         </div>
                                         <div>

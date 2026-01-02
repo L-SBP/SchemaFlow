@@ -245,6 +245,7 @@ class AdminListItem(BaseModel):
     user_id: int
     username: str
     email: str
+    avatar_url: Optional[str] = None
     last_login_at: Optional[str] = None  # 前端期望字符串格式
     is_online: bool = Field(default=False, description="是否在线状态（基于 Redis 实时状态）")
 

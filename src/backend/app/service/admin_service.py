@@ -312,6 +312,7 @@ async def get_admin_list_service(db: AsyncSession, page: int, page_size: int) ->
             user_id=orm.user_id,
             username=orm.username,
             email=orm.email,
+            avatar_url=orm.avatar_url,
             last_login_at=last_login_str,
             is_online=is_online,  # 使用 Redis 中的实时在线状态
         )

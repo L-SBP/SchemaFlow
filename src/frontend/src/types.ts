@@ -307,6 +307,7 @@ export interface AdminListItem {
   user_id: number;
   username: string;
   email: string;
+  avatar_url?: string;
   last_login_at: string;
   is_online: boolean;
 }
