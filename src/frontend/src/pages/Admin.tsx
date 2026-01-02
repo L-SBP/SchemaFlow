@@ -246,7 +246,18 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onViewUser }) => {
                                 {users.map(user => (
                                     <tr key={user.user_id} className="hover:bg-gray-50/50">
                                         <td className="px-6 py-4 text-gray-500 font-mono whitespace-nowrap">{user.user_id}</td>
-                                        <td className="px-6 py-4 font-medium text-gray-800 whitespace-nowrap">{user.username}</td>
+                                        <td className="px-6 py-4 font-medium text-gray-800 whitespace-nowrap">
+                                            <div className="flex items-center gap-2">
+                                                {user.avatar_url ? (
+                                                    <img src={user.avatar_url} alt={user.username} className="w-6 h-6 rounded-full object-cover" />
+                                                ) : (
+                                                    <div className="w-6 h-6 rounded-full bg-blue-100 flex items-center justify-center text-blue-600 text-xs font-bold">
+                                                        {user.username.charAt(0).toUpperCase()}
+                                                    </div>
+                                                )}
+                                                {user.username}
+                                            </div>
+                                        </td>
                                         <td className="px-6 py-4 text-gray-600 whitespace-nowrap">{user.email}</td>
                                         <td className="px-6 py-4 whitespace-nowrap">
                                             <Tag color={user.status === 'normal' ? 'green' : user.status === 'banned' ? 'red' : 'orange'}>

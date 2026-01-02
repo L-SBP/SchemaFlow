@@ -118,6 +118,7 @@ class CRUDAdminData:
                     "status": user.status,
                     "max_databases": user.max_databases,
                     "last_login_at": user.last_login_at,
+                    "avatar_url": user.avatar_url,
                     "project_count": project_count  # 聚合查询出来的字段
                 })
 

@@ -58,6 +58,7 @@ class AdminUserListItem(BaseModel):
     project_count: int = Field(default=0, description="该用户拥有的项目数量")
     max_databases: int = Field(default=10, description="该用户最大数据库额度")
     last_login_at: Optional[datetime] = None
+    avatar_url: Optional[str] = None
 
     model_config = ConfigDict(from_attributes=True)
 

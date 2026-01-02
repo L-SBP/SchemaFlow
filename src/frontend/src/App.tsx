@@ -95,6 +95,10 @@ const App: React.FC = () => {
     navigate(role === UserRole.ADMIN ? ROUTES.ADMIN_USERS : ROUTES.DASHBOARD, { replace: true });
   };
 
+  const updateCurrentUser = (updates: Partial<{ name: string; avatar_url: string }>) => {
+    setCurrentUser(prev => prev ? { ...prev, ...updates } : null);
+  };
+
   const handleLogout = async () => {
     try {
       await authApi.logout();
@@ -253,7 +257,7 @@ const App: React.FC = () => {
         <div className="flex-1 overflow-hidden relative">
           <Routes>
             {/* 公共路由 - 两种角色都可访问 */}
-            <Route path="/profile" element={<Profile user={currentUser} onLogout={handleLogout} />} />
+            <Route path="/profile" element={<Profile user={currentUser} onLogout={handleLogout} onUpdateUser={updateCurrentUser} />} />
 
             {/* 普通用户路由 - 仅非管理员可访问 */}
             {!isAdmin && (

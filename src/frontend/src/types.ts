@@ -261,6 +261,7 @@ export interface AdminUserListItem {
   project_count: number;
   max_databases: number;
   last_login_at: string | null;
+  avatar_url?: string;
 }
 
 export interface AdminUserListResponse {

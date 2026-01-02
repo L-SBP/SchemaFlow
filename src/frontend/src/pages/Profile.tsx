@@ -18,9 +18,11 @@ interface ProfileProps {
   user?: { name: string; role: any } | null;
   // 新增：登出回调，用于修改敏感信息后强制重新登录
   onLogout?: () => void;
+  // 新增：更新全局用户状态回调
+  onUpdateUser?: (updates: Partial<{ name: string; avatar_url: string }>) => void;
 }
 
-export const Profile: React.FC<ProfileProps> = ({ onLogout }) => {
+export const Profile: React.FC<ProfileProps> = ({ onLogout, onUpdateUser }) => {
   const [activeTab, setActiveTab] = useState<'security' | 'email' | 'history'>('security');
 
   // --- 数据状态 ---
@@ -125,6 +127,10 @@ export const Profile: React.FC<ProfileProps> = ({ onLogout }) => {
       const updatedUser = res.username ? res : res.data;
       if (updatedUser && updatedUser.username) {
         setUserProfile(prev => prev ? { ...prev, username: updatedUser.username } : null);
+        // 同步更新全局状态
+        if (onUpdateUser) {
+          onUpdateUser({ name: updatedUser.username });
+        }
         setIsEditingName(false);
         message.success('用户名修改成功！');
       }
@@ -183,6 +189,10 @@ export const Profile: React.FC<ProfileProps> = ({ onLogout }) => {
       const updatedData = res.avatar_url ? res : res.data;
       if (updatedData && updatedData.avatar_url) {
         setUserProfile(prev => prev ? { ...prev, avatar_url: updatedData.avatar_url } : null);
+        // 同步更新全局状态
+        if (onUpdateUser) {
+          onUpdateUser({ avatar_url: updatedData.avatar_url });
+        }
         message.success('头像更新成功！');
         closeAvatarModal();
       }
