@@ -125,6 +125,7 @@ export const Announcements: React.FC = () => {
                 isOpen={!!selected}
                 onClose={() => setSelected(null)}
                 title="公告详情"
+                maxWidth="max-w-5xl"
                 footer={<Button onClick={() => setSelected(null)}>关闭</Button>}
             >
                 {selected && (
