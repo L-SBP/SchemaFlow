@@ -465,6 +465,11 @@ async def test_ai_model_connection(
     # 清理 URL 中的不可见字符（零宽空格、换行符等）
     import re
     clean_url = re.sub(r'[\x00-\x1f\x7f-\x9f\u200b-\u200d\ufeff]', '', data.api_url.strip())
+    
+    # 智能修正 URL：如果用户只输入了 Base URL (以 /v1 结尾)，自动追加 /chat/completions
+    if clean_url.endswith('/v1') or clean_url.endswith('/v1/'):
+        clean_url = clean_url.rstrip('/') + '/chat/completions'
+        
     clean_model_id = data.model_id.strip()
     
     # 获取 API 密钥：优先使用传入的密钥，否则从数据库获取

@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { AIModelConfigResponse, AIModelConfigDetailResponse, AIModelConfigCreate, AIModelConfigUpdate } from '../types.ts';
 import { Card, Button, Tag, Modal, Input, message, Select } from '../components/UI.tsx';
 import { Pagination } from '../components/Pagination.tsx';
-import { Bot, Plus, Edit3, Trash2, Loader2, RefreshCw, Eye, EyeOff, Zap, CheckCircle, XCircle } from 'lucide-react';
+import { Bot, Plus, Edit3, Trash2, Loader2, RefreshCw, Zap, CheckCircle, XCircle } from 'lucide-react';
 import { adminApi } from '../api/admin.ts';
 
 /**
@@ -30,7 +30,6 @@ export const AdminAIModels: React.FC = () => {
         api_key: '',
         model_type: 'general_llm'
     });
-    const [showApiKey, setShowApiKey] = useState(false);
 
     // 表单校验错误
     const [formErrors, setFormErrors] = useState<{ api_url?: string }>({});
@@ -99,7 +98,6 @@ export const AdminAIModels: React.FC = () => {
             api_key: '',
             model_type: 'general_llm'
         });
-        setShowApiKey(false);
         setFormErrors({});
         setTestResult(null);
         setIsModalOpen(true);
@@ -116,7 +114,6 @@ export const AdminAIModels: React.FC = () => {
                 api_key: '',
                 model_type: detail.model_type
             });
-            setShowApiKey(false);
             setFormErrors({});
             setTestResult(null);
             setIsModalOpen(true);
@@ -442,7 +439,7 @@ export const AdminAIModels: React.FC = () => {
                     <div className="relative">
                         <Input
                             label={editingModel ? "API 密钥 (留空则使用已保存的密钥)" : "API 密钥"}
-                            type={showApiKey ? "text" : "password"}
+                            type="password"
                             placeholder={editingModel ? "输入新密钥或留空使用已保存的" : "sk-xxxxx"}
                             value={formData.api_key}
                             onChange={(e) => {
@@ -451,13 +448,6 @@ export const AdminAIModels: React.FC = () => {
                             }}
                             required={!editingModel}
                         />
-                        <button
-                            type="button"
-                            className="absolute right-3 top-8 text-gray-400 hover:text-gray-600"
-                            onClick={() => setShowApiKey(!showApiKey)}
-                        >
-                            {showApiKey ? <EyeOff size={16} /> : <Eye size={16} />}
-                        </button>
                         {editingModel && !formData.api_key.trim() && (
                             <div className="mt-1">
                                 <span className="text-xs text-blue-600 bg-blue-50 px-2 py-0.5 rounded">将使用已保存的密钥</span>
