@@ -298,7 +298,6 @@ export const UserProfile: React.FC<UserProfileProps> = ({ user, onBack }) => {
                     <tr key={project.id} className="hover:bg-gray-50/50">
                       <td className="px-4 py-3 font-medium text-gray-800">
                         <div className="flex items-center gap-2 min-w-0">
-                          <Database size={14} className="text-gray-400 shrink-0" />
                           <span className="truncate" title={project.name}>{project.name}</span>
                         </div>
                       </td>
