@@ -1105,6 +1105,19 @@ export const Workspace: React.FC<WorkspaceProps> = ({ project, onBack }) => {
                             </div>
                           )}
 
+                          {/* 查询结果为空提示 */}
+                          {msg.sql && !msg.tableData && !isError && !msg.requiresConfirmation && /^\s*SELECT/i.test(msg.sql) && (
+                            <div className="mt-4 bg-white rounded-lg border border-gray-200 overflow-hidden shadow-sm">
+                              <div className="px-4 py-2 bg-gray-50 border-b border-gray-200 flex items-center gap-2 text-xs font-semibold text-gray-600">
+                                <TableIcon size={14} />
+                                查询结果 (0 条)
+                              </div>
+                              <div className="p-8 text-center text-gray-400 text-sm">
+                                查询结果为空
+                              </div>
+                            </div>
+                          )}
+
                           {/* 数据表格 (Table Data) */}
                           {msg.type === 'table' && msg.tableData && (
                             <div className="mt-4 bg-white rounded-lg border border-gray-200 overflow-hidden shadow-sm">
