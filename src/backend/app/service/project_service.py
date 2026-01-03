@@ -601,7 +601,15 @@ async def update_project_info_service(
     if db_obj.project_status == 'deleted':
         raise OperationNotPermittedException("无法更新已删除的项目")
 
-    updated_obj = await crud_project.update(db, project_id, **update_data)
+    # Fix: 仅允许更新元数据，防止前端误传 schema_definition 导致 Schema 被覆盖或触发重新生成
+    allowed_fields = {'project_name', 'description'}
+    filtered_update_data = {k: v for k, v in update_data.items() if k in allowed_fields}
+
+    # 如果没有需要更新的字段，直接返回当前对象
+    if not filtered_update_data:
+        return schemas.ProjectDetailOut.model_validate(db_obj)
+
+    updated_obj = await crud_project.update(db, project_id, **filtered_update_data)
 
     # 清除相关缓存，确保数据一致性
     await _invalidate_project_cache(project_id, user_id)

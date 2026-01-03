@@ -205,7 +205,7 @@ export const ProjectWizard: React.FC<ProjectWizardProps> = ({ projectId, onCompl
          */
         const stage = data.creation_stage;
         if (!isRegeneratingER && (
-          stage === CreationStageEnum.SCHEMA_GENERATED ||
+          (stage === CreationStageEnum.SCHEMA_GENERATED && !!data.er_diagram_code) ||
           stage === CreationStageEnum.DDL_GENERATED ||
           stage === CreationStageEnum.COMPLETED ||
           data.project_status === ProjectStatusEnum.ACTIVE)) {
@@ -218,7 +218,7 @@ export const ProjectWizard: React.FC<ProjectWizardProps> = ({ projectId, onCompl
     };
 
     fetchProject();
-    
+
     // 执行异步轮询逻辑
     if (!viewOnly && shouldPoll) {
       // 策略分支：常规任务 3s 一次，高频图形重绘 5s 一次以减轻服务器压力
@@ -253,7 +253,7 @@ export const ProjectWizard: React.FC<ProjectWizardProps> = ({ projectId, onCompl
         const parsed = JSON.parse(raw) as { stage?: string; progress?: number };
         const stage = (parsed.stage ?? null) as CreationStageEnum | null;
         const progress = Number(parsed.progress);
-        
+
         // 校验历史数据的有效性
         if (Number.isFinite(progress) && progress > 0) {
           const clamped = Math.max(0, Math.min(100, progress));
@@ -319,7 +319,7 @@ export const ProjectWizard: React.FC<ProjectWizardProps> = ({ projectId, onCompl
     const restored = restoredSnapshotRef.current;
     if (restored && restored.stage === stage && visualProgress < restored.progress) {
       setVisualProgress(restored.progress);
-      return; 
+      return;
     }
 
     // 完成类阶段的即时响应逻辑
@@ -339,7 +339,7 @@ export const ProjectWizard: React.FC<ProjectWizardProps> = ({ projectId, onCompl
       setVisualProgress(prev => {
         if (prev >= target) return prev;
         const remaining = target - prev;
-        const increment = Math.max(0.1, remaining * 0.05); 
+        const increment = Math.max(0.1, remaining * 0.05);
         return Math.min(target, prev + increment);
       });
     }, 100);
@@ -381,7 +381,7 @@ export const ProjectWizard: React.FC<ProjectWizardProps> = ({ projectId, onCompl
     if (!project) return;
     try {
       restoredSnapshotRef.current = null;
-      setShouldPoll(true); 
+      setShouldPoll(true);
 
       /**
        * 乐观更新 (Optimistic UI Update):
@@ -391,7 +391,7 @@ export const ProjectWizard: React.FC<ProjectWizardProps> = ({ projectId, onCompl
       latestStageRef.current = getStageIndex(nextStage);
 
       setProject(prev => prev ? { ...prev, creation_stage: nextStage } : null);
-      setVisualProgress(0); 
+      setVisualProgress(0);
 
       // 发起异步业务请求
       await generateDDL(project.project_id, editedSchema, requirements);
@@ -417,7 +417,7 @@ export const ProjectWizard: React.FC<ProjectWizardProps> = ({ projectId, onCompl
       latestStageRef.current = getStageIndex(nextStage);
 
       setProject(prev => prev ? { ...prev, creation_stage: nextStage } : null);
-      setVisualProgress(0); 
+      setVisualProgress(0);
 
       // 执行物理部署
       const updatedProject = await deployProject(project.project_id, editedDDL);
@@ -434,7 +434,7 @@ export const ProjectWizard: React.FC<ProjectWizardProps> = ({ projectId, onCompl
     } catch (err) {
       console.error("Failed to deploy project:", err);
       setError("部署项目失败。");
-      setShouldPoll(true); 
+      setShouldPoll(true);
     }
   }, [project, editedDDL]);
 
@@ -450,7 +450,7 @@ export const ProjectWizard: React.FC<ProjectWizardProps> = ({ projectId, onCompl
 
     setIsRegeneratingER(true);
     setError(null);
-    setShouldPoll(true); 
+    setShouldPoll(true);
 
     try {
       await regenerateER(project.project_id, editedSchema);
@@ -609,9 +609,8 @@ export const ProjectWizard: React.FC<ProjectWizardProps> = ({ projectId, onCompl
                 ) : (
                   <div className="h-full flex items-center justify-center text-gray-400">
                     <div className="text-center">
-                      <FileJson className="w-12 h-12 mx-auto mb-2 opacity-50" />
-                      <p>ER 图预览</p>
-                      <p className="text-sm">点击"确认修改"生成 ER 图</p>
+                      <Loader2 className="w-12 h-12 animate-spin mx-auto text-blue-500 mb-2" />
+                      <p>正在生成 ER 图...</p>
                     </div>
                   </div>
                 )}

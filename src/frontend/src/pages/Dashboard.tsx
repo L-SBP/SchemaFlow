@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { ProjectDTO, fetchProjects, createProject, updateProject, confirmDeleteProject, deleteProject } from '../api/project';
+import { ProjectDTO, fetchProjects, createProject, updateProject, confirmDeleteProject, deleteProject, getProjectDetail } from '../api/project';
 import { ProjectStatusEnum } from '../types';
 import { Button, Modal, Input, message } from '../components/UI';
-import { Plus, PlayCircle, Sparkles, AlertTriangle, LayoutDashboard } from 'lucide-react';
+import { Plus, PlayCircle, Sparkles, AlertTriangle, LayoutDashboard, Loader2 } from 'lucide-react';
 import { ProjectWizard } from '../components/ProjectWizard';
 import { ProjectOverview } from '../project-overview-optimization/ProjectOverview';
 import { ProjectData } from '../types/project-overview';
@@ -46,6 +46,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ onProjectSelect }) => {
 
   // 部署状态管理
   const [isDeploying, setIsDeploying] = useState(false);
+  const [isCreating, setIsCreating] = useState(false);
   const [currentProjectId, setCurrentProjectId] = useState<string | number | null>(null);
   const [wizardFooter, setWizardFooter] = useState<React.ReactNode>(null);
 
@@ -86,7 +87,9 @@ export const Dashboard: React.FC<DashboardProps> = ({ onProjectSelect }) => {
   // 创建项目 (POST)
   const handleCreateProject = async () => {
     if (!newProjectName || !newProjectDesc) return;
+    if (isCreating) return;
 
+    setIsCreating(true);
     setIsDeploying(true);
 
     try {
@@ -99,6 +102,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ onProjectSelect }) => {
     } catch (e) {
       console.error("Failed to create project:", e);
       setIsDeploying(false);
+      setIsCreating(false);
       setCurrentProjectId(null);
       message.error("创建失败，请检查网络或重试");
     }
@@ -110,10 +114,44 @@ export const Dashboard: React.FC<DashboardProps> = ({ onProjectSelect }) => {
       setNewProjectName('');
       setNewProjectDesc('');
       setIsDeploying(false);
+      setIsCreating(false);
       setCurrentProjectId(null);
       setWizardFooter(null);
     }, 300);
     loadProjects();
+  };
+
+  const handleWizardComplete = async () => {
+    if (currentProjectId) {
+      try {
+        // 获取最新项目详情以确保状态正确
+        const project = await getProjectDetail(currentProjectId);
+
+        // 关闭模态框并重置状态
+        setIsModalOpen(false);
+        setTimeout(() => {
+          setNewProjectName('');
+          setNewProjectDesc('');
+          setIsDeploying(false);
+          setIsCreating(false);
+          setCurrentProjectId(null);
+          setWizardFooter(null);
+        }, 300);
+
+        // 刷新列表
+        loadProjects();
+
+        // 跳转到工作台
+        if (onProjectSelect) {
+          onProjectSelect(project);
+        }
+      } catch (e) {
+        console.error("Failed to navigate to workspace:", e);
+        handleCloseModal();
+      }
+    } else {
+      handleCloseModal();
+    }
   };
 
   // --- 项目管理操作 ---
@@ -223,8 +261,8 @@ export const Dashboard: React.FC<DashboardProps> = ({ onProjectSelect }) => {
           !showProgressView ? (
             <>
               <Button onClick={handleCloseModal}>取消</Button>
-              <Button variant="primary" onClick={handleCreateProject} icon={<PlayCircle size={16} />}>
-                开始智能部署
+              <Button variant="primary" onClick={handleCreateProject} icon={isCreating ? <Loader2 className="animate-spin" size={16} /> : <PlayCircle size={16} />} disabled={isCreating}>
+                {isCreating ? '正在创建...' : '开始智能部署'}
               </Button>
             </>
           ) : wizardFooter
@@ -272,7 +310,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ onProjectSelect }) => {
         ) : (
           <ProjectWizard
             projectId={currentProjectId!}
-            onComplete={handleCloseModal}
+            onComplete={handleWizardComplete}
             onClose={handleCloseModal}
             renderFooter={setWizardFooter}
           />
