@@ -182,7 +182,7 @@ export const Select: React.FC<SelectProps> = ({
      * 用于在 Fixed 定位模式下，动态追随触发按钮的物理坐标，防止菜单被局部 overflow 容器裁剪。
      */
     const [menuPosition, setMenuPosition] = useState({ top: 0, left: 0, width: 0 });
-    
+
     // DOM 节点物理引用
     const selectRef = React.useRef<HTMLDivElement>(null);
     const buttonRef = React.useRef<HTMLButtonElement>(null);
@@ -228,7 +228,7 @@ export const Select: React.FC<SelectProps> = ({
                     parent = parent.parentElement;
                 }
             }
-            
+
             // 物理坐标重算
             const rect = targetElement!.getBoundingClientRect();
             setMenuPosition({
@@ -455,7 +455,7 @@ export const Steps: React.FC<{ steps: StepItem[]; current: number }> = ({ steps,
                             }`}>
                             {isCompleted ? <Check size={18} strokeWidth={3} /> : index + 1}
                         </div>
-                        
+
                         {/* 节点描述文本 */}
                         <div className={`mt-3 text-sm font-medium transition-colors duration-300 ${isCurrent ? 'text-primary' :
                             isCompleted ? 'text-gray-800' :
@@ -500,10 +500,10 @@ export const Modal: React.FC<ModalProps> = ({ isOpen, onClose, title, children, 
          * - overflow-y-auto: 允许在内容溢出时进行全屏滚动。
          */
         <div className="fixed inset-0 z-50 flex items-start justify-center bg-gray-900/60 backdrop-blur-sm p-2 sm:p-4 transition-opacity duration-300 overflow-y-auto">
-            
+
             {/* 模态框主体：应用 zoom-in 动画效果 */}
             <div className={`bg-white rounded-xl shadow-2xl w-full ${maxWidth} animate-in fade-in zoom-in-95 duration-200 flex flex-col my-auto shrink-0`}>
-                
+
                 {/* 头部标题区域 */}
                 <div className="px-4 sm:px-8 py-4 sm:py-5 border-b border-gray-100 flex justify-between items-center shrink-0 bg-white gap-2 min-h-[64px] rounded-t-xl">
                     <h3 className="text-base sm:text-lg font-bold text-gray-800 tracking-tight truncate flex-1 min-w-0 flex items-center">{title}</h3>
@@ -664,12 +664,12 @@ export const ToastContainer: React.FC = () => {
                             {toast.type === 'warning' && <AlertTriangle size={20} className="text-orange-600" />}
                             {toast.type === 'info' && <Info size={20} className="text-blue-600" />}
                         </div>
-                        
+
                         {/* 核心消息载荷区域：支持长文本自动折行 (break-words) */}
                         <div className="flex-1 text-sm text-gray-800 font-medium break-words leading-relaxed min-w-0 flex items-center">
                             {toast.content}
                         </div>
-                        
+
                         {/* 手动关闭触发器 */}
                         <button
                             onClick={() => removeToast(toast.id)}

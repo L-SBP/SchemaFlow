@@ -311,7 +311,7 @@ export const AdminAIModels: React.FC = () => {
                     </div>
                 ) : (
                     <div className="overflow-x-auto">
-                        <table className="w-full text-left text-sm table-fixed">
+                        <table className="w-full text-left text-sm table-fixed min-w-[1000px]">
                             <thead className="bg-gray-50 border-b border-gray-200">
                                 <tr>
                                     <th className="px-4 py-4 font-medium text-gray-600 whitespace-nowrap w-[15%]">模型名称</th>

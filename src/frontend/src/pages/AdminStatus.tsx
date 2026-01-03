@@ -107,9 +107,9 @@ export const AdminStatus: React.FC = () => {
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 h-[calc(100vh-300px)] min-h-[500px]">
                 {/* 违规审计日志 (Real API Data: GET /violations) */}
                 <div className="lg:col-span-2 h-full flex flex-col">
-                    <Card 
-                        title="安全违规审计日志" 
-                        className="flex-1 flex flex-col overflow-hidden" 
+                    <Card
+                        title="安全违规审计日志"
+                        className="flex-1 flex flex-col overflow-hidden"
                         bodyClassName="flex-1 flex flex-col overflow-hidden min-h-0 p-0 sm:p-0"
                     >
                         <div className="overflow-auto flex-1">
@@ -190,9 +190,9 @@ export const AdminStatus: React.FC = () => {
                                     <div className="flex items-center gap-3">
                                         <div className="relative">
                                             {admin.avatar_url ? (
-                                                <img 
-                                                    src={admin.avatar_url} 
-                                                    alt={admin.username} 
+                                                <img
+                                                    src={admin.avatar_url}
+                                                    alt={admin.username}
                                                     className="w-10 h-10 rounded-full object-cover border border-gray-200"
                                                 />
                                             ) : (
