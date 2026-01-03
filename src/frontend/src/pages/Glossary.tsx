@@ -17,13 +17,18 @@ import {
   Database
 } from 'lucide-react';
 import * as XLSX from 'xlsx';
-import { KnowledgeTerm, KnowledgeImportResponse } from '../types.ts';
+import { KnowledgeTerm, KnowledgeImportResponse, Project } from '../types.ts';
 import { glossaryApi, CreateTermParams } from '../api/glossary.ts';
 import { fetchProjects, ProjectDTO } from '../api/project.ts';
 import { Button, Input, Modal, Card, message, ConfirmDialog, Select } from '../components/UI.tsx';
 import { Pagination } from '../components/Pagination.tsx';
 
-export const Glossary: React.FC = () => {
+interface GlossaryProps {
+  /** 当前工作区选中的项目（从 App 传入） */
+  selectedProject?: Project | null;
+}
+
+export const Glossary: React.FC<GlossaryProps> = ({ selectedProject }) => {
   // --- 状态管理 ---
 
   // 项目列表 (从真实 API 获取)
@@ -73,9 +78,15 @@ export const Glossary: React.FC = () => {
       try {
         const data = await fetchProjects();
         setProjectList(data.items);
-        // 如果当前没有选中项目且获取到了项目列表，默认选中第一个
+        // 优先使用工作区选中的项目，否则使用列表第一个
         if (data.items.length > 0 && !selectedProjectId) {
-          setSelectedProjectId(String(data.items[0].project_id));
+          if (selectedProject?.id) {
+            // 如果有工作区选中的项目，使用该项目
+            setSelectedProjectId(selectedProject.id);
+          } else {
+            // 否则使用列表第一个
+            setSelectedProjectId(String(data.items[0].project_id));
+          }
         }
       } catch (error) {
         console.error("Failed to fetch projects", error);
@@ -84,7 +95,7 @@ export const Glossary: React.FC = () => {
       }
     };
     loadProjects();
-  }, []);
+  }, [selectedProject]);
 
   // --- 获取术语列表 (依赖 selectedProjectId) ---
   useEffect(() => {

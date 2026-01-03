@@ -273,8 +273,8 @@ const App: React.FC = () => {
                     />
                   }
                 />
-                <Route path="/reports" element={<Reports projects={projects} />} />
-                <Route path="/glossary" element={<Glossary />} />
+                <Route path="/reports" element={<Reports projects={projects} selectedProject={selectedProject} />} />
+                <Route path="/glossary" element={<Glossary selectedProject={selectedProject} />} />
                 <Route path="/announcements" element={<Announcements />} />
               </>
             )}

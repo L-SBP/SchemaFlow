@@ -10,6 +10,8 @@ import { toPng } from 'html-to-image';
 
 interface ReportsProps {
   projects?: Project[];
+  /** 当前工作区选中的项目（从 App 传入） */
+  selectedProject?: Project | null;
 }
 
 // 分页配置
@@ -17,9 +19,12 @@ const PAGE_SIZE = 6;
 
 const COLORS = ['#1677ff', '#52c41a', '#faad14', '#ff4d4f', '#722ed1', '#13c2c2'];
 
-export const Reports: React.FC<ReportsProps> = ({ projects }) => {
+export const Reports: React.FC<ReportsProps> = ({ projects, selectedProject }) => {
   const [availableProjects, setAvailableProjects] = useState<Project[]>(projects || []);
-  const [selectedProjectId, setSelectedProjectId] = useState<string>((projects || [])[0]?.id || '');
+  // 优先使用工作区选中的项目
+  const [selectedProjectId, setSelectedProjectId] = useState<string>(
+    selectedProject?.id || (projects || [])[0]?.id || ''
+  );
 
   const mapProjectDTOToProject = (projectDTO: ProjectDTO): Project => {
     const dbTypeMap: Record<string, 'MySQL' | 'PostgreSQL' | 'SQLite'> = {
@@ -51,7 +56,10 @@ export const Reports: React.FC<ReportsProps> = ({ projects }) => {
     const ensureProjects = async () => {
       if (projects && projects.length > 0) {
         setAvailableProjects(projects);
-        if (!selectedProjectId) setSelectedProjectId(projects[0].id);
+        if (!selectedProjectId) {
+          // 优先使用工作区选中的项目
+          setSelectedProjectId(selectedProject?.id || projects[0].id);
+        }
         return;
       }
 
@@ -59,7 +67,14 @@ export const Reports: React.FC<ReportsProps> = ({ projects }) => {
         const dtos = await fetchProjects();
         const mapped = (dtos.items || []).map(mapProjectDTOToProject);
         setAvailableProjects(mapped);
-        if (!selectedProjectId && mapped.length > 0) setSelectedProjectId(mapped[0].id);
+        if (!selectedProjectId && mapped.length > 0) {
+          // 优先使用工作区选中的项目
+          if (selectedProject?.id) {
+            setSelectedProjectId(selectedProject.id);
+          } else {
+            setSelectedProjectId(mapped[0].id);
+          }
+        }
       } catch (error) {
         console.error('Failed to load projects for reports:', error);
         // 错误已由API客户端统一处理，这里只需记录日志
@@ -68,7 +83,7 @@ export const Reports: React.FC<ReportsProps> = ({ projects }) => {
 
     ensureProjects();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [projects]);
+  }, [projects, selectedProject]);
 
   // State: API Data
   const [reports, setReports] = useState<Report[]>([]);
