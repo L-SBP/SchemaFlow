@@ -267,20 +267,30 @@ async def import_knowledge_service(
             # [修复] 增加编码自动回退机制
             try:
                 # 1. 优先尝试标准 UTF-8
-                df = pd.read_csv(io.BytesIO(content), encoding='utf-8')
+                df = pd.read_csv(io.BytesIO(content), encoding='utf-8', index_col=False)
             except UnicodeDecodeError:
                 try:
                     # 2. 失败则尝试 GB18030 (包含 GBK 和 GB2312 的超集，兼容性最好)
-                    df = pd.read_csv(io.BytesIO(content), encoding='gb18030')
+                    df = pd.read_csv(io.BytesIO(content), encoding='gb18030', index_col=False)
                 except UnicodeDecodeError:
                     # 3. 还是不行，尝试 Windows-1252 (西欧常见)
-                    df = pd.read_csv(io.BytesIO(content), encoding='cp1252')
+                    df = pd.read_csv(io.BytesIO(content), encoding='cp1252', index_col=False)
 
         else:
             # Excel 文件是二进制格式，不需要指定 encoding
             df = pd.read_excel(io.BytesIO(content))
+        
+        # 重置索引确保索引为数字
+        df = df.reset_index(drop=True)
     except Exception as e:
         raise ValidationException(f"解析文件失败: {str(e)}")
+
+    # 检查文件是否为空或列数不足
+    if df.empty:
+        raise ValidationException("文件格式错误：文件内容为空")
+    
+    if len(df.columns) < 2:
+        raise ValidationException("文件格式错误：至少需要两列数据（术语、定义）")
 
     # 3. 校验表头 (假设模板列名为 term, definition, examples)
     # 支持中文列名，如 "术语", "定义", "示例"
@@ -288,6 +298,15 @@ async def import_knowledge_service(
     # 简单的列名映射，兼容中文
     rename_map = {'术语': 'term', '定义': 'definition', '示例': 'examples', '备注': 'examples'}
     df.rename(columns=rename_map, inplace=True)
+
+    # 检查是否缺少表头（第一行被当作数据而非列名）
+    # 如果列名不包含预期的表头，说明可能缺少表头行
+    current_cols = set(df.columns)
+    expected_cols = {'term', 'definition', '术语', '定义'}
+    if not current_cols.intersection(expected_cols):
+        raise ValidationException(
+            "文件格式错误：缺少表头行。请确保第一行为列名，且包含「术语」和「定义」两列"
+        )
 
     if not all(col in df.columns for col in required_cols):
         raise ValidationException("文件格式错误：缺少必需的列。请确保文件包含「术语」和「定义」两列")
@@ -301,26 +320,43 @@ async def import_knowledge_service(
     existing_terms = {item.term for item in existing_items}
 
     for index, row in df.iterrows():
-        row_num = index + 2  # Excel 行号从 1 开始，表头占 1 行
-        term = str(row.get('term', '')).strip()
-        definition = str(row.get('definition', '')).strip()
-        examples = str(row.get('examples', ''))
-        if pd.isna(examples): examples = ""
+        # 安全转换行号，处理非数字索引的情况
+        try:
+            row_num = int(index) + 2  # Excel 行号从 1 开始，表头占 1 行
+        except (ValueError, TypeError):
+            # 如果索引无法转换为整数，说明文件格式可能有问题
+            raise ValidationException(
+                "文件格式错误：数据列解析异常，可能是某行数据中包含了多余的逗号(,)分隔符，"
+                "导致列数不匹配。请检查并修正文件内容。"
+            )
+        try:
+            # 安全地获取和转换字段值
+            term_val = row.get('term', '')
+            definition_val = row.get('definition', '')
+            examples_val = row.get('examples', '')
+            
+            # 处理可能的 NaN 值和类型转换
+            term = '' if pd.isna(term_val) else str(term_val).strip()
+            definition = '' if pd.isna(definition_val) else str(definition_val).strip()
+            examples = '' if pd.isna(examples_val) else str(examples_val).strip()
 
-        if not term or not definition:
-            failures.append(schemas.ImportFailure(row=row_num, error="Term or Definition is empty"))
+            if not term or not definition:
+                failures.append(schemas.ImportFailure(row=row_num, error="术语或定义为空"))
+                continue
+
+            if term in existing_terms:
+                failures.append(schemas.ImportFailure(row=row_num, error="术语已存在"))
+                continue
+
+            success_items.append({
+                "term": term,
+                "definition": definition,
+                "examples": examples
+            })
+            existing_terms.add(term)  # 防止文件内重复
+        except Exception as e:
+            failures.append(schemas.ImportFailure(row=row_num, error=f"数据格式错误: {str(e)}"))
             continue
-
-        if term in existing_terms:
-            failures.append(schemas.ImportFailure(row=row_num, error="Term already exists"))
-            continue
-
-        success_items.append({
-            "term": term,
-            "definition": definition,
-            "examples": examples
-        })
-        existing_terms.add(term)  # 防止文件内重复
 
     # 5. 批量写入
     imported_count = 0
