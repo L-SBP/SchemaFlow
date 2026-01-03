@@ -239,7 +239,7 @@ const App: React.FC = () => {
   const defaultRoute = isAdmin ? ROUTES.ADMIN_USERS : ROUTES.DASHBOARD;
 
   return (
-    <div className="flex h-screen h-[100dvh] bg-[#f0f2f5] bg-[url('https://gw.alipayobjects.com/zos/rmsportal/TVYTbAXWheQpRcWDaDMu.svg')] bg-center bg-no-repeat bg-contain overflow-hidden">
+    <div className="flex h-screen h-[100dvh] bg-[#f0f2f5] bg-[url('/background.svg')] bg-center bg-no-repeat bg-contain overflow-hidden">
       <ToastContainer />
 
       <Sidebar
