@@ -1185,7 +1185,7 @@ export const Workspace: React.FC<WorkspaceProps> = ({ project, onBack }) => {
                   }
                 }}
                 placeholder={activeSessionId ? "输入您的指令..." : "请先选择左侧会话"}
-                className={`input-bar-textarea flex-1 min-w-0 bg-transparent border-none focus:ring-0 focus:outline-none resize-none overflow-hidden disabled:opacity-60 disabled:cursor-not-allowed ${
+                className={`input-bar-textarea flex-1 min-w-0 bg-transparent border-none focus:ring-0 focus:outline-none resize-none overflow-y-auto disabled:opacity-60 disabled:cursor-not-allowed ${
                   // 响应式输入框样式
                   is.mobile ? 'pl-3 py-3 text-sm h-12' : 'pl-4 py-4 text-sm h-14'
                   }`}
