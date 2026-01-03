@@ -348,21 +348,23 @@ export const Profile: React.FC<ProfileProps> = ({ onLogout, onUpdateUser }) => {
             </div>
 
             <div className="border-t border-gray-100 pt-6 text-left space-y-4">
-              <div>
-                <div className="flex justify-between text-sm mb-1">
-                  <span className="text-gray-500">项目额度</span>
-                  {/* 修复：添加默认值 0，防止 userProfile 未加载时显示空 */}
-                  <span className="font-medium text-gray-800">
-                    {userProfile?.used_databases ?? 0} / {userProfile?.max_databases ?? 0}
-                  </span>
+              {!userProfile?.is_admin && (
+                <div>
+                  <div className="flex justify-between text-sm mb-1">
+                    <span className="text-gray-500">项目额度</span>
+                    {/* 修复：添加默认值 0，防止 userProfile 未加载时显示空 */}
+                    <span className="font-medium text-gray-800">
+                      {userProfile?.used_databases ?? 0} / {userProfile?.max_databases ?? 0}
+                    </span>
+                  </div>
+                  <div className="w-full bg-gray-100 rounded-full h-1.5">
+                    <div
+                      className="bg-primary h-1.5 rounded-full"
+                      style={{ width: `${Math.min(((userProfile?.used_databases || 0) / (userProfile?.max_databases || 1)) * 100, 100)}%` }}
+                    ></div>
+                  </div>
                 </div>
-                <div className="w-full bg-gray-100 rounded-full h-1.5">
-                  <div
-                    className="bg-primary h-1.5 rounded-full"
-                    style={{ width: `${Math.min(((userProfile?.used_databases || 0) / (userProfile?.max_databases || 1)) * 100, 100)}%` }}
-                  ></div>
-                </div>
-              </div>
+              )}
               <div className="flex justify-between text-sm">
                 <span className="text-gray-500">注册时间</span>
                 {/* 修复：对 userProfile.created_at 进行存在性检查，避免 Invalid Date */}
