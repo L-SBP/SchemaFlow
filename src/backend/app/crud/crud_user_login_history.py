@@ -40,7 +40,8 @@ class CRUDLoginHistory:
                 select(UserLoginHistory)
                 .where(
                     UserLoginHistory.user_id == user_id,
-                    UserLoginHistory.login_status == "success"
+                    UserLoginHistory.login_status == "success",
+                    UserLoginHistory.logout_time == None
                 )
                 .order_by(UserLoginHistory.login_time.desc())
                 .limit(1)
@@ -124,6 +125,11 @@ class CRUDLoginHistory:
             DatabaseOperationFailedException: 更新失败时抛出。
         """
         try:
+            # 确保登出时间不早于登录时间
+            if logout_time < login_history.login_time:
+                logout_time = login_history.login_time
+                log.warning(f"Logout time {logout_time} is earlier than login time {login_history.login_time}, setting logout time to login time")
+            
             # 只做数据赋值，不做业务判断（业务判断在Service层）
             login_history.logout_time = logout_time
             login_history.session_duration = logout_time - login_history.login_time
