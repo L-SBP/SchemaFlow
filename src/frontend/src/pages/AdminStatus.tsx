@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Card, Tag } from '../components/UI.tsx';
+import { Pagination } from '../components/Pagination.tsx';
 import { LayoutDashboard, Users, AlertTriangle, Zap, ShieldAlert, Folder } from 'lucide-react';
 import { AdminStats, AdminListItem, ViolationLogListItem } from '../types.ts';
 import { adminApi } from '../api/admin.ts';
@@ -16,21 +17,24 @@ export const AdminStatus: React.FC = () => {
     const [violations, setViolations] = useState<ViolationLogListItem[]>([]);
     const [isLoading, setIsLoading] = useState(true);
 
+    // 分页状态
+    const [violationPage, setViolationPage] = useState(1);
+    const [violationTotal, setViolationTotal] = useState(0);
+    const violationPageSize = 10;
+
     // --- 数据获取 ---
     useEffect(() => {
         const fetchAllData = async () => {
             setIsLoading(true);
             try {
-                // 并发请求所有数据
-                const [statsRes, adminsRes, violationsRes] = await Promise.all([
+                // 并发请求 Dashboard Stats 和 Admin List
+                const [statsRes, adminsRes] = await Promise.all([
                     adminApi.getDashboardStats(),
                     adminApi.getAdmins(1, 100), // 获取更多在线管理员
-                    adminApi.getViolations(1, 20) // 获取最新20条违规
                 ]);
 
                 setStats(statsRes);
                 setAdmins(adminsRes.items);
-                setViolations(violationsRes.items);
             } catch (error) {
                 console.error("Failed to load admin status data", error);
             } finally {
@@ -40,6 +44,20 @@ export const AdminStatus: React.FC = () => {
 
         fetchAllData();
     }, []);
+
+    // 独立获取违规日志以支持分页
+    useEffect(() => {
+        const fetchViolations = async () => {
+            try {
+                const res = await adminApi.getViolations(violationPage, violationPageSize);
+                setViolations(res.items);
+                setViolationTotal(res.total);
+            } catch (error) {
+                console.error("Failed to load violations", error);
+            }
+        };
+        fetchViolations();
+    }, [violationPage]);
 
     return (
         <div className="p-8 max-w-7xl mx-auto h-full overflow-y-auto space-y-8">
@@ -89,7 +107,11 @@ export const AdminStatus: React.FC = () => {
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 h-[calc(100vh-300px)] min-h-[500px]">
                 {/* 违规审计日志 (Real API Data: GET /violations) */}
                 <div className="lg:col-span-2 h-full flex flex-col">
-                    <Card title="安全违规审计日志" className="flex-1 flex flex-col overflow-hidden" extra={<span className="text-xs text-gray-400">最新20条</span>}>
+                    <Card 
+                        title="安全违规审计日志" 
+                        className="flex-1 flex flex-col overflow-hidden" 
+                        bodyClassName="flex-1 flex flex-col overflow-hidden min-h-0 p-0 sm:p-0"
+                    >
                         <div className="overflow-auto flex-1">
                             <table className="w-full text-left text-sm min-w-[600px]">
                                 <thead className="bg-gray-50 border-b border-gray-200 sticky top-0 z-10">
@@ -97,7 +119,6 @@ export const AdminStatus: React.FC = () => {
                                         <th className="px-4 py-3 whitespace-nowrap bg-gray-50">风险等级</th>
                                         <th className="px-4 py-3 whitespace-nowrap bg-gray-50">违规类型</th>
                                         <th className="px-4 py-3 whitespace-nowrap bg-gray-50">用户</th>
-                                        <th className="px-4 py-3 whitespace-nowrap bg-gray-50">处理状态</th>
                                         <th className="px-4 py-3 whitespace-nowrap bg-gray-50 text-right">时间</th>
                                     </tr>
                                 </thead>
@@ -133,22 +154,30 @@ export const AdminStatus: React.FC = () => {
                                             <td className="px-4 py-3 text-gray-600">
                                                 {log.username} <span className="text-xs text-gray-400">(ID:{log.user_id})</span>
                                             </td>
-                                            <td className="px-4 py-3">
-                                                <Tag color={log.resolution_status === 'resolved' ? 'green' : log.resolution_status === 'pending' ? 'orange' : 'gray'}>
-                                                    {log.resolution_status}
-                                                </Tag>
-                                            </td>
                                             <td className="px-4 py-3 text-gray-500 text-xs whitespace-nowrap text-right">
                                                 {new Date(log.created_at).toLocaleString()}
                                             </td>
                                         </tr>
                                     ))}
                                     {violations.length === 0 && (
-                                        <tr><td colSpan={5} className="text-center py-12 text-gray-400">暂无违规记录</td></tr>
+                                        <tr><td colSpan={4} className="text-center py-12 text-gray-400">暂无违规记录</td></tr>
                                     )}
                                 </tbody>
                             </table>
                         </div>
+                        {/* 分页器 */}
+                        {violationTotal > 0 && (
+                            <div className="border-t border-gray-100 bg-gray-50/50 shrink-0">
+                                <Pagination
+                                    current={violationPage}
+                                    total={violationTotal}
+                                    pageSize={violationPageSize}
+                                    onChange={setViolationPage}
+                                    showTotal={true}
+                                    simple
+                                />
+                            </div>
+                        )}
                     </Card>
                 </div>
 

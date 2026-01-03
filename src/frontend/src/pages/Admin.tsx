@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { User, UserRole, UserStatus, AdminUserListItem } from '../types.ts';
 import { Card, Button, Tag, Modal, Input, message, Select } from '../components/UI.tsx';
+import { Pagination } from '../components/Pagination.tsx';
 import { Search, Ban, CheckCircle, Users, Eye, Database, Edit3, Loader2, Filter, AlertTriangle } from 'lucide-react';
 import { adminApi } from '../api/admin.ts';
 
@@ -327,14 +328,14 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onViewUser }) => {
 
                 {/* 分页器 */}
                 {total > 0 && (
-                    <div className="flex justify-between items-center px-6 py-4 border-t border-gray-100 bg-gray-50/50">
-                        <span className="text-xs text-gray-500">
-                            共 {total} 条记录，当前第 {page} 页
-                        </span>
-                        <div className="flex gap-2">
-                            <Button variant="default" className="h-8 px-3 text-xs" disabled={page <= 1} onClick={() => setPage(p => p - 1)}>上一页</Button>
-                            <Button variant="default" className="h-8 px-3 text-xs" disabled={page * pageSize >= total} onClick={() => setPage(p => p + 1)}>下一页</Button>
-                        </div>
+                    <div className="border-t border-gray-100 bg-gray-50/50">
+                        <Pagination
+                            current={page}
+                            total={total}
+                            pageSize={pageSize}
+                            onChange={setPage}
+                            showTotal={true}
+                        />
                     </div>
                 )}
             </Card>

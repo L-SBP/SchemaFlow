@@ -334,6 +334,7 @@ interface CardProps {
     title?: ReactNode;
     extra?: ReactNode;
     className?: string;
+    bodyClassName?: string;
 }
 
 /**
@@ -342,7 +343,7 @@ interface CardProps {
  * 信息分组的核心容器。
  * 支持响应式内边距调节与悬停视觉浮起动效。
  */
-export const Card: React.FC<CardProps> = ({ children, title, extra, className = '' }: CardProps): JSX.Element => (
+export const Card: React.FC<CardProps> = ({ children, title, extra, className = '', bodyClassName = '' }: CardProps): JSX.Element => (
     <div className={`bg-white rounded-xl border border-gray-200 shadow-sm transition-all hover:shadow-md ${className}`}>
         {/* 顶部标题栏区域 */}
         {(title || extra) && (
@@ -353,7 +354,7 @@ export const Card: React.FC<CardProps> = ({ children, title, extra, className = 
             </div>
         )}
         {/* 内容插槽区域 */}
-        <div className="p-4 sm:p-6">{children}</div>
+        <div className={`p-4 sm:p-6 ${bodyClassName}`}>{children}</div>
     </div>
 );
 

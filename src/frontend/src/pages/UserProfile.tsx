@@ -234,9 +234,9 @@ export const UserProfile: React.FC<UserProfileProps> = ({ user, onBack }) => {
                               <span className="text-gray-400 text-xs">{timeText}</span>
                             </div>
                             <div className="flex items-center gap-2 text-gray-500 text-xs mt-1">
-                              <span className="flex items-center gap-0.5"><MapPin size={10} /> {log.login_status === 'success' ? '成功' : 
-                               log.login_status === 'forced_logout' ? '已登出' : 
-                               log.login_status === 'expired' ? '已过期' : '失败'}</span>
+                              <span className="flex items-center gap-0.5"><MapPin size={10} /> {log.login_status === 'success' ? '成功' :
+                                log.login_status === 'forced_logout' ? '已登出' :
+                                  log.login_status === 'expired' ? '已过期' : '失败'}</span>
                               <span className="flex items-center gap-0.5 max-w-[220px] truncate" title={log.user_agent || 'Unknown'}>
                                 <Globe size={10} /> {log.user_agent || 'Unknown'}
                               </span>
