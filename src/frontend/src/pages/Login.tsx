@@ -265,6 +265,7 @@ export const Login: React.FC<LoginProps> = ({ onLogin }) => {
             <div className="space-y-4">
               <Input
                 label="用户名"
+                required
                 value={username}
                 onChange={e => setUsername(e.target.value)}
                 placeholder="设置用户名"
@@ -274,6 +275,7 @@ export const Login: React.FC<LoginProps> = ({ onLogin }) => {
               <div className="animate-in fade-in slide-in-from-top-2 duration-200 space-y-4">
                 <Input
                   label="邮箱地址"
+                  required
                   type="email"
                   value={email}
                   onChange={e => setEmail(e.target.value)}
@@ -285,6 +287,7 @@ export const Login: React.FC<LoginProps> = ({ onLogin }) => {
                   <div className="flex-1">
                     <Input
                       label="验证码"
+                      required
                       value={verificationCode}
                       onChange={e => setVerificationCode(e.target.value)}
                       placeholder="6位验证码"
@@ -305,6 +308,7 @@ export const Login: React.FC<LoginProps> = ({ onLogin }) => {
 
               <Input
                 label="密码"
+                required
                 type="password"
                 value={password}
                 onChange={e => setPassword(e.target.value)}
@@ -315,6 +319,7 @@ export const Login: React.FC<LoginProps> = ({ onLogin }) => {
               <div className="animate-in fade-in slide-in-from-top-2 duration-200">
                 <Input
                   label="确认密码"
+                  required
                   type="password"
                   value={confirmPassword}
                   onChange={e => setConfirmPassword(e.target.value)}
