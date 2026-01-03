@@ -476,6 +476,10 @@ async def service_logout(
     # 设置用户离线状态
     await service_set_user_online_status(user_id, is_online=False)
 
+    # 删除用户信息缓存
+    cache_key = redis_key_manager.get_user_info_key(user_id)
+    await cache_service.delete(cache_key)
+
     # 查找用户最新的未登出登录记录
     latest_record = await crud_login_history.get_latest_unlogout_record(db, user_id)
 
