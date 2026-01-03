@@ -17,7 +17,7 @@
  */
 
 import React, { JSX, ReactNode, useState, useEffect } from 'react';
-import { Check, X, CheckCircle, AlertCircle, Info, AlertTriangle } from 'lucide-react';
+import { Check, X, CheckCircle, AlertCircle, Info, AlertTriangle, Eye, EyeOff } from 'lucide-react';
 
 // =========================================================
 // 1. Button Component - 交互触发器
@@ -93,21 +93,40 @@ interface InputProps extends React.InputHTMLAttributes<HTMLInputElement> {
  * 标准化表单输入单元。
  * 针对 iOS 环境优化了 16px 字体，解决移动端自动缩放导致的视口跳变问题。
  */
-export const Input: React.FC<InputProps> = ({ label, className = '', ...props }): JSX.Element => (
-    <div className="flex flex-col gap-1.5">
-        {/* 条件渲染：展示字段名称及必填红星标识 */}
-        {label && (
-            <label className="text-sm font-medium text-gray-700">
-                {label}
-                {props.required && <span className="text-red-500 ml-1">*</span>}
-            </label>
-        )}
-        <input
-            className={`px-3 py-2.5 min-h-[44px] bg-white border border-gray-300 rounded-lg text-base sm:text-sm focus:outline-none focus:border-primary focus:ring-2 focus:ring-blue-100 transition-all shadow-sm ${className}`}
-            {...props}
-        />
-    </div>
-);
+export const Input: React.FC<InputProps> = ({ label, className = '', type, ...props }): JSX.Element => {
+    const [showPassword, setShowPassword] = useState(false);
+    const isPassword = type === 'password';
+    const inputType = isPassword ? (showPassword ? 'text' : 'password') : type;
+
+    return (
+        <div className="flex flex-col gap-1.5">
+            {/* 条件渲染：展示字段名称及必填红星标识 */}
+            {label && (
+                <label className="text-sm font-medium text-gray-700">
+                    {label}
+                    {props.required && <span className="text-red-500 ml-1">*</span>}
+                </label>
+            )}
+            <div className="relative">
+                <input
+                    type={inputType}
+                    className={`px-3 py-2.5 min-h-[44px] bg-white border border-gray-300 rounded-lg text-base sm:text-sm focus:outline-none focus:border-primary focus:ring-2 focus:ring-blue-100 transition-all shadow-sm w-full ${className} ${isPassword ? 'pr-10' : ''}`}
+                    {...props}
+                />
+                {isPassword && (
+                    <button
+                        type="button"
+                        onClick={() => setShowPassword(!showPassword)}
+                        className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 focus:outline-none"
+                        tabIndex={-1}
+                    >
+                        {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                    </button>
+                )}
+            </div>
+        </div>
+    );
+};
 
 // =========================================================
 // 3. Select Component - 维度选择器
