@@ -299,6 +299,7 @@ export interface AdminUserDetailResponse {
   project_count: number;
   last_login_at: string | null;
   created_at: string | null;
+  avatar_url?: string;
   projects: AdminUserProjectItem[];
   login_history: AdminUserLoginHistoryItem[];
 }

@@ -161,8 +161,8 @@ export const UserProfile: React.FC<UserProfileProps> = ({ user, onBack }) => {
         <div className="flex items-start justify-between">
           <div className="flex items-center gap-6">
             <div className="w-20 h-20 bg-blue-100 rounded-full flex items-center justify-center text-primary text-2xl font-bold border-4 border-white shadow-sm overflow-hidden">
-              {user.avatar_url ? (
-                <img src={user.avatar_url} alt={user.username} className="w-full h-full object-cover" />
+              {(detail?.avatar_url || user.avatar_url) ? (
+                <img src={detail?.avatar_url || user.avatar_url} alt={user.username} className="w-full h-full object-cover" />
               ) : (
                 user.username.charAt(0).toUpperCase()
               )}

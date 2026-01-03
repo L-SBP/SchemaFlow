@@ -103,6 +103,7 @@ async def get_admin_user_detail_service(
         project_count=project_count,
         last_login_at=user_obj.last_login_at,
         created_at=getattr(user_obj, "created_at", None),
+        avatar_url=user_obj.avatar_url,
         projects=[
             AdminUserProjectItem(
                 project_id=p.project_id,

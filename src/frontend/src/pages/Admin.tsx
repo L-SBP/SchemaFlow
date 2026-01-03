@@ -175,7 +175,8 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onViewUser }) => {
         role: UserRole.USER, // 列表默认视为普通用户，详情页可细化
         status: mapStatusToUserStatus(item.status),
         lastLogin: item.last_login_at ? new Date(item.last_login_at).toLocaleString() : '从未登录',
-        projectQuota: item.max_databases
+        projectQuota: item.max_databases,
+        avatar_url: item.avatar_url
     });
 
     return (
@@ -246,18 +247,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onViewUser }) => {
                                 {users.map(user => (
                                     <tr key={user.user_id} className="hover:bg-gray-50/50">
                                         <td className="px-6 py-4 text-gray-500 font-mono whitespace-nowrap">{user.user_id}</td>
-                                        <td className="px-6 py-4 font-medium text-gray-800 whitespace-nowrap">
-                                            <div className="flex items-center gap-2">
-                                                <div className="w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center text-primary text-xs font-bold overflow-hidden">
-                                                    {user.avatar_url ? (
-                                                        <img src={user.avatar_url} alt={user.username} className="w-full h-full object-cover" />
-                                                    ) : (
-                                                        user.username.charAt(0).toUpperCase()
-                                                    )}
-                                                </div>
-                                                {user.username}
-                                            </div>
-                                        </td>
+                                        <td className="px-6 py-4 font-medium text-gray-800 whitespace-nowrap">{user.username}</td>
                                         <td className="px-6 py-4 text-gray-600 whitespace-nowrap">{user.email}</td>
                                         <td className="px-6 py-4 whitespace-nowrap">
                                             <Tag color={user.status === 'normal' ? 'green' : user.status === 'banned' ? 'red' : 'orange'}>

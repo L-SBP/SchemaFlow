@@ -179,6 +179,7 @@ class AdminUserDetailResponse(BaseModel):
     project_count: int = Field(default=0, description="项目数量")
     last_login_at: Optional[datetime] = None
     created_at: Optional[datetime] = None
+    avatar_url: Optional[str] = None
 
     projects: List[AdminUserProjectItem] = Field(default_factory=list)
     login_history: List[AdminUserLoginHistoryItem] = Field(default_factory=list)
