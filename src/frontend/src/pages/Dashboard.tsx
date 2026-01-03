@@ -289,11 +289,11 @@ export const Dashboard: React.FC<DashboardProps> = ({ onProjectSelect }) => {
                   {/* 更新：增加 SQLite 选项 */}
                   {(['MySQL', 'PostgreSQL', 'SQLite'] as const).map(type => {
                     // 将显示名称映射为 DatabaseIcon 需要的 dbType
-                    const dbTypeMap: Record<string, string> = {
-                      'MySQL': 'mysql',
-                      'PostgreSQL': 'postgresql',
-                      'SQLite': 'sqlite'
-                    };
+                    const dbTypeMap = {
+                      MySQL: 'mysql',
+                      PostgreSQL: 'postgresql',
+                      SQLite: 'sqlite'
+                    } as const;
                     return (
                       <div key={type} onClick={() => setNewProjectType(type)} className={`cursor-pointer px-3 sm:px-4 py-2.5 sm:py-3 rounded-lg border flex items-center gap-2 sm:gap-3 transition-all ${newProjectType === type ? 'border-primary bg-blue-50 text-primary ring-1 ring-primary' : 'border-gray-200 hover:border-gray-300 hover:bg-gray-50'}`}>
                         <DatabaseIcon dbType={dbTypeMap[type]} size={28} />
@@ -310,7 +310,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ onProjectSelect }) => {
                   onChange={setNewProjectAiModel}
                   options={[
                     { value: 'deepseek', label: 'DeepSeek' },
-                    { value: 'gpt3.5', label: 'GPT-3.5' },
+                    { value: 'chatgpt', label: 'GPT-3.5' },
                     { value: 'gpt4', label: 'GPT-4' }
                   ]}
                   required
