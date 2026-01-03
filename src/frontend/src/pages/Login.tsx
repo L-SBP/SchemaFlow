@@ -334,16 +334,18 @@ export const Login: React.FC<LoginProps> = ({ onLogin }) => {
             <div className="space-y-4">
               <Input
                 label="邮箱地址"
+                required
                 type="email"
                 value={email}
                 onChange={e => setEmail(e.target.value)}
-                placeholder="输入注册邮箱"
+                placeholder="输入绑定邮箱"
                 disabled={isLoading}
               />
               <div className="flex items-end gap-2">
                 <div className="flex-1">
                   <Input
                     label="验证码"
+                    required
                     value={verificationCode}
                     onChange={e => setVerificationCode(e.target.value)}
                     placeholder="6位验证码"
@@ -363,6 +365,7 @@ export const Login: React.FC<LoginProps> = ({ onLogin }) => {
 
               <Input
                 label="新密码"
+                required
                 type="password"
                 value={resetNewPassword}
                 onChange={e => setResetNewPassword(e.target.value)}
@@ -372,6 +375,7 @@ export const Login: React.FC<LoginProps> = ({ onLogin }) => {
 
               <Input
                 label="确认新密码"
+                required
                 type="password"
                 value={resetConfirmNewPassword}
                 onChange={e => setResetConfirmNewPassword(e.target.value)}
