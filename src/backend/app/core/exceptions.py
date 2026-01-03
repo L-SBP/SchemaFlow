@@ -76,7 +76,7 @@ class CodeInvalidException(BusinessException):
 class UserNotFoundException(BusinessException):
     """用户不存在异常。"""
     def __init__(self):
-        super().__init__(code=401, message="用户名或密码不正确")
+        super().__init__(code=401, message="用户不存在")
 
 class PasswordMismatchException(BusinessException):
     """密码不匹配异常。"""
@@ -115,13 +115,8 @@ class PasswordInvalidException(BusinessException):
     def __init__(self, user_id: int = 0, failed_attempts: int = 0, custom_message: str = None):
         if custom_message:
             message = custom_message
-        elif failed_attempts >= 3:
-            # suspended 只是标记异常，用户仍可登录，但会被管理员关注
-            message = f"密码错误次数过多，账户已被标记为异常，请注意账户安全"
-        elif failed_attempts > 0:
-            message = f"用户名或密码不正确，还剩 {3 - failed_attempts} 次尝试机会"
         else:
-            message = "用户名或密码不正确"
+            message = "密码错误"
         super().__init__(code=401, message=message)
         self.user_id = user_id
         self.failed_attempts = failed_attempts

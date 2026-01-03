@@ -224,17 +224,19 @@ export const UserProfile: React.FC<UserProfileProps> = ({ user, onBack }) => {
                     {pageItems.map((log) => {
                       const loginTime = new Date(log.login_time);
                       const timeText = Number.isNaN(loginTime.getTime()) ? log.login_time : loginTime.toLocaleString();
-                      const isSuccess = (log.login_status || '').toLowerCase() === 'success';
+                      const isFailed = (log.login_status || '').toLowerCase() === 'failed';
                       return (
                         <div key={log.login_id} className="flex items-start gap-3 text-sm border-b border-gray-50 pb-3 last:border-0 last:pb-0">
-                          <div className={`w-2 h-2 mt-1.5 rounded-full ${isSuccess ? 'bg-green-500' : 'bg-red-500'}`}></div>
+                          <div className={`w-2 h-2 mt-1.5 rounded-full ${isFailed ? 'bg-red-500' : 'bg-green-500'}`}></div>
                           <div className="flex-1">
                             <div className="flex justify-between">
                               <span className="font-medium text-gray-700">{log.ip_address}</span>
                               <span className="text-gray-400 text-xs">{timeText}</span>
                             </div>
                             <div className="flex items-center gap-2 text-gray-500 text-xs mt-1">
-                              <span className="flex items-center gap-0.5"><MapPin size={10} /> {log.login_status}</span>
+                              <span className="flex items-center gap-0.5"><MapPin size={10} /> {log.login_status === 'success' ? '成功' : 
+                               log.login_status === 'forced_logout' ? '已登出' : 
+                               log.login_status === 'expired' ? '已过期' : '失败'}</span>
                               <span className="flex items-center gap-0.5 max-w-[220px] truncate" title={log.user_agent || 'Unknown'}>
                                 <Globe size={10} /> {log.user_agent || 'Unknown'}
                               </span>

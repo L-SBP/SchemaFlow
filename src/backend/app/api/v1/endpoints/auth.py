@@ -15,7 +15,7 @@ from schema.token import Token # 记得导入这个
 from api.v1.deps import get_db
 from core import exceptions
 from service import email_service
-from service.user_service import service_register_user, service_login, create_login_record, \
+from service.user_service import service_register_user, service_login_with_record, create_login_record, \
     check_email_exists, service_save_token_in_redis, service_logout,service_check_user_exists,service_save_token_in_redis
 from service.password_reset_service import service_send_password_reset_code, service_reset_password_with_code
 from core.auth import create_access_token
@@ -31,6 +31,7 @@ router = APIRouter()
 # ============================================================
 @router.post("/swagger_login", response_model=Token)
 async def swagger_login(
+    request: Request,
     db: AsyncSession = Depends(get_db),
     form_data: OAuth2PasswordRequestForm = Depends()
 ):
@@ -38,6 +39,7 @@ async def swagger_login(
     专门兼容 OAuth2 表单格式的登录接口。
 
     Args:
+        request (Request): HTTP请求对象
         db (AsyncSession): 数据库会话。
         form_data (OAuth2PasswordRequestForm): OAuth2 表单数据。
 
@@ -48,10 +50,16 @@ async def swagger_login(
         HTTPException: 用户名密码错误(400)或 Token 保存失败(500)。
     """
     # 1. 验证用户
-    user = await service_login(db, form_data.username, form_data.password)
-    if not user:
-        from core.exceptions import UserNotFoundException
-        raise UserNotFoundException()
+    try:
+        user = await service_login_with_record(
+            db, 
+            request, 
+            form_data.username, 
+            form_data.password
+        )
+    except Exception:
+        # service_login_with_record 已经处理了异常和日志记录
+        raise
     
     if user.status != 'normal':
         from core.exceptions import UserStatusForbiddenException
@@ -167,16 +175,11 @@ async def login(
     device_info = request.headers.get("X-Device-Info", "")
     log.info("Login request: client_ip={}, user_agent={}, device_infp={}", client_ip, user_agent, device_info)
 
-    exist_user = await service_login(db, payload.username, payload.password)
-
-    log.info("start to record the login log")
-    await create_login_record(
+    exist_user = await service_login_with_record(
         db=db,
-        user_id=exist_user.user_id,
-        ip_address=client_ip,
-        login_status="success",
-        user_agent=user_agent,
-        device_info=device_info,
+        request=request,
+        username=payload.username, 
+        password=payload.password
     )
 
     # 异地频繁登录检测已禁用

@@ -17,7 +17,7 @@ import httpx
 import aiohttp
 import celery.exceptions as celery_exceptions
 
-from .exceptions import BusinessException, AppException, SQLConversionException
+from .exceptions import BusinessException, AppException, SQLConversionException, UserNotFoundException, PasswordInvalidException
 from .log import log
 from schema.unified_response import UnifiedResponse
 

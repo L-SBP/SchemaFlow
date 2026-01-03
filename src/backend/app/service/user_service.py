@@ -8,6 +8,7 @@
 # backend/app/service/user_service.py
 
 from typing import Optional, List, Dict, Any  # 确保导入了所有类型
+from fastapi import Request
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.exc import SQLAlchemyError
 
@@ -144,16 +145,18 @@ async def service_register_user(
         raise exceptions.DatabaseOperationFailedException("create user")
 
 
-async def service_login(
+async def service_login_with_record(
     db: AsyncSession,
+    request: Request,
     username: str,
     password: str
 ) -> Optional[UserAccount]:
     """
-    用户登录。
+    用户登录并记录登录日志。
 
     Args:
         db (AsyncSession): 数据库会话。
+        request (Request): HTTP请求对象。
         username (str): 用户名。
         password (str): 明文密码。
 
@@ -165,16 +168,45 @@ async def service_login(
         exceptions.PasswordInvalidException: 密码错误。
         exceptions.UserStatusForbiddenException: 用户状态异常。
     """
+    # 从请求中获取登录信息
+    client_ip = request.client.host
+    user_agent = request.headers.get("User-Agent", "")
+    device_info = request.headers.get("X-Device-Info", "")
+    
     user = await service_check_user_exists(db, username)
 
     if not user:
         log.info(f"Login failed: user {username} not found")
+        
+        # 记录登录失败日志
+        await create_login_record(
+            db=db,
+            user_id=None,  # 用户不存在，所以user_id为None
+            ip_address=client_ip,
+            login_status="failed",
+            user_agent=user_agent,
+            device_info=device_info,
+            failure_reason="User not found"
+        )
+        
         raise exceptions.UserNotFoundException()
 
     # 用户状态检查：只有 banned（封禁）状态禁止登录
     # suspended（异常）状态只是标记，用户仍可正常登录，管理员可查看并决定是否封禁
     if user.status == "banned":
         log.error(f"User {user.user_id} is banned, login denied")
+        
+        # 记录登录失败日志
+        await create_login_record(
+            db=db,
+            user_id=user.user_id,
+            ip_address=client_ip,
+            login_status="failed",
+            user_agent=user_agent,
+            device_info=device_info,
+            failure_reason="User is banned"
+        )
+        
         raise exceptions.UserStatusForbiddenException(status=user.status, user_id=user.user_id)
     
     # 如果用户是 suspended 状态，记录日志但允许登录
@@ -185,10 +217,21 @@ async def service_login(
     if not verify_password(password, user.password_hash):
         log.error(f"User {user.user_id} password is invalid")
         
+        # 记录登录失败日志
+        await create_login_record(
+            db=db,
+            user_id=user.user_id,
+            ip_address=client_ip,
+            login_status="failed",
+            user_agent=user_agent,
+            device_info=device_info,
+            failure_reason="Password invalid"
+        )
+        
         # 管理员账户不受密码错误次数限制
         if user.is_admin:
             log.info(f"Admin user {user.user_id} password invalid, but no failure tracking for admins")
-            raise exceptions.PasswordInvalidException(user_id=user.user_id, failed_attempts=0)
+            raise exceptions.PasswordInvalidException(user_id=user.user_id, failed_attempts=0, custom_message="用户名或密码不正确")
         
         # 普通用户：记录密码错误次数，检查是否达到三次阈值
         from core.security import login_failure_tracker, BlacklistManager, ViolationLogger
@@ -217,12 +260,26 @@ async def service_login(
             
             log.warning(f"User {user.user_id} has been suspended due to {fail_count} failed login attempts")
         
-        raise exceptions.PasswordInvalidException(user_id=user.user_id, failed_attempts=fail_count)
+        # 根据失败次数确定错误消息
+        if fail_count >= 3:
+            custom_message = f"密码错误次数过多，账户已被标记为异常，请注意账户安全"
+        elif fail_count > 0:
+            custom_message = f"用户名或密码不正确，还剩 {3 - fail_count} 次尝试机会"
+        else:
+            custom_message = "用户名或密码不正确"
+        
+        raise exceptions.PasswordInvalidException(user_id=user.user_id, failed_attempts=fail_count, custom_message=custom_message)
 
     # 登录成功，重置密码错误计数（仅普通用户）
     if not user.is_admin:
         from core.security import login_failure_tracker
         await login_failure_tracker.reset_failed_count(user.user_id)
+
+    # 处理旧的未登出会话
+    old_login_record = await crud_login_history.get_latest_unlogout_record(db, user.user_id)
+    if old_login_record:
+        log.info(f"Found old unlogout record {old_login_record.login_id} for user {user.user_id}, forcing logout")
+        await crud_login_history.update_logout_info(db, old_login_record)
 
     # 更新最后登录时间
     try:
@@ -238,6 +295,16 @@ async def service_login(
         log.warning(f"Failed to update last_login_at for user {user.user_id}: {e}")
         # 不抛出异常，允许登录继续进行
 
+    # 记录登录成功日志
+    await create_login_record(
+        db=db,
+        user_id=user.user_id,
+        ip_address=client_ip,
+        login_status="success",
+        user_agent=user_agent,
+        device_info=device_info,
+    )
+    
     log.info(f"User {user.user_id} login successfully")
     return user
 
