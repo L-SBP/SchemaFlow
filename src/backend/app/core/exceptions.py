@@ -112,8 +112,10 @@ class PasswordInvalidException(BusinessException):
     """
     user_id: int
     failed_attempts: int
-    def __init__(self, user_id: int, failed_attempts: int = 0):
-        if failed_attempts >= 3:
+    def __init__(self, user_id: int = 0, failed_attempts: int = 0, custom_message: str = None):
+        if custom_message:
+            message = custom_message
+        elif failed_attempts >= 3:
             # suspended 只是标记异常，用户仍可登录，但会被管理员关注
             message = f"密码错误次数过多，账户已被标记为异常，请注意账户安全"
         elif failed_attempts > 0:

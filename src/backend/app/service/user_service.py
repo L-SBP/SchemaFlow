@@ -536,7 +536,7 @@ async def update_password_service(
             raise exceptions.UserNotFoundException()
 
         if not verify_password(password_data.old_password, db_user.password_hash):
-            raise exceptions.PasswordInvalidException("旧密码不正确")
+            raise exceptions.PasswordInvalidException(user_id=user_id, custom_message="旧密码不正确")
 
         new_hashed_password = get_password_hash(password_data.new_password)
 
