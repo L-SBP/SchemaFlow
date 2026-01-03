@@ -126,11 +126,12 @@ class UserUpdatePassword(BaseModel):
     new_password: str = Field(..., description="新密码")
     confirm_password: str = Field(..., description="确认密码")
     
-    @validator('old_password', 'new_password', 'confirm_password')
-    def password_length(cls, v):
-        if not 6 <= len(v) <= 50:
-            raise ValueError('密码长度必须在6到50个字符之间')
-        return v
+    @model_validator(mode='after')
+    def check_password_length(self) -> 'UserUpdatePassword':
+        for pwd in [self.old_password, self.new_password, self.confirm_password]:
+            if not 6 <= len(pwd) <= 50:
+                raise ValueError('密码长度必须在6到50个字符之间')
+        return self
     
     @model_validator(mode='before')
     @classmethod
