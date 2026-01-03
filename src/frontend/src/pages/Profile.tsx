@@ -547,8 +547,10 @@ export const Profile: React.FC<ProfileProps> = ({ onLogout, onUpdateUser }) => {
                                   ) : '-'}
                                 </td>
                                 <td className="px-4 py-3 text-right">
-                                  <Tag color={log.login_status === 'success' ? 'green' : 'red'}>
-                                    {log.login_status === 'success' ? '成功' : '失败'}
+                                  <Tag color={log.login_status === 'failed' ? 'red' : 'green'}>
+                                    {log.login_status === 'success' ? '成功' : 
+                                     log.login_status === 'forced_logout' ? '已登出' : 
+                                     log.login_status === 'expired' ? '已过期' : '失败'}
                                   </Tag>
                                 </td>
                               </tr>
