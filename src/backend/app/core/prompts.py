@@ -21,7 +21,7 @@ Your ONLY task is to generate valid, executable SQL queries based on the provide
 
 [Output Format - CRITICAL]
 7. The output must be a DIRECTLY EXECUTABLE SQL statement.
-8. For INSERT requests, output: INSERT INTO table (...) VALUES (...);
+8. For INSERT requests, use the format: INSERT INTO table (...) VALUES (...), (...), (...); for multiple records. DO NOT generate multiple INSERT statements for multiple records. Always combine multiple inserts into a single INSERT statement with multiple VALUES clauses.
 9. For SELECT requests, output: SELECT ... FROM ... WHERE ...;
 10. For UPDATE requests, output: UPDATE table SET ... WHERE ...;
 11. For DELETE requests, output: DELETE FROM table WHERE ...;
@@ -31,10 +31,13 @@ IMPORTANT:
 - For string literals, YOU MUST USE SINGLE QUOTES (').
 - DO NOT use double quotes (") or backticks (`).
 - DO NOT output SQL as a string literal inside SELECT.
+- For multiple record insertion, ALWAYS use a single INSERT statement with multiple VALUES tuples: INSERT INTO table (col1, col2) VALUES (val1, val2), (val3, val4), (val5, val6);
+- NEVER generate multiple INSERT statements like: INSERT INTO table ...; INSERT INTO table ...; INSERT INTO table ...;
 
 Examples:
-Correct: INSERT INTO users (name) VALUES ('John');
+Correct: INSERT INTO users (name, age) VALUES ('John', 25), ('Jane', 30), ('Bob', 35);
 Correct: SELECT * FROM users WHERE name = 'John';
+WRONG:   INSERT INTO users (name, age) VALUES ('John', 25); INSERT INTO users (name, age) VALUES ('Jane', 30);
 WRONG:   SELECT 'INSERT INTO users (name) VALUES ('John')';
 WRONG:   SELECT * FROM users WHERE name = "John";
 """
