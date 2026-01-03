@@ -48,11 +48,6 @@ export const Announcements: React.FC = () => {
         fetchPublishedAnnouncements();
     }, []);
 
-    // 辅助函数：判断是否为最近 3 天内发布
-    const isNew = (dateStr: string) => {
-        return new Date(dateStr) > new Date(Date.now() - 86400000 * 3);
-    };
-
     return (
         <div className="p-4 sm:p-6 lg:p-8 max-w-7xl mx-auto h-full flex flex-col overflow-hidden">
             {/* 页面头部：标题与图标 - 固定在顶部 */}
@@ -83,10 +78,6 @@ export const Announcements: React.FC = () => {
                                             <div className="flex flex-wrap items-center gap-2 sm:gap-3 mb-2">
                                                 <span className="w-2 h-2 rounded-full bg-primary shrink-0"></span>
                                                 <h3 className="font-bold text-gray-800 text-base sm:text-lg truncate max-w-[calc(100%-4rem)]">{item.title}</h3>
-
-                                                {isNew(item.created_at) && (
-                                                    <Tag color="red">NEW</Tag>
-                                                )}
                                             </div>
 
                                             {/* 内容摘要：限制显示 2 行 */}
