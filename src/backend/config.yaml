@@ -120,7 +120,7 @@ dev:
     # 授权码
     key: "bfujmrhgwroudhei"
     # 验证码有效期
-    expire_time_seconds: 60
+    expire_time_seconds: 300
 
   mysql:
     # 数据库主机

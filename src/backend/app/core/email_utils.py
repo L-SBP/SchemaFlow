@@ -45,7 +45,7 @@ def make_email_content(verify_code: str):
                 <h3>亲爱的用户：</h3>
                 <p>你正在进行邮箱验证操作，你的验证码为：</p>
                 <p style="font-size: 20px; color: #1890ff; font-weight: bold;">{verify_code}</p>
-                <p>验证码有效期为 {config.smtp.expire_time_seconds / 60} 分钟，请尽快完成验证。</p>
+                <p>验证码有效期为 {int(config.smtp.expire_time_seconds / 60)} 分钟，请尽快完成验证。</p>
                 <p>若你未发起此操作，请忽略本邮件，感谢你的使用！</p>
             </body>
         </html>
