@@ -20,6 +20,12 @@ export default defineConfig(({ command, mode }) => {
           configure: (proxy, options) => {
             proxy.on('proxyReq', (proxyReq, req, res) => {
               console.log('代理转发中:', req.url, '->', options.target + req.url);
+              // 转发真实客户端 IP
+              const clientIp = req.headers['x-forwarded-for'] || req.socket.remoteAddress;
+              if (clientIp) {
+                proxyReq.setHeader('X-Forwarded-For', clientIp);
+                proxyReq.setHeader('X-Real-IP', typeof clientIp === 'string' ? clientIp.split(',')[0].trim() : clientIp);
+              }
             });
             proxy.on('error', (err, req, res) => {
               console.log('代理出错:', err);
