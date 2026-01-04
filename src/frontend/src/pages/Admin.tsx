@@ -441,7 +441,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onViewUser }) => {
                             className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-primary focus:border-primary outline-none transition-colors min-h-[100px] resize-none"
                             placeholder={
                                 targetStatusAction === 'banned' ? "请输入违规行为或封禁理由..." :
-                                    statusTargetUser?.status === 'banned' ? "请输入解封理由或申诉处理结果..." :
+                                    statusTargetUser?.status === 'banned' ? "请输入解封理由..." :
                                         "请输入恢复正常的原因（如：确认为误判、用户行为已恢复正常等）..."
                             }
                             value={statusReason}
