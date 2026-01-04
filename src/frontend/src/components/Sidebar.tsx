@@ -189,7 +189,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ role, user, selectedProject, a
                 {/* 主体导航区域 (Main Navigation Links)
                     采用 flex-1 占据中间剩余空间，内容超出时支持内部滚动。
                 */}
-                <div className={`flex-1 py-4 space-y-1 overflow-y-auto custom-scrollbar ${isCollapsed ? 'px-2' : 'px-3'}`}>
+                <div className={`flex-1 py-4 space-y-1 overflow-y-auto no-scrollbar ${isCollapsed ? 'px-2' : 'px-3'}`}>
 
                     {/* 当前工作区上下文入口 (Dynamic Context Slot)
                         仅对普通用户展示，用于快速定位当前的 AI 建模任务。

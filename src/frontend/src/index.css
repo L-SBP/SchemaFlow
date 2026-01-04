@@ -114,6 +114,15 @@ body {
   scrollbar-color: #c1c1c1 #f1f1f1;
 }
 
+/* 隐藏滚动条工具类 */
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
 /* ========================================
    4. ?????????
    ======================================== */
