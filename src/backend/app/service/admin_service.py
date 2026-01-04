@@ -164,18 +164,22 @@ async def update_user_status_service(
     # 2. 业务逻辑：调用 CRUD 修改，传入 db_obj=user_obj
     updated_user = await crud_user_account.update(db, db_obj=user_obj, status=data.status)
 
-    # 3. 如果用户被解封（状态变为normal），重置登录失败计数和请求频率
+    # 3. 如果用户状态被修改，重置相关的风控计数
+    from core.security import login_failure_tracker, freq_limiter, RemoteLoginDetector
+    
+    # 无论修改为什么状态，都清除 IP 变更历史
+    await RemoteLoginDetector.clear_ip_history(user_id)
+    
     if data.status == 'normal':
-        from core.security import login_failure_tracker, freq_limiter
         await login_failure_tracker.reset_failed_count(user_id)
         await freq_limiter.reset_frequency(user_id)
-        log.info(f"管理员 {admin_user_id} 修改用户 {user_id} 状态为 normal，已重置登录失败计数和请求频率")
-    
-    # 4. 如果用户被封禁，强制登出用户的所有活跃会话
+        log.info(f"管理员 {admin_user_id} 修改用户 {user_id} 状态为 normal，已重置登录失败计数、请求频率和 IP 历史")
     elif data.status == 'banned':
         from service.user_service import force_logout_user_sessions
         await force_logout_user_sessions(user_id)
-        log.info(f"管理员 {admin_user_id} 修改用户 {user_id} 状态为 {data.status}，已强制登出用户所有活跃会话")
+        log.info(f"管理员 {admin_user_id} 修改用户 {user_id} 状态为 {data.status}，已强制登出用户所有活跃会话并清除 IP 历史")
+    else:
+        log.info(f"管理员 {admin_user_id} 修改用户 {user_id} 状态为 {data.status}，已清除 IP 历史")
 
     # 5. 业务逻辑：记录到 user_ban_log (占位，可后续实现)
     # await create_ban_log(db, user_id, admin_user_id, reason=data.reason, ...)

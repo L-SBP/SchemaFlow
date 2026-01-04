@@ -306,6 +306,29 @@ async def service_login_with_record(
     )
     
     log.info(f"User {user.user_id} login successfully")
+
+    # 登录成功后，检查 IP 频繁变更情况
+    try:
+        from core.security import RemoteLoginDetector, ViolationLogger
+        is_ip_changed_frequently, ip_change_desc = await RemoteLoginDetector.check_frequent_ip_changes(
+            user.user_id,
+            client_ip
+        )
+        if is_ip_changed_frequently:
+            await ViolationLogger.log_violation(
+                db,
+                user.user_id,
+                ViolationLogger.EVENT_FREQUENT_REMOTE_LOGIN,
+                ip_change_desc,
+                risk_level=ViolationLogger.RISK_HIGH,
+                ip_address=client_ip,
+                client_user_agent=user_agent
+            )
+            await db.commit()
+            log.warning(f"User {user.user_id} marked as abnormal due to frequent IP changes during login")
+    except Exception as e:
+        log.error(f"Login IP check failed for user {user.user_id}: {e}")
+
     return user
 
 
