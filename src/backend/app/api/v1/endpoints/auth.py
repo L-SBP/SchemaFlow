@@ -170,7 +170,8 @@ async def login(
         UnifiedResponse: 包含Token和用户信息的响应。
     """
     # 初始化变量：存储登录记录需要的信息
-    client_ip = request.client.host
+    from core.utils import get_client_ip
+    client_ip = get_client_ip(request)
     user_agent = request.headers.get("User-Agent", "")
     device_info = request.headers.get("X-Device-Info", "")
     log.info("Login request: client_ip={}, user_agent={}, device_infp={}", client_ip, user_agent, device_info)
@@ -267,8 +268,8 @@ async def forgot_password(
 
     为避免用户枚举，无论邮箱是否存在，对外均返回成功。
     """
-
-    client_ip = request.client.host if request.client else None
+    from core.utils import get_client_ip
+    client_ip = get_client_ip(request)
     await service_send_password_reset_code(db, payload.email, client_ip=client_ip)
     return UnifiedResponse.success(message="重置邮件发送成功")
 

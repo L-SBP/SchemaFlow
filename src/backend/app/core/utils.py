@@ -61,3 +61,35 @@ def generate_random_string(length: int = 8, include_digits: bool = True) -> str:
     if include_digits:
         chars += string.digits
     return ''.join(random.choices(chars, k=length))
+
+
+def get_client_ip(request) -> str:
+    """
+    从 HTTP 请求中获取真实的客户端 IP 地址。
+    
+    在反向代理（如 Nginx、Docker 网络）环境下，request.client.host 只能获取到代理服务器的 IP。
+    此函数优先从 X-Forwarded-For 或 X-Real-IP 头中获取真实客户端 IP。
+    
+    Args:
+        request: FastAPI/Starlette Request 对象
+        
+    Returns:
+        str: 客户端真实 IP 地址
+    """
+    # 优先从 X-Forwarded-For 获取（可能包含多个 IP，取第一个）
+    forwarded_for = request.headers.get("X-Forwarded-For")
+    if forwarded_for:
+        # X-Forwarded-For 格式: client, proxy1, proxy2, ...
+        # 取第一个即为原始客户端 IP
+        return forwarded_for.split(",")[0].strip()
+    
+    # 其次从 X-Real-IP 获取
+    real_ip = request.headers.get("X-Real-IP")
+    if real_ip:
+        return real_ip.strip()
+    
+    # 最后回退到 request.client.host
+    if request.client:
+        return request.client.host
+    
+    return "127.0.0.1"

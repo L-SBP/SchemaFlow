@@ -169,7 +169,8 @@ async def service_login_with_record(
         exceptions.UserStatusForbiddenException: 用户状态异常。
     """
     # 从请求中获取登录信息
-    client_ip = request.client.host
+    from core.utils import get_client_ip
+    client_ip = get_client_ip(request)
     user_agent = request.headers.get("User-Agent", "")
     device_info = request.headers.get("X-Device-Info", "")
     
