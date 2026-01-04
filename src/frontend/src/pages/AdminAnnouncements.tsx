@@ -84,7 +84,18 @@ export const AdminAnnouncements: React.FC = () => {
     };
 
     const handleSave = async () => {
-        if (!title || !content) return;
+        if (!title.trim()) {
+            message.error('请输入公告标题');
+            return;
+        }
+        if (!status) {
+            message.error('请选择公告状态');
+            return;
+        }
+        if (!content.trim()) {
+            message.error('请输入公告内容');
+            return;
+        }
 
         setIsSaving(true);
         try {

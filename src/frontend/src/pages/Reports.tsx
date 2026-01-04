@@ -188,7 +188,26 @@ export const Reports: React.FC<ReportsProps> = ({ projects, selectedProject }) =
 
   // --- API: Create Report ---
   const handleCreateReport = async () => {
-    if (!reportName || !selectedQueryObj) return;
+    if (!selectedQueryObj) {
+      message.error('请先选择一条历史查询作为数据源');
+      return;
+    }
+    if (!isSelectedQueryReportable) {
+      message.error('该查询不支持生成报表');
+      return;
+    }
+    if (!reportName.trim()) {
+      message.error('请输入报表名称');
+      return;
+    }
+    if (!xAxisKey) {
+      message.error('请选择 X 轴 (分类/维度)');
+      return;
+    }
+    if (!yAxisKey) {
+      message.error('请选择 Y 轴 (数值/指标)');
+      return;
+    }
 
     setIsSaving(true);
     try {
@@ -482,8 +501,17 @@ export const Reports: React.FC<ReportsProps> = ({ projects, selectedProject }) =
               {step === 0 ? (
                 <Button
                   variant="primary"
-                  onClick={() => setStep(1)}
-                  disabled={!selectedQueryId || !isSelectedQueryReportable}
+                  onClick={() => {
+                    if (!selectedQueryId) {
+                      message.error('请先选择一条历史查询');
+                      return;
+                    }
+                    if (!isSelectedQueryReportable) {
+                      message.error('该查询不支持生成报表');
+                      return;
+                    }
+                    setStep(1);
+                  }}
                   icon={<ArrowRight size={16} />}
                 >
                   下一步: 配置图表
@@ -492,7 +520,7 @@ export const Reports: React.FC<ReportsProps> = ({ projects, selectedProject }) =
                 <Button
                   variant="primary"
                   onClick={handleCreateReport}
-                  disabled={!reportName || !xAxisKey || !yAxisKey || isSaving || !isSelectedQueryReportable}
+                  disabled={isSaving}
                   icon={isSaving ? <Loader2 className="animate-spin" size={16} /> : <Save size={16} />}
                 >
                   {isSaving ? '创建中...' : '完成并创建'}
