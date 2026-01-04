@@ -796,12 +796,16 @@ export const Workspace: React.FC<WorkspaceProps> = ({ project, onBack }) => {
     } catch (error: any) {
       console.error('Send message failed:', error);
       // 错误已由全局错误处理器统一处理（包括弹窗提示）
-      // 无论什么错误，都尝试刷新消息列表，因为后端可能已经处理完成并保存了消息
+      
+      // 立即清除处理中标记，停止显示"思考中"状态
+      setProcessingSessionIds(prev => {
+        const next = new Set(prev);
+        next.delete(activeSessionId);
+        return next;
+      });
+
+      // 无论什么错误，都立即刷新消息列表，因为后端已经处理完成并保存了消息（包括错误消息）
       try {
-        // 等待后端处理完成（AI服务错误检测通常几秒内完成）
-        console.log('Waiting for backend to complete processing...');
-        await new Promise(resolve => setTimeout(resolve, 3000));
-        
         console.log('Refreshing messages from backend...');
         const res = await sessionApi.getMessages(Number(activeSessionId));
         const messageItems = Array.isArray(res) ? res : [];
@@ -832,14 +836,16 @@ export const Workspace: React.FC<WorkspaceProps> = ({ project, onBack }) => {
       } catch (refreshError) {
         console.error('Failed to refresh messages after error:', refreshError);
       }
-    } finally {
-      // 移除当前会话的处理中标记
-      setProcessingSessionIds(prev => {
-        const next = new Set(prev);
-        next.delete(activeSessionId);
-        return next;
-      });
+      return;
     }
+    
+    // 仅在请求成功时才清除处理中标记
+    // 标记当前会话为不再处理中
+    setProcessingSessionIds(prev => {
+      const next = new Set(prev);
+      next.delete(activeSessionId);
+      return next;
+    });
   };
 
   // --- 处理高危操作确认 ---
