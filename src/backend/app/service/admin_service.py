@@ -158,6 +158,9 @@ async def update_user_status_service(
     if not user_obj:
         raise ItemNotFoundException(f"User with ID {user_id} not found.")
 
+    # 保存原始状态用于后续判断
+    original_status = user_obj.status
+    
     # 2. 业务逻辑：调用 CRUD 修改，传入 db_obj=user_obj
     updated_user = await crud_user_account.update(db, db_obj=user_obj, status=data.status)
 
@@ -171,10 +174,14 @@ async def update_user_status_service(
         await login_failure_tracker.reset_failed_count(user_id)
         await freq_limiter.reset_frequency(user_id)
         log.info(f"管理员 {admin_user_id} 修改用户 {user_id} 状态为 normal，已重置登录失败计数、请求频率和 IP 历史")
+    elif data.status == 'banned':
+        from service.user_service import force_logout_user_sessions
+        await force_logout_user_sessions(user_id)
+        log.info(f"管理员 {admin_user_id} 修改用户 {user_id} 状态为 {data.status}，已强制登出用户所有活跃会话并清除 IP 历史")
     else:
         log.info(f"管理员 {admin_user_id} 修改用户 {user_id} 状态为 {data.status}，已清除 IP 历史")
 
-    # 4. 业务逻辑：记录到 user_ban_log (占位，可后续实现)
+    # 5. 业务逻辑：记录到 user_ban_log (占位，可后续实现)
     # await create_ban_log(db, user_id, admin_user_id, reason=data.reason, ...)
 
     return AdminUpdateUserStatusResponse(

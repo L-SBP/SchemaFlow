@@ -32,7 +32,6 @@ export interface CreateProjectParams {
   name: string;
   type: 'MySQL' | 'PostgreSQL' | 'SQLite';
   description: string;
-  ai_model?: string;
 }
 
 /**
@@ -100,8 +99,7 @@ export const createProject = async (params: CreateProjectParams): Promise<Create
   return await client.post('/v1/projects/', {
     project_name: params.name,
     db_type: params.type.toLowerCase(), // 严格遵循后端数据库标识规范（全小写）
-    description: params.description,
-    ai_model: params.ai_model
+    description: params.description
   });
 };
 

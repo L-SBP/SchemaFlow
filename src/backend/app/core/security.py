@@ -47,7 +47,7 @@ class RedisFrequencyLimiter:
     
     async def check_frequency(self, user_id: int, 
                        time_window: int = 10,  # 时间窗口（秒）
-                       threshold: int = 200,     # 请求次数阈值
+                       threshold: int = 200,    # 请求次数阈值（修正为200）
                        ) -> Tuple[bool, int]:
         """
         检查用户请求频率是否超限。
@@ -116,12 +116,9 @@ class RedisFrequencyLimiter:
             log.error("获取用户频率失败: {}", e)
             return 0
     
-    def reset_frequency(self, user_id: int) -> bool:
+    async def reset_frequency(self, user_id: int) -> bool:
         """
         重置用户请求频率（管理员使用）。
-        
-        注意：此方法是同步的，仅用于非关键路径。
-        如需在异步上下文中使用，请改用 async 版本。
         
         Args:
             user_id: 用户ID
@@ -135,9 +132,7 @@ class RedisFrequencyLimiter:
         try:
             from redis_client.redis_keys import redis_key_manager
             key = redis_key_manager.get_frequency_limit_key(user_id)
-            # 注意：这里使用同步方式，可能会有警告
-            # 在生产环境中建议使用异步版本
-            self.redis_client.delete(key)
+            await self.redis_client.delete(key)
             log.info("已重置用户 {} 的请求频率", user_id)
             return True
         except Exception as e:

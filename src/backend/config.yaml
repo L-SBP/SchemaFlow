@@ -106,7 +106,7 @@ dev:
     # JWT算法
     algorithm: HS256
     # JWT访问令牌有效期
-    token_expire_time_seconds: 10800  # 60 * 24 * 7 minutes
+    token_expire_time_seconds: 1209600  # 60 * 60 * 24 * 7 minutes = 2周
 
   smtp:
     # SMTP服务器
@@ -290,7 +290,7 @@ prod:
   jwt:
     secret_key: "prod_secret_key" # 占位，后面会生成强密钥
     algorithm: HS256
-    token_expire_time_seconds: 10800  # 60 * 60 * 3 sec
+    token_expire_time_seconds: 1209600  # 60 * 60 * 24 * 7 minutes = 2周
 
   smtp:
     host: smtp.qq.com
