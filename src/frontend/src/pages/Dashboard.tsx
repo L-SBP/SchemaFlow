@@ -87,7 +87,14 @@ export const Dashboard: React.FC<DashboardProps> = ({ onProjectSelect }) => {
 
   // 创建项目 (POST)
   const handleCreateProject = async () => {
-    if (!newProjectName || !newProjectDesc) return;
+    if (!newProjectName.trim()) {
+      message.error('请输入项目名称');
+      return;
+    }
+    if (!newProjectDesc.trim()) {
+      message.error('请输入业务场景描述');
+      return;
+    }
     if (isCreating) return;
 
     setIsCreating(true);
@@ -182,6 +189,10 @@ export const Dashboard: React.FC<DashboardProps> = ({ onProjectSelect }) => {
 
   const handleConfirmDelete = async () => {
     if (!projectToDelete) return;
+    if (!deleteConfirmation.trim()) {
+      message.error('请输入DELETE以确认删除');
+      return;
+    }
     try {
       const { confirmation_token } = await confirmDeleteProject(projectToDelete.project_id, deleteConfirmation);
       await deleteProject(projectToDelete.project_id, confirmation_token);
@@ -206,6 +217,14 @@ export const Dashboard: React.FC<DashboardProps> = ({ onProjectSelect }) => {
 
   const handleSaveEdit = async () => {
     if (!projectToEdit) return;
+    if (!editName.trim()) {
+      message.error('请输入项目名称');
+      return;
+    }
+    if (!editDesc.trim()) {
+      message.error('请输入项目描述');
+      return;
+    }
     try {
       await updateProject(projectToEdit.project_id, {
         project_name: editName,
