@@ -60,7 +60,8 @@ async def get_current_active_user(
         if is_exceeded:
             log.warning("用户 {} 请求频率超限: {} 请求/10秒", user_id, count)
             try:
-                ip_address = request.client.host if request.client else "127.0.0.1"
+                from core.utils import get_client_ip
+                ip_address = get_client_ip(request)
                 await ViolationLogger.log_violation(
                     db,
                     user_id,

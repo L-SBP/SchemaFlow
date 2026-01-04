@@ -47,7 +47,7 @@ class RedisFrequencyLimiter:
     
     async def check_frequency(self, user_id: int, 
                        time_window: int = 10,  # 时间窗口（秒）
-                       threshold: int = 20,     # 请求次数阈值
+                       threshold: int = 200,     # 请求次数阈值
                        ) -> Tuple[bool, int]:
         """
         检查用户请求频率是否超限。
@@ -55,7 +55,7 @@ class RedisFrequencyLimiter:
         Args:
             user_id: 用户ID
             time_window: 时间窗口（秒），默认 10 秒
-            threshold: 阈值（请求次数），默认 20 次
+            threshold: 阈值（请求次数），默认 200 次
             
         Returns:
             Tuple[bool, int]: (是否超限, 当前请求次数)

@@ -136,7 +136,7 @@ services:
       - POSTGRES_USER=admin
       - POSTGRES_PASSWORD=secure_2025
       - REDIS_HOST=redis
-    command: uvicorn app.server:my_app --host 0.0.0.0 --port 8000 --reload
+    command: uvicorn app.server:my_app --host 0.0.0.0 --port 8000 --reload --proxy-headers --forwarded-allow-ips='*'
     depends_on:
       - postgres-meta
       - redis
