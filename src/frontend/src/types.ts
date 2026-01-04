@@ -166,7 +166,6 @@ export interface CreateProjectParams {
   name: string;
   type: 'MySQL' | 'PostgreSQL' | 'SQLite';
   description: string;
-  ai_model?: string;
 }
 
 export enum ProjectStatusEnum {

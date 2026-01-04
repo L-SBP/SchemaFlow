@@ -442,7 +442,7 @@ export const Workspace: React.FC<WorkspaceProps> = ({ project, onBack }) => {
   const [processingSessionIds, setProcessingSessionIds] = useState<Set<string>>(new Set());
   // 当前会话是否正在发送/思考中（派生状态）
   const isSending = activeSessionId ? processingSessionIds.has(activeSessionId) : false;
-  
+
   const [isTyping, setIsTyping] = useState(false);   // 打字机效果进行中
   const [selectedModel, setSelectedModel] = useState<string>('');
   const [availableModels, setAvailableModels] = useState<AIModelOption[]>([]); // 可用模型列表
