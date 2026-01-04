@@ -496,6 +496,33 @@ async def service_logout(
     return True
 
 
+async def force_logout_user_sessions(user_id: int) -> bool:
+    """
+    强制登出用户的所有活跃会话。
+    
+    此方法用于在封禁用户时，强制使其所有活跃会话失效。
+
+    Args:
+        user_id (int): 用户 ID。
+
+    Returns:
+        bool: 是否登出成功。
+    """
+    # 由于当前系统没有存储用户与token的直接映射关系，
+    # 我们通过其他方式实现强制登出：
+    # 1. 删除用户信息缓存
+    cache_key = redis_key_manager.get_user_info_key(user_id)
+    await cache_service.delete(cache_key)
+    
+    # 2. 设置用户为离线状态
+    await service_set_user_online_status(user_id, is_online=False)
+    
+    # 3. 注意：由于token存储在Redis中使用的是token值作为key，我们无法直接通过user_id找到所有token
+    # 因此，我们依赖deps.py中的权限检查，当用户状态变为banned时，下次访问会因为状态检查而被拒绝
+    log.info(f"User {user_id} has been forced logout from all sessions")
+    return True
+
+
 async def get_current_user(
     db: AsyncSession,
     username_or_email: str,

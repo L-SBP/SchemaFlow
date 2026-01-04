@@ -667,6 +667,11 @@ class BlacklistManager:
             
             await db.commit()
             
+            # 在封禁用户后，强制登出用户的所有活跃会话
+            # 导入用户服务以强制登出用户的所有会话
+            from service.user_service import force_logout_user_sessions
+            await force_logout_user_sessions(user_id)
+            
             log.warning("管理员 {} 封禁了用户 {}: {}", banned_by, user_id, reason)
             return True
         
