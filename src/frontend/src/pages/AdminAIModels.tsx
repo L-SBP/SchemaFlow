@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { AIModelConfigResponse, AIModelConfigDetailResponse, AIModelConfigCreate, AIModelConfigUpdate, BusinessError } from '../types.ts';
+import { AIModelConfigResponse, AIModelConfigDetailResponse, AIModelConfigCreate, AIModelConfigUpdate } from '../types.ts';
 import { Card, Button, Tag, Modal, Input, message, Select } from '../components/UI.tsx';
 import { Pagination } from '../components/Pagination.tsx';
 import { Bot, Plus, Edit3, Trash2, Loader2, RefreshCw, Zap, CheckCircle, XCircle } from 'lucide-react';
@@ -244,11 +244,9 @@ export const AdminAIModels: React.FC = () => {
             setIsModalOpen(false);
             fetchModels();
         } catch (error: any) {
+            // 错误已由全局错误处理器（responseInterceptor/errorInterceptor）显示提示
+            // 此处只记录日志，不重复弹窗
             console.error("Save model failed", error);
-            // BusinessError 已由全局错误处理器显示提示，避免重复弹窗
-            if (!(error instanceof BusinessError)) {
-                message.error(error?.message || '保存失败');
-            }
         } finally {
             setIsSaving(false);
         }
@@ -265,11 +263,9 @@ export const AdminAIModels: React.FC = () => {
             setDeleteTarget(null);
             fetchModels();
         } catch (error: any) {
+            // 错误已由全局错误处理器（responseInterceptor/errorInterceptor）显示提示
+            // 此处只记录日志，不重复弹窗
             console.error("Delete model failed", error);
-            // BusinessError 已由全局错误处理器显示提示，避免重复弹窗
-            if (!(error instanceof BusinessError)) {
-                message.error(error?.message || '删除失败');
-            }
         } finally {
             setIsDeleting(false);
         }
