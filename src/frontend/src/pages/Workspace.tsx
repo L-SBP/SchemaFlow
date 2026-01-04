@@ -795,7 +795,41 @@ export const Workspace: React.FC<WorkspaceProps> = ({ project, onBack }) => {
 
     } catch (error: any) {
       console.error('Send message failed:', error);
-      // 错误已由全局错误处理器统一处理（包括弹窗提示），此处不再重复提示
+      // 错误已由全局错误处理器统一处理（包括弹窗提示）
+      // 如果是超时错误，后端可能已经处理完成，尝试刷新消息列表
+      if (error?.code === 'ECONNABORTED' || error?.message?.includes('timeout')) {
+        try {
+          // 延迟一小段时间后刷新，给后端处理的时间
+          await new Promise(resolve => setTimeout(resolve, 1000));
+          const res = await sessionApi.getMessages(Number(activeSessionId));
+          const messageItems = Array.isArray(res) ? res : [];
+          const mappedMessages = messageItems.map(mapBackendMessageToFrontend);
+          
+          setSessions(prev => prev.map(s =>
+            s.id === activeSessionId ? { ...s, messages: mappedMessages } : s
+          ));
+          
+          // 检查是否需要自动重命名（如果有新的AI回复且会话名仍是"新会话"）
+          const current = sessions.find(s => s.id === activeSessionId);
+          if (current && current.name === '新会话' && mappedMessages.length > 0) {
+            const userMessages = mappedMessages.filter(m => m.role === 'user');
+            if (userMessages.length > 0) {
+              const firstUserMsg = userMessages[0].text;
+              const autoName = firstUserMsg.length > 10 ? firstUserMsg.substring(0, 10) + '...' : firstUserMsg;
+              try {
+                await sessionApi.update(Number(activeSessionId), autoName);
+                setSessions(prev => prev.map(s =>
+                  s.id === activeSessionId ? { ...s, name: autoName } : s
+                ));
+              } catch (e) {
+                console.error('Auto rename session failed:', e);
+              }
+            }
+          }
+        } catch (refreshError) {
+          console.error('Failed to refresh messages after timeout:', refreshError);
+        }
+      }
     } finally {
       // 移除当前会话的处理中标记
       setProcessingSessionIds(prev => {
