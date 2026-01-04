@@ -169,8 +169,7 @@ async def service_login_with_record(
         exceptions.UserStatusForbiddenException: 用户状态异常。
     """
     # 从请求中获取登录信息
-    from core.utils import get_client_ip
-    client_ip = get_client_ip(request)
+    client_ip = request.client.host
     user_agent = request.headers.get("User-Agent", "")
     device_info = request.headers.get("X-Device-Info", "")
     
@@ -254,7 +253,7 @@ async def service_login_with_record(
                 event_type=ViolationLogger.EVENT_MULTIPLE_FAILED_LOGINS,
                 event_description=f"连续 {fail_count} 次输错密码，账户被标记为异常",
                 risk_level=ViolationLogger.RISK_HIGH,
-                ip_address="127.0.0.1",
+                ip_address=client_ip,
                 auto_check_suspend=False  # 已手动处理标记，跳过累计检查
             )
             await db.commit()
@@ -496,33 +495,63 @@ async def service_logout(
     log.info(f"User {user_id} logged out successfully")
     return True
 
-
-async def force_logout_user_sessions(user_id: int) -> bool:
-    """
-    强制登出用户的所有活跃会话。
+async def force_logout_user_sessions(user_id: int) -> bool: 
+    """ 
+    强制登出用户的所有活跃会话。 
     
-    此方法用于在封禁用户时，强制使其所有活跃会话失效。
+    此方法用于在封禁用户时，强制使其所有活跃会话失效。 
 
-    Args:
-        user_id (int): 用户 ID。
+    Args: 
+        user_id (int): 用户 ID。 
 
-    Returns:
-        bool: 是否登出成功。
-    """
-    # 由于当前系统没有存储用户与token的直接映射关系，
-    # 我们通过其他方式实现强制登出：
-    # 1. 删除用户信息缓存
-    cache_key = redis_key_manager.get_user_info_key(user_id)
-    await cache_service.delete(cache_key)
+    Returns: 
+        bool: 是否登出成功。 
+    """ 
+    # 1. 删除用户信息缓存 
+    cache_key = redis_key_manager.get_user_info_key(user_id) 
+    await cache_service.delete(cache_key) 
     
-    # 2. 设置用户为离线状态
-    await service_set_user_online_status(user_id, is_online=False)
+    # 2. 设置用户为离线状态 
+    await service_set_user_online_status(user_id, is_online=False) 
     
-    # 3. 注意：由于token存储在Redis中使用的是token值作为key，我们无法直接通过user_id找到所有token
-    # 因此，我们依赖deps.py中的权限检查，当用户状态变为banned时，下次访问会因为状态检查而被拒绝
-    log.info(f"User {user_id} has been forced logout from all sessions")
+    # 3. 删除用户的所有JWT令牌 
+    redis = get_redis() 
+    if redis: 
+        # 生成token键的前缀 
+        token_prefix = redis_key_manager.get_token_key("").rsplit(":", 1)[0] + ":" 
+        
+        # 使用SCAN命令遍历所有token键，避免阻塞Redis 
+        cursor = 0 
+        deleted_count = 0 
+        
+        while True: 
+            cursor, keys = await redis.scan(cursor=cursor, match=f"{token_prefix}*", count=100) 
+            
+            for key in keys: 
+                # 从键中提取token值 
+                token = key.rsplit(":", 1)[-1] 
+                
+                try: 
+                    # 解码token获取用户ID 
+                    decoded_user_id = decode_jwt_token(token) 
+                    
+                    # 如果token属于目标用户，则删除 
+                    if decoded_user_id == user_id: 
+                        await redis.delete(key) 
+                        deleted_count += 1 
+                except Exception: 
+                    # 忽略无效的token 
+                    continue 
+            
+            # 如果cursor为0，表示遍历完成 
+            if cursor == 0: 
+                break 
+        
+        if deleted_count > 0: 
+            log.info(f"Deleted {deleted_count} JWT tokens for user {user_id}") 
+    
+    log.info(f"User {user_id} has been forced logout from all sessions") 
     return True
-
 
 async def get_current_user(
     db: AsyncSession,
