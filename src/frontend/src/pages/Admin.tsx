@@ -125,6 +125,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onViewUser }) => {
         setEditingQuotaUser(user);
         setNewQuota(user.max_databases.toString());
         setQuotaError('');
+        setQuotaError('');
     };
 
     /**
@@ -132,14 +133,34 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onViewUser }) => {
      */
     const handleSaveQuota = async () => {
         if (!editingQuotaUser) return;
+        
+        // 检查是否为科学计数法
+        if (newQuota.toLowerCase().includes('e')) {
+            setQuotaError('不支持科学计数法格式');
+            return;
+        }
+        
+        // 检查是否为整数
+        if (!/^-?\d+$/.test(newQuota.trim())) {
+            setQuotaError('额度必须为整数');
+            return;
+        }
+        
         const quota = parseInt(newQuota);
 
         if (isNaN(quota) || quota < 0) {
             setQuotaError('额度不能为负数');
             return;
         }
-        if (quota > 1000) {
-            setQuotaError('额度值超出系统上限 (1000)');
+        
+        // 检查调整后的额度是否小于当前项目数
+        if (quota < editingQuotaUser.project_count) {
+            setQuotaError(`调整后的额度(${quota})不能小于当前项目数(${editingQuotaUser.project_count})`);
+            return;
+        }
+        
+        if (quota > 100) {
+            setQuotaError('额度值超出系统上限 (100)');
             return;
         }
 

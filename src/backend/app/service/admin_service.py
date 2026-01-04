@@ -216,7 +216,12 @@ async def update_user_quota_service(
     if not user_obj:
         raise ItemNotFoundException(f"User with ID {user_id} not found.")
 
-    # 2. 传入对象进行更新
+    # 2. 检查调整后的额度是否小于当前项目数
+    project_count = await crud_project.get_total_count_by_user(db, user_id)
+    if data.max_databases < project_count:
+        raise ValidationException(f"调整后的额度({data.max_databases})不能小于当前项目数({project_count})")
+
+    # 3. 传入对象进行更新
     updated_user = await crud_user_account.update(db, db_obj=user_obj, max_databases=data.max_databases)
 
     return AdminUpdateUserQuotaResponse(
