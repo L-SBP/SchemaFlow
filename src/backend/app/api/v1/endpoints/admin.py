@@ -441,6 +441,11 @@ async def update_ai_model_config(
     if not existing:
         raise ItemNotFoundException("AI 模型配置")
     
+    # 如果要更新 model_name，检查新名称是否与其他配置冲突
+    if data.model_name and data.model_name != existing.model_name:
+        if await crud_ai_model_config.check_name_exists(db, data.model_name, exclude_id=config_id):
+            raise ValidationException(f"模型名称 '{data.model_name}' 已存在")
+    
     config = await crud_ai_model_config.update(db, config_id, data)
     result = AIModelConfigResponse.model_validate(config)
     return UnifiedResponse.success(data=result, message="更新 AI 模型配置成功")
