@@ -228,10 +228,10 @@ export const ProjectOverview: React.FC<ProjectOverviewProps> = ({
     return (
       <div className="project-overview project-overview--loading">
         <div className="project-overview__loading">
-          <div className="loading-spinner" aria-label="Loading projects...">
+          <div className="loading-spinner" aria-label="正在加载项目...">
             <div className="spinner"></div>
           </div>
-          <p className="loading-text">Loading projects...</p>
+          <p className="loading-text">正在加载项目...</p>
         </div>
       </div>
     );
@@ -243,7 +243,7 @@ export const ProjectOverview: React.FC<ProjectOverviewProps> = ({
       <div className="project-overview project-overview--error">
         <div className="project-overview__error">
           <div className="error-icon" aria-hidden="true">⚠️</div>
-          <h3 className="error-title">Failed to load projects</h3>
+          <h3 className="error-title">项目加载失败</h3>
           <p className="error-message">{error}</p>
           {onRefresh && (
             <button
@@ -251,7 +251,7 @@ export const ProjectOverview: React.FC<ProjectOverviewProps> = ({
               onClick={handleRefresh}
               type="button"
             >
-              Try Again
+              重试
             </button>
           )}
         </div>
@@ -265,11 +265,11 @@ export const ProjectOverview: React.FC<ProjectOverviewProps> = ({
       <div className="project-overview project-overview--empty">
         <div className="project-overview__empty">
           <div className="empty-icon" aria-hidden="true">📁</div>
-          <h3 className="empty-title">No projects found</h3>
+          <h3 className="empty-title">暂无项目</h3>
           <p className="empty-message">
             {processedState.hasErrors
-              ? 'Some projects could not be loaded due to invalid data.'
-              : 'You don\'t have any projects yet.'}
+              ? '部分项目数据无效，暂时无法加载。'
+              : '你还没有创建任何项目。'}
           </p>
           {onRefresh && (
             <button
@@ -277,7 +277,7 @@ export const ProjectOverview: React.FC<ProjectOverviewProps> = ({
               onClick={handleRefresh}
               type="button"
             >
-              Refresh
+              刷新
             </button>
           )}
         </div>
