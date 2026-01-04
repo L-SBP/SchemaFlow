@@ -299,7 +299,9 @@ async def create_project_service(
     # 2. 解析请求参数
     project_data = project_in.model_dump()
     db_type = project_data.pop('db_type')
-    ai_model = project_data.pop('ai_model', 'gpt4')
+    # 统一使用 GPT-4：即使旧客户端传入 ai_model 也忽略
+    project_data.pop('ai_model', None)
+    ai_model = 'gpt4'
     requirements_text = project_data.get('description', '')
     project_name = project_data.get('project_name', 'project')
 

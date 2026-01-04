@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { ProjectDTO, fetchProjects, createProject, updateProject, confirmDeleteProject, deleteProject, getProjectDetail } from '../api/project';
 import { ProjectStatusEnum } from '../types';
-import { Button, Modal, Input, message, Select } from '../components/UI';
+import { Button, Modal, Input, message } from '../components/UI';
 import { Plus, PlayCircle, Sparkles, AlertTriangle, LayoutDashboard, Loader2 } from 'lucide-react';
 import { ProjectWizard } from '../components/ProjectWizard';
 import { ProjectOverview } from '../project-overview-optimization/ProjectOverview';
@@ -54,7 +54,6 @@ export const Dashboard: React.FC<DashboardProps> = ({ onProjectSelect }) => {
   const [newProjectName, setNewProjectName] = useState('');
   const [newProjectType, setNewProjectType] = useState<'MySQL' | 'PostgreSQL' | 'SQLite'>('MySQL');
   const [newProjectDesc, setNewProjectDesc] = useState('');
-  const [newProjectAiModel, setNewProjectAiModel] = useState('deepseek');
 
   // --- 项目管理状态 (编辑/删除) ---
   const [projectToDelete, setProjectToDelete] = useState<ProjectDTO | null>(null);
@@ -75,7 +74,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ onProjectSelect }) => {
       setProjects(data.items);
     } catch (error) {
       console.error("Failed to load projects:", error);
-      setError("Failed to load projects. Please try again.");
+      setError("项目列表加载失败，请稍后重试。");
     } finally {
       setLoading(false);
     }
@@ -104,8 +103,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ onProjectSelect }) => {
       const res = await createProject({
         name: newProjectName,
         type: newProjectType,
-        description: newProjectDesc,
-        ai_model: newProjectAiModel
+        description: newProjectDesc
       });
       setCurrentProjectId(res.project_id);
     } catch (e) {
@@ -321,19 +319,6 @@ export const Dashboard: React.FC<DashboardProps> = ({ onProjectSelect }) => {
                     );
                   })}
                 </div>
-              </div>
-              <div className="flex flex-col gap-2">
-                <Select
-                  label="AI 模型"
-                  value={newProjectAiModel}
-                  onChange={setNewProjectAiModel}
-                  options={[
-                    { value: 'deepseek', label: 'DeepSeek' },
-                    { value: 'chatgpt', label: 'GPT-3.5' },
-                    { value: 'gpt4', label: 'GPT-4' }
-                  ]}
-                  required
-                />
               </div>
               <div className="flex flex-col gap-2">
                 <label className="text-sm font-medium text-gray-700">业务场景描述<span className="text-red-500 ml-1">*</span></label>
