@@ -438,7 +438,11 @@ export const Workspace: React.FC<WorkspaceProps> = ({ project, onBack }) => {
 
   // 聊天交互状态
   const [inputValue, setInputValue] = useState('');
-  const [isSending, setIsSending] = useState(false); // 发送中/思考中
+  // 使用 Set 存储正在处理中的会话 ID，支持多会话后台处理
+  const [processingSessionIds, setProcessingSessionIds] = useState<Set<string>>(new Set());
+  // 当前会话是否正在发送/思考中（派生状态）
+  const isSending = activeSessionId ? processingSessionIds.has(activeSessionId) : false;
+  
   const [isTyping, setIsTyping] = useState(false);   // 打字机效果进行中
   const [selectedModel, setSelectedModel] = useState<string>('');
   const [availableModels, setAvailableModels] = useState<AIModelOption[]>([]); // 可用模型列表
@@ -488,6 +492,11 @@ export const Workspace: React.FC<WorkspaceProps> = ({ project, onBack }) => {
     // 切换会话时，重置首次滚动标记
     initialAutoScrollDoneRef.current = false;
     isNearBottomRef.current = true;
+
+    // 切换会话时，重置打字状态
+    // 注意：不再重置发送状态(isSending)，因为现在是基于 processingSessionIds 的派生状态，
+    // 这样可以保持后台处理状态，当用户切回正在处理的会话时能看到加载指示器。
+    setIsTyping(false);
 
     // 切换会话时，读取该会话保存的模型
     if (activeSessionId) {
@@ -743,7 +752,8 @@ export const Workspace: React.FC<WorkspaceProps> = ({ project, onBack }) => {
         : s
     ));
     setInputValue('');
-    setIsSending(true);
+    // 标记当前会话为处理中
+    setProcessingSessionIds(prev => new Set(prev).add(activeSessionId));
 
     try {
       // 2. 调用后端 API 发送消息
@@ -797,7 +807,12 @@ export const Workspace: React.FC<WorkspaceProps> = ({ project, onBack }) => {
         s.id === activeSessionId ? { ...s, messages: [...s.messages, errorMsg] } : s
       ));
     } finally {
-      setIsSending(false);
+      // 移除当前会话的处理中标记
+      setProcessingSessionIds(prev => {
+        const next = new Set(prev);
+        next.delete(activeSessionId);
+        return next;
+      });
     }
   };
 
@@ -806,7 +821,7 @@ export const Workspace: React.FC<WorkspaceProps> = ({ project, onBack }) => {
   const handleConfirmation = async (messageId: string, action: 'confirm' | 'cancel') => {
     if (action === 'confirm') {
       try {
-        setIsSending(true);
+        setProcessingSessionIds(prev => new Set(prev).add(activeSessionId));
         // 调用确认 API
         const res = await sessionApi.confirmMessage(Number(messageId));
         const aiMsg = mapBackendMessageToFrontend(res);
@@ -848,12 +863,16 @@ export const Workspace: React.FC<WorkspaceProps> = ({ project, onBack }) => {
         // 错误已由API客户端统一处理，这里只需记录日志
         GlobalMessage.error('执行失败，请稍后重试');
       } finally {
-        setIsSending(false);
+        setProcessingSessionIds(prev => {
+          const next = new Set(prev);
+          next.delete(activeSessionId);
+          return next;
+        });
       }
     } else {
       // 取消操作：调用后端取消接口，更新原消息内容（附加取消提示）
       try {
-        setIsSending(true);
+        setProcessingSessionIds(prev => new Set(prev).add(activeSessionId));
         const res = await sessionApi.cancelMessage(Number(messageId));
         const updatedMsg = mapBackendMessageToFrontend(res);
 
@@ -873,7 +892,11 @@ export const Workspace: React.FC<WorkspaceProps> = ({ project, onBack }) => {
         console.error('Cancel message failed:', error);
         GlobalMessage.error('取消失败，请稍后重试');
       } finally {
-        setIsSending(false);
+        setProcessingSessionIds(prev => {
+          const next = new Set(prev);
+          next.delete(activeSessionId);
+          return next;
+        });
       }
     }
   };
