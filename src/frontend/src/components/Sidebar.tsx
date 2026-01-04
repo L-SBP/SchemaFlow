@@ -15,7 +15,7 @@
 
 import React, { useEffect, useRef, useState } from 'react';
 import { LayoutDashboard, BarChart2, Users, Book, Bell, X, PanelLeftClose, PanelLeftOpen, User as UserIcon, Settings, LogOut, Database, Bot } from 'lucide-react';
-import { UserRole } from '../types'; 
+import { UserRole } from '../types';
 
 /**
  * 侧边栏组件属性接口定义
@@ -141,12 +141,12 @@ export const Sidebar: React.FC<SidebarProps> = ({ role, user, selectedProject, a
             */}
             <div className={`
                 fixed inset-y-0 left-0 w-64 bg-white border-r border-gray-200 h-screen h-[100dvh] flex flex-col 
-                transition-[transform,width] duration-300 ease-in-out motion-reduce:transition-none z-50
+                transition-[transform,width] duration-300 ease-in-out motion-reduce:transition-none z-50 overflow-x-hidden
                 md:translate-x-0 md:static md:sticky md:top-0 md:h-screen md:h-[100dvh]
                 ${isOpen ? 'translate-x-0' : '-translate-x-full'}
                 ${isCollapsed ? 'md:w-16' : 'md:w-64'}
             `}>
-                
+
                 {/* 头部 Logo 区域 (Header & Branding)
                     集成了品牌标识与折叠控制器。
                 */}
@@ -189,8 +189,8 @@ export const Sidebar: React.FC<SidebarProps> = ({ role, user, selectedProject, a
                 {/* 主体导航区域 (Main Navigation Links)
                     采用 flex-1 占据中间剩余空间，内容超出时支持内部滚动。
                 */}
-                <div className="flex-1 py-4 px-3 space-y-1 overflow-y-auto custom-scrollbar">
-                    
+                <div className={`flex-1 py-4 space-y-1 overflow-y-auto custom-scrollbar ${isCollapsed ? 'px-2' : 'px-3'}`}>
+
                     {/* 当前工作区上下文入口 (Dynamic Context Slot)
                         仅对普通用户展示，用于快速定位当前的 AI 建模任务。
                     */}
@@ -249,7 +249,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ role, user, selectedProject, a
                 {/* 底部账户管理中心 (Bottom Account Section)
                     集成了用户身份标识与浮动快捷菜单。
                 */}
-                <div className="border-t border-gray-100 p-3 relative" ref={userMenuRef}>
+                <div className={`border-t border-gray-100 relative ${isCollapsed ? 'p-2' : 'p-3'}`} ref={userMenuRef}>
                     {/* 触发器：点击展现个人中心菜单 */}
                     <button
                         type="button"

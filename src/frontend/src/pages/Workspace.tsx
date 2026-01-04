@@ -164,10 +164,10 @@ const mapBackendMessageToFrontend = (msg: ChatResponse): Message => {
   // 2. 如果有 data 字段且不为空，优先展示表格
   else if (msg.data && Array.isArray(msg.data) && msg.data.length > 0) {
     type = 'table';
-    
+
     // 获取列名
     let columns = Object.keys(msg.data[0]);
-    
+
     // 自定义列排序：确保"受影响行数"在"最后插入ID"之前
     // 优先级映射：数字越小越靠前
     const columnPriority: Record<string, number> = {
@@ -181,7 +181,7 @@ const mapBackendMessageToFrontend = (msg: ChatResponse): Message => {
     columns.sort((a, b) => {
       const priorityA = columnPriority[a] || 999;
       const priorityB = columnPriority[b] || 999;
-      
+
       if (priorityA !== priorityB) {
         return priorityA - priorityB;
       }
@@ -238,7 +238,7 @@ const mapBackendMessageToFrontend = (msg: ChatResponse): Message => {
   // 这解决了历史记录中缺少"执行成功"提示的问题
   const isActionQuery = sqlText && /^\s*(INSERT|UPDATE|DELETE|DROP|CREATE|ALTER|TRUNCATE)/i.test(sqlText);
   const shouldAppendSuccess = !isError && !msg.requires_confirmation && isActionQuery && tableData;
-  
+
   if (shouldAppendSuccess && !displayText.includes('执行成功')) {
     displayText = displayText ? `${displayText}\n\n✅ 执行成功` : '✅ 执行成功';
   }
@@ -836,7 +836,7 @@ export const Workspace: React.FC<WorkspaceProps> = ({ project, onBack }) => {
     } catch (error: any) {
       console.error('Send message failed:', error);
       // 错误已由全局错误处理器统一处理（包括弹窗提示）
-      
+
       // 立即清除处理中标记，停止显示"思考中"状态
       setProcessingSessionIds(prev => {
         const next = new Set(prev);
@@ -849,17 +849,17 @@ export const Workspace: React.FC<WorkspaceProps> = ({ project, onBack }) => {
       try {
         console.log('Waiting briefly for backend to persist error message...');
         await new Promise(resolve => setTimeout(resolve, 500));
-        
+
         console.log('Refreshing messages from backend...');
         const res = await sessionApi.getMessages(Number(activeSessionId));
         const messageItems = Array.isArray(res) ? res : [];
         const mappedMessages = messageItems.map(mapBackendMessageToFrontend);
-        
+
         console.log('Received messages:', mappedMessages.length);
         setSessions(prev => prev.map(s =>
           s.id === activeSessionId ? { ...s, messages: mappedMessages } : s
         ));
-        
+
         // 检查是否需要自动重命名（如果有新的AI回复且会话名仍是"新会话"）
         const current = sessions.find(s => s.id === activeSessionId);
         if (current && current.name === '新会话' && mappedMessages.length > 0) {
@@ -882,7 +882,7 @@ export const Workspace: React.FC<WorkspaceProps> = ({ project, onBack }) => {
       }
       return;
     }
-    
+
     // 仅在请求成功时才清除处理中标记
     // 标记当前会话为不再处理中
     setProcessingSessionIds(prev => {
@@ -1239,7 +1239,7 @@ export const Workspace: React.FC<WorkspaceProps> = ({ project, onBack }) => {
                                         {msg.tableData?.columns.map(col => {
                                           const val = row[col];
                                           let displayVal = val;
-                                          
+
                                           // 针对"最后插入ID"列的特殊处理：0 或 null 显示为 "null"
                                           if (col === '最后插入ID' || col === 'last_insert_id') {
                                             if (val === 0 || val === '0' || val === null) {
