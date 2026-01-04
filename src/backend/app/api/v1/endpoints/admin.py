@@ -1,8 +1,8 @@
 """
 管理员 API 端点。提供用户管理、公告管理、违规记录查看及系统统计看板等管理员专属功能。
 """
-from typing import Optional, Literal, Any, List
-from fastapi import APIRouter, Depends, Query, Path, Body
+from typing import Optional, List, Literal, Any
+from fastapi import APIRouter, Depends, Query, Path, Body, Request
 from sqlalchemy.ext.asyncio import AsyncSession as Session
 
 # 导入 Service 和 Schema
@@ -98,6 +98,7 @@ async def update_user_status(
 @router.patch("/users/{user_id}/quota", response_model=UnifiedResponse[AdminUpdateUserQuotaResponse], summary="4.1.3 调整用户资源额度")
 async def update_user_quota(
     # 修正：将 data 移到 user_id 之前
+    request: Request,  # 添加 Request 依赖
     data: AdminUpdateUserQuotaRequest,
     user_id: int = Path(..., description="目标用户ID"),
     db: Session = Depends(get_db),
@@ -107,6 +108,7 @@ async def update_user_quota(
     调整用户的最大数据库额度。
 
     Args:
+        request: HTTP请求对象，用于检查原始请求体。
         data (AdminUpdateUserQuotaRequest): 用户额度更新请求体。
         user_id (int): 目标用户ID。
         db (Session): 数据库会话。
@@ -115,6 +117,33 @@ async def update_user_quota(
     Returns:
         UnifiedResponse[AdminUpdateUserQuotaResponse]: 更新后的用户额度信息。
     """
+    # 额外验证：检查原始请求体是否包含科学计数法或小数
+    import json
+    
+    # 获取原始请求体以进行额外验证
+    try:
+        body_bytes = await request.body()
+        body_str = body_bytes.decode('utf-8')
+        body_json = json.loads(body_str)
+        
+        max_databases_raw = body_json.get('max_databases')
+        
+        # 检查是否为科学计数法格式（字符串形式）
+        if isinstance(max_databases_raw, str) and ('e' in max_databases_raw.lower() or 'E' in max_databases_raw):
+            raise ValidationException("不支持科学计数法格式")
+        
+        # 检查是否为小数（字符串形式包含小数点）
+        if isinstance(max_databases_raw, str) and '.' in max_databases_raw:
+            raise ValidationException("额度必须为整数")
+        
+        # 检查是否为小数（数值形式且不是整数）
+        if isinstance(max_databases_raw, float) and not max_databases_raw.is_integer():
+            raise ValidationException("额度必须为整数")
+            
+    except (json.JSONDecodeError, AttributeError):
+        # 如果无法获取原始请求体，则跳过额外验证
+        pass
+
     result = await service.update_user_quota_service(db, user_id, data)
     return UnifiedResponse.success(data=result, message="调整用户资源额度成功")
 

@@ -7,7 +7,7 @@
 
 # backend/app/schema/admin.py
 
-from pydantic import BaseModel, Field, ConfigDict, validator
+from pydantic import BaseModel, Field, ConfigDict, validator, root_validator
 from typing import Optional, List, Literal, Any
 from datetime import datetime
 from schema.user import UserMe  # 确保这里能导入 UserMe
