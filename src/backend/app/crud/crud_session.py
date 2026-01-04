@@ -69,7 +69,7 @@ class CRUDSession:
     @staticmethod
     async def get_by_project(db: AsyncSession, project_id: int, skip: int = 0, limit: int = 100) -> List[Session]:
         """
-        根据项目ID获取会话列表（按创建时间降序，最新会话在前）。
+        根据项目ID获取会话列表（按最后活动时间降序，最近活跃的会话在前）。
 
         Args:
             db (AsyncSession): 数据库会话。
@@ -87,7 +87,7 @@ class CRUDSession:
             query = (
                 select(Session)
                 .where(Session.project_id == project_id)
-                .order_by(Session.created_at.desc())  # 最新会话在前
+                .order_by(Session.last_activity.desc())  # 按最后活动时间排序，最近活跃在前
                 .offset(skip)
                 .limit(limit)
             )

@@ -595,7 +595,8 @@ export const Workspace: React.FC<WorkspaceProps> = ({ project, onBack }) => {
             id: item.session_id.toString(),
             name: item.session_name,
             messages: [], // 列表接口不返回消息详情，需懒加载
-            updated_at: new Date(item.created_at).getTime(),
+            // 优先使用 last_activity（最后一次对话时间），回退到 created_at
+            updated_at: new Date(item.last_activity || item.created_at).getTime(),
             current_model: item.current_model
           }));
           setSessions(mappedSessions);
