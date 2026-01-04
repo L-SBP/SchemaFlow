@@ -79,76 +79,35 @@ src/backend/
 ### 1. 环境准备
 
 ```bash
-# 创建虚拟环境
-python -m venv venv
+# 创建 conda 环境
+conda create -n backend python=3.10 -y
 
-# 激活虚拟环境
-# Windows
-.\venv\Scripts\activate
-# Linux/Mac
-source venv/bin/activate
+# 激活环境
+conda activate backend
+
+# 配置国内镜像源（提升下载速度）
+pip config set global.index-url https://mirrors.aliyun.com/pypi/simple/
 
 # 安装依赖
 pip install -r requirements.txt
 ```
 
-### 2. 配置
+### 2. 启动服务
 
-编辑 `config.yaml` 配置文件：
-
-```yaml
-# 数据库配置
-db:
-  host: localhost
-  port: 5432
-  database: your_database
-  username: your_username
-  password: your_password
-
-# MySQL 配置（用户项目数据库）
-mysql:
-  host: localhost
-  port: 3306
-  username: root
-  password: your_password
-
-# Redis 配置
-redis:
-  host: localhost
-  port: 6379
-
-# 应用配置
-app:
-  host: 0.0.0.0
-  port: 8000
-  reload: true
-```
-
-### 3. 启动服务
+使用 Docker Compose 一键启动所有服务：
 
 ```bash
-cd src/backend/app
+# 在项目根目录执行
+docker-compose up -d
 
-# 启动 FastAPI 服务
-python main.py
+# 查看服务状态
+docker-compose ps
 
-# 或使用 uvicorn
-uvicorn server:app --host 0.0.0.0 --port 8000 --reload
+# 查看后端日志
+docker-compose logs -f backend
 ```
 
-### 4. 启动 Celery Worker
-
-```bash
-cd src/backend/app
-
-# Windows（必须使用 --pool=solo）
-celery -A celery_app worker --loglevel=info --pool=solo
-
-# Linux/Mac
-celery -A celery_app worker --loglevel=info --concurrency=4
-```
-
-### 5. 访问 API 文档
+### 3. 访问 API 文档
 
 - Swagger UI: http://localhost:8000/docs
 - ReDoc: http://localhost:8000/redoc
@@ -289,6 +248,5 @@ async with get_session(engine) as session:
 
 ## 相关文档
 
-- [Celery 任务迁移文档](celery任务迁移文档.md)
 - [Redis 缓存设计文档](../../doc/project/02-设计文档/redis缓存设计文档.md)
 - [API 接口文档](http://localhost:8000/docs)
