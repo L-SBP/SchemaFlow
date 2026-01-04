@@ -19,6 +19,40 @@
 import { BusinessError } from '../types';
 import { message } from '../components/UI.tsx';
 
+let authRedirectScheduled = false;
+
+const forceLogoutAndRedirectToLogin = (options?: { messageText?: string }) => {
+  // 物理销毁本地所有敏感持久化信息，确保 JWT Token 不被滥用
+  localStorage.removeItem('access_token');
+  localStorage.removeItem('refresh_token');
+  localStorage.removeItem('user_info');
+
+  // 广播全局事件，由 WorkspaceWrapper 等组件捕获并停止心跳轮询
+  window.dispatchEvent(new CustomEvent('auth-expired'));
+
+  if (!authRedirectScheduled) {
+    authRedirectScheduled = true;
+
+    // 允许调用方自定义提示；默认提示保持与原有 401 行为一致
+    const text = options?.messageText || '登录已过期，请重新登录';
+    message.error(text);
+
+    // 延时执行强制重定向逻辑，为用户预留阅读提示的时间。
+    setTimeout(() => {
+      authRedirectScheduled = false;
+      if (window.location.pathname !== '/login') {
+        window.location.href = '/login';
+      }
+    }, 1500);
+  }
+};
+
+const isTokenRevokedMessage = (msg: string): boolean => {
+  const text = (msg || '').trim();
+  if (!text) return false;
+  return text.includes('令牌已被撤销') || text.toLowerCase().includes('token revoked') || text.toLowerCase().includes('revoked');
+};
+
 /**
  * 错误处理器的运行时配置接口定义
  * @interface ErrorHandlingConfig
@@ -79,6 +113,21 @@ export class ErrorHandler {
         details: error.details,
         stack: error.stack,
       });
+    }
+
+    // 特判：后端 BusinessException 会以 HTTP 200 返回，但 code 字段可能携带 401/403 等语义。
+    // 当 token 失效/被撤销时，必须强制下线并跳转登录页。
+    if (error.isHttpError()) {
+      if (error.code === 401) {
+        forceLogoutAndRedirectToLogin({ messageText: error.message || '登录已过期，请重新登录' });
+        return;
+      }
+
+      // 令牌被撤销通常以 403 + 特定 message 表达
+      if (error.code === 403 && isTokenRevokedMessage(error.message)) {
+        forceLogoutAndRedirectToLogin({ messageText: error.message || '登录状态已失效，请重新登录' });
+        return;
+      }
     }
 
     // 步骤 2：类型断言分发。根据不同的错误码区间，路由至特定的 UI 提示逻辑。
@@ -241,7 +290,7 @@ export class HttpErrorHandler {
   /** 记录最近一次错误发生的时间戳 */
   private lastErrorTime: number = 0;
   /** 定义错误气泡的消隐间隔（3秒），防止在高频请求下的 UI 提示堆叠 */
-  private readonly ERROR_DEBOUNCE_TIME = 3000; 
+  private readonly ERROR_DEBOUNCE_TIME = 3000;
 
   constructor(config: Partial<ErrorHandlingConfig> = {}) {
     this.config = { ...defaultErrorConfig, ...config };
@@ -320,25 +369,22 @@ export class HttpErrorHandler {
    * @private
    */
   private handleAuthenticationError(_data?: any): void {
-    // 步骤 1：物理销毁本地所有敏感持久化信息，确保 JWT Token 不被滥用
-    localStorage.removeItem('access_token');
-    localStorage.removeItem('refresh_token');
-    localStorage.removeItem('user_info');
-
-    const errorMessage = '登录已过期，请重新登录';
-    if (this.config.showUserFriendlyMessages && this.shouldShowError(errorMessage)) {
-      message.error(errorMessage);
+    if (!this.config.showUserFriendlyMessages) {
+      // 仍需强制登出，但不弹提示
+      localStorage.removeItem('access_token');
+      localStorage.removeItem('refresh_token');
+      localStorage.removeItem('user_info');
+      window.dispatchEvent(new CustomEvent('auth-expired'));
+      setTimeout(() => {
+        if (window.location.pathname !== '/login') {
+          window.location.href = '/login';
+        }
+      }, 0);
+      return;
     }
 
-    // 步骤 2：广播全局事件，由 WorkspaceWrapper 等组件捕获并停止心跳轮询
-    window.dispatchEvent(new CustomEvent('auth-expired'));
-
-    // 步骤 3：延时执行强制重定向逻辑，为用户预留阅读提示的时间。
-    setTimeout(() => {
-      if (window.location.pathname !== '/login') {
-        window.location.href = '/login';
-      }
-    }, 1500);
+    // 复用统一登出逻辑（含去抖与延时跳转）
+    forceLogoutAndRedirectToLogin({ messageText: '登录已过期，请重新登录' });
   }
 
   /**
@@ -398,7 +444,7 @@ export class HttpErrorHandler {
       const message_text = status === 503
         ? '服务暂时不可用，请稍后重试'
         : '服务器内部错误，请稍后重试';
-      
+
       if (this.shouldShowError(message_text)) {
         message.error(message_text);
       }
@@ -546,18 +592,18 @@ export class GlobalErrorHandler {
     // 优先级 1：由 responseInterceptor 识别并抛出的业务逻辑错误
     if (error instanceof BusinessError) {
       this.businessErrorHandler.handleBusinessError(error);
-    } 
+    }
     // 优先级 2：由 Axios 识别的 HTTP 响应层错误 (status code >= 400)
     else if (error.response) {
       this.httpErrorHandler.handleHttpError(
         error.response.status,
         error.response.data
       );
-    } 
+    }
     // 优先级 3：请求已发起但未收到响应（如 DNS 失败、连接超时）
     else if (error.request) {
       this.networkErrorHandler.handleNetworkError(error);
-    } 
+    }
     // 优先级 4：代码执行期异常或其他未知逻辑错误
     else {
       console.error('Unknown Error:', error);
