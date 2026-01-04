@@ -273,7 +273,7 @@ class RemoteLoginDetector:
     
     # IP变更检测参数
     IP_CHANGE_WINDOW = 1800  # 30分钟
-    IP_CHANGE_THRESHOLD = 15  # 阈值15次
+    IP_CHANGE_THRESHOLD = 3  # 阈值3次
     
     @staticmethod
     async def check_frequent_ip_changes(
@@ -460,11 +460,9 @@ class ViolationLogger:
             # 任何违规记录都直接标记用户为异常（仅当 auto_check_suspend=True 时执行）
             if auto_check_suspend:
                 from core.security import BlacklistManager
-                # 改为调用 auto_suspend_if_needed，遵循三击机制
-                # reason = f"触发违规记录: {event_type} - {event_description}"
-                # success = await BlacklistManager.suspend_user(db, user_id, reason=reason)
-                is_suspended, reason = await BlacklistManager.auto_suspend_if_needed(db, user_id)
-                if is_suspended:
+                reason = f"触发违规记录: {event_type} - {event_description}"
+                success = await BlacklistManager.suspend_user(db, user_id, reason=reason)
+                if success:
                     log.warning(f"用户 {user_id} 因违规行为被系统自动标记为异常: {reason}")
             
             return violation
@@ -529,57 +527,8 @@ class BlacklistManager:
     """
     黑名单管理器。
     
-    负责自动检测违规用户并将其加入黑名单，以及管理员的黑名单操作。
+    负责自动检测违规用户并将其标记为异常，以及管理员的黑名单操作。
     """
-    
-    # 自动封禁的阈值
-    VIOLATION_THRESHOLD = 3  # 24小时内3次违规记录触发自动标记为异常
-    
-    @staticmethod
-    async def auto_suspend_if_needed(
-        db: AsyncSession,
-        user_id: int,
-        violation_logger: ViolationLogger = ViolationLogger()
-    ) -> Tuple[bool, Optional[str]]:
-        """
-        检查用户是否应该被自动标记为异常（三击机制）。
-        
-        注意：系统只会将用户标记为 suspended（异常），真正的封禁（banned）需要管理员手动操作。
-        
-        触发条件：
-        1. 频率超限（Redis 记录）
-        2. 24小时内违规记录 ≥ 3 条
-        
-        Args:
-            db: 数据库会话
-            user_id: 用户ID
-            violation_logger: 违规日志记录器实例
-            
-        Returns:
-            Tuple[bool, Optional[str]]: (是否被标记为异常, 原因)
-        """
-        try:
-            # 获取违规记录数
-            violation_count = await violation_logger.get_violation_count(
-                db, user_id, time_hours=24
-            )
-            
-            if violation_count >= BlacklistManager.VIOLATION_THRESHOLD:
-                # 自动标记用户为异常状态（suspended）
-                reason = f"24小时内违规记录达到 {violation_count} 条，系统自动标记为异常"
-                success = await BlacklistManager.suspend_user(
-                    db, user_id, reason=reason
-                )
-                
-                if success:
-                    log.warning("自动标记用户 {} 为异常: {}", user_id, reason)
-                    return True, reason
-            
-            return False, None
-        
-        except Exception as e:
-            log.error("自动异常标记检查失败: {}", e)
-            return False, None
     
     @staticmethod
     async def suspend_user(
@@ -666,6 +615,11 @@ class BlacklistManager:
             user.status = 'banned'
             
             await db.commit()
+            
+            # 在封禁用户后，强制登出用户的所有活跃会话
+            # 导入用户服务以强制登出用户的所有会话
+            from service.user_service import force_logout_user_sessions
+            await force_logout_user_sessions(user_id)
             
             log.warning("管理员 {} 封禁了用户 {}: {}", banned_by, user_id, reason)
             return True
