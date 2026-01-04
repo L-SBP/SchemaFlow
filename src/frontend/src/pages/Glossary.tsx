@@ -1,0 +1,602 @@
+import React, { useState, useEffect, useRef } from 'react';
+import {
+  Plus,
+  Search,
+  Trash2,
+  Download,
+  Upload,
+  Edit2,
+  Book,
+  CheckSquare,
+  Square,
+  Filter,
+  Loader2,
+  FileText,
+  AlertCircle,
+  CheckCircle2,
+  Database
+} from 'lucide-react';
+import * as XLSX from 'xlsx';
+import { KnowledgeTerm, KnowledgeImportResponse, Project } from '../types.ts';
+import { glossaryApi, CreateTermParams } from '../api/glossary.ts';
+import { fetchProjects, ProjectDTO } from '../api/project.ts';
+import { Button, Input, Modal, Card, message, ConfirmDialog, Select } from '../components/UI.tsx';
+import { Pagination } from '../components/Pagination.tsx';
+
+interface GlossaryProps {
+  /** 当前工作区选中的项目（从 App 传入） */
+  selectedProject?: Project | null;
+}
+
+export const Glossary: React.FC<GlossaryProps> = ({ selectedProject }) => {
+  // --- 状态管理 ---
+
+  // 项目列表 (从真实 API 获取)
+  const [projectList, setProjectList] = useState<ProjectDTO[]>([]);
+  const [loadingProjects, setLoadingProjects] = useState(false);
+
+  // 当前选中的项目 ID
+  const [selectedProjectId, setSelectedProjectId] = useState<string>('');
+
+  // 术语数据列表
+  const [terms, setTerms] = useState<KnowledgeTerm[]>([]);
+  const [total, setTotal] = useState(0);
+  const [loadingTerms, setLoadingTerms] = useState(false);
+
+  // 筛选与分页
+  const [searchQuery, setSearchQuery] = useState("");
+  const [page, setPage] = useState(1);
+  const pageSize = 9; // 每页 9 条
+  const [hasMore, setHasMore] = useState(false);
+
+  // 选中项 (用于批量删除)
+  const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
+
+  // 确认删除对话框状态
+  const [isDeleteConfirmOpen, setIsDeleteConfirmOpen] = useState(false);
+
+  // 模态框与表单
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [editingTerm, setEditingTerm] = useState<KnowledgeTerm | null>(null);
+  const [formData, setFormData] = useState<CreateTermParams>({
+    term: "",
+    definition: "",
+    examples: ""
+  });
+  const [isSaving, setIsSaving] = useState(false);
+
+  // 文件导入相关状态
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [isImporting, setIsImporting] = useState(false);
+  const [importResult, setImportResult] = useState<KnowledgeImportResponse | null>(null);
+  const [isImportResultModalOpen, setIsImportResultModalOpen] = useState(false);
+
+  // --- 初始化: 获取真实项目列表 ---
+  useEffect(() => {
+    const loadProjects = async () => {
+      setLoadingProjects(true);
+      try {
+        const data = await fetchProjects();
+        setProjectList(data.items);
+        // 优先使用工作区选中的项目，否则使用列表第一个
+        if (data.items.length > 0 && !selectedProjectId) {
+          if (selectedProject?.id) {
+            // 如果有工作区选中的项目，使用该项目
+            setSelectedProjectId(selectedProject.id);
+          } else {
+            // 否则使用列表第一个
+            setSelectedProjectId(String(data.items[0].project_id));
+          }
+        }
+      } catch (error) {
+        console.error("Failed to fetch projects", error);
+      } finally {
+        setLoadingProjects(false);
+      }
+    };
+    loadProjects();
+  }, [selectedProject]);
+
+  // --- 获取术语列表 (依赖 selectedProjectId) ---
+  useEffect(() => {
+    if (selectedProjectId) {
+      fetchTerms();
+      setSelectedIds(new Set()); // 切换项目时清空选中
+    } else {
+      setTerms([]); // 无项目时清空列表
+    }
+  }, [selectedProjectId, page, searchQuery]);
+
+  const fetchTerms = async () => {
+    if (!selectedProjectId) return;
+    setLoadingTerms(true);
+    try {
+      const res = await glossaryApi.getList(selectedProjectId, page, pageSize, searchQuery || undefined);
+      setTerms(res.items);
+      setTotal(res.total);
+      setHasMore(page * pageSize < res.total);
+    } catch (error) {
+      console.error("Failed to fetch terms", error);
+    } finally {
+      setLoadingTerms(false);
+    }
+  };
+
+  // --- 交互处理 ---
+
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>, field: keyof CreateTermParams) => {
+    setFormData(prev => ({ ...prev, [field]: e.target.value }));
+  };
+
+  const openModal = (termToEdit?: KnowledgeTerm) => {
+    if (termToEdit) {
+      setEditingTerm(termToEdit);
+      setFormData({
+        term: termToEdit.term,
+        definition: termToEdit.definition,
+        examples: termToEdit.examples || ""
+      });
+    } else {
+      setEditingTerm(null);
+      setFormData({ term: "", definition: "", examples: "" });
+    }
+    setIsModalOpen(true);
+  };
+
+  const handleSave = async () => {
+    if (!selectedProjectId) {
+      message.error("请先选择一个项目");
+      return;
+    }
+    if (!formData.term.trim() || !formData.definition.trim()) {
+      message.error("术语名称和定义不能为空");
+      return;
+    }
+
+    setIsSaving(true);
+    try {
+      if (editingTerm) {
+        // 更新
+        await glossaryApi.update(selectedProjectId, editingTerm.knowledge_id, formData);
+      } else {
+        // 创建
+        await glossaryApi.create(selectedProjectId, formData);
+      }
+      setIsModalOpen(false);
+      fetchTerms(); // 刷新列表
+    } catch (error: any) {
+      // 错误已由响应拦截器自动处理并显示，这里只需记录日志
+      console.error("Save failed", error);
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const handleBatchDelete = async () => {
+    if (selectedIds.size === 0) return;
+    setIsDeleteConfirmOpen(true);
+  };
+
+  const confirmBatchDelete = async () => {
+    try {
+      const idsArray = Array.from(selectedIds);
+      const res = await glossaryApi.deleteBatch(selectedProjectId, idsArray);
+
+      message.success(`删除成功。成功: ${res.imported_count || selectedIds.size}, 失败: ${res.failed_count || 0}`);
+      setSelectedIds(new Set());
+      fetchTerms();
+    } catch (error: any) {
+      message.error("删除失败");
+    }
+  };
+
+  const toggleSelection = (id: number) => {
+    setSelectedIds(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  const toggleAll = () => {
+    if (selectedIds.size === terms.length && terms.length > 0) {
+      setSelectedIds(new Set());
+    } else {
+      setSelectedIds(new Set(terms.map(t => t.knowledge_id)));
+    }
+  };
+
+  // --- 导入导出 ---
+
+  const handleExport = () => {
+    if (!selectedProjectId) return;
+
+    // 根据选中状态决定导出哪些数据
+    const termsToExport = selectedIds.size > 0
+      ? terms.filter(t => selectedIds.has(t.knowledge_id))
+      : terms;
+
+    if (termsToExport.length === 0) {
+      message.warning("没有可导出的术语数据");
+      return;
+    }
+
+    // 转换数据格式
+    const exportData = termsToExport.map((term: KnowledgeTerm) => ({
+      '术语': term.term,
+      '定义': term.definition,
+      '示例': term.examples || '',
+      '创建时间': term.created_at ? new Date(term.created_at).toLocaleDateString('zh-CN') : ''
+    }));
+
+    // 创建工作簿和工作表
+    const worksheet = XLSX.utils.json_to_sheet(exportData);
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, '业务术语');
+
+    // 设置列宽
+    worksheet['!cols'] = [
+      { wch: 20 },  // 术语
+      { wch: 50 },  // 定义
+      { wch: 30 },  // 示例
+      { wch: 15 }   // 创建时间
+    ];
+
+    // 生成文件名
+    const projectName = projectList.find(p => String(p.project_id) === selectedProjectId)?.project_name || 'project';
+    const timestamp = new Date().toISOString().slice(0, 10);
+    const filename = `业务术语_${projectName}_${timestamp}.xlsx`;
+
+    // 下载文件
+    XLSX.writeFile(workbook, filename);
+    message.success(`成功导出 ${termsToExport.length} 条术语`);
+  };
+
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const fileName = file.name.toLowerCase();
+    const validExtensions = ['.csv', '.xlsx', '.xls'];
+    if (!validExtensions.some(ext => fileName.endsWith(ext))) {
+      message.error("文件格式不支持：请上传 Excel (.xlsx/.xls) 或 CSV 文件");
+      if (fileInputRef.current) fileInputRef.current.value = '';
+      return;
+    }
+
+    if (!selectedProjectId) {
+      message.error("请先选择项目");
+      return;
+    }
+
+    setIsImporting(true);
+    try {
+      const res = await glossaryApi.importTerms(selectedProjectId, file);
+      // 设置导入结果并打开结果模态框，替代 alert
+      setImportResult(res);
+      setIsImportResultModalOpen(true);
+
+      if (res.imported_count > 0) {
+        fetchTerms();
+      }
+    } catch (error: any) {
+      // 错误已由响应拦截器自动处理并显示，这里只需记录日志
+      console.error("Import failed", error);
+    } finally {
+      setIsImporting(false);
+      if (fileInputRef.current) fileInputRef.current.value = ''; // 重置 input
+    }
+  };
+
+  // --- 渲染 ---
+
+  if (loadingProjects && projectList.length === 0) {
+    return (
+      <div className="flex justify-center items-center h-full">
+        <Loader2 className="animate-spin text-primary" size={32} />
+        <span className="ml-2 text-gray-500">加载项目列表...</span>
+      </div>
+    );
+  }
+
+  if (projectList.length === 0) {
+    return <div className="p-8 text-center text-gray-500">您暂无数据库项目，请先在项目概览中创建。</div>;
+  }
+
+  const totalPages = Math.ceil(total / pageSize);
+
+  return (
+    <div className="p-4 sm:p-6 lg:p-8 max-w-7xl mx-auto h-full flex flex-col overflow-hidden">
+      {/* 头部与操作栏 - 固定在顶部 */}
+      <div className="flex-shrink-0 flex flex-col gap-4 sm:gap-6 mb-4">
+        {/* 业务术语标题区域 - 使用与系统公告一致的样式 */}
+        <div className="flex items-center gap-3 mb-4">
+          <div className="p-2 bg-blue-100 text-blue-600 rounded-lg shrink-0">
+            <Book size={20} className="sm:w-6 sm:h-6" />
+          </div>
+          <div className="min-w-0 flex-1">
+            <h2 className="text-xl sm:text-2xl font-bold text-gray-800 truncate">业务术语</h2>
+            <p className="text-gray-500 text-sm hidden sm:block">管理项目相关的业务术语定义</p>
+          </div>
+          <div className="flex items-center gap-3 shrink-0">
+            {/* 项目选择器 */}
+            <div className="flex items-center gap-2 bg-white px-3 py-2 rounded-lg border border-gray-300 shadow-sm hover:border-gray-400 transition-colors">
+              <Filter size={16} className="text-gray-400 shrink-0" />
+              <Select
+                variant="minimal"
+                className="min-w-[120px]"
+                value={selectedProjectId}
+                onChange={(val) => setSelectedProjectId(val)}
+                options={projectList.map(p => ({ value: String(p.project_id), label: p.project_name }))}
+              />
+            </div>
+            {/* 新增术语按钮 */}
+            <Button variant="primary" onClick={() => openModal()} icon={<Plus size={16} />} className="shrink-0">
+              新增术语
+            </Button>
+          </div>
+        </div>
+
+        <div className="flex flex-col gap-3 sm:flex-row sm:gap-4 justify-between items-stretch sm:items-center bg-white p-3 sm:p-4 rounded-xl border border-gray-200 shadow-sm">
+          <div className="relative w-full sm:w-80 lg:w-96">
+            <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+              <Search className="h-4 w-4 text-gray-400" />
+            </div>
+            <input
+              type="text"
+              className="block w-full pl-9 pr-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-1 focus:ring-primary focus:border-primary outline-none transition-colors"
+              placeholder="搜索术语名称..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              onKeyDown={(e) => e.key === 'Enter' && setPage(1)}
+            />
+          </div>
+
+          <div className="flex flex-wrap items-center gap-2 sm:gap-3 justify-end">
+            {selectedIds.size > 0 && (
+              <Button
+                variant="danger"
+                onClick={handleBatchDelete}
+                icon={<Trash2 size={16} />}
+                className="h-9 text-xs"
+              >
+                删除 ({selectedIds.size})
+              </Button>
+            )}
+            <div className="h-6 w-px bg-gray-200 hidden sm:block"></div>
+
+            <Button
+              variant="default"
+              onClick={handleExport}
+              icon={<Download size={16} />}
+              className="h-9 text-xs hidden md:flex"
+            >
+              {selectedIds.size > 0 ? `导出 (${selectedIds.size})` : '导出本页'}
+            </Button>
+
+            <Button
+              variant="default"
+              onClick={() => fileInputRef.current?.click()}
+              icon={isImporting ? <Loader2 className="animate-spin" size={16} /> : <Upload size={16} />}
+              disabled={isImporting}
+              className="h-9 text-xs hidden md:flex"
+            >
+              {isImporting ? '导入中' : '导入'}
+            </Button>
+            <input
+              type="file"
+              ref={fileInputRef}
+              onChange={handleFileChange}
+              className="hidden"
+              accept=".csv, application/vnd.openxmlformats-officedocument.spreadsheetml.sheet, application/vnd.ms-excel"
+            />
+          </div>
+        </div>
+      </div>
+
+      {/* 列表内容区 - 可滚动 */}
+      <div className="flex-1 overflow-y-auto min-h-0 pr-1">
+        {loadingTerms && terms.length === 0 ? (
+          <div className="flex justify-center items-center h-64">
+            <Loader2 className="animate-spin text-primary" size={32} />
+          </div>
+        ) : terms.length === 0 ? (
+          <div className="text-center py-12 sm:py-20 bg-gray-50 rounded-xl border border-dashed border-gray-300">
+            <Book size={40} className="mx-auto text-gray-300 mb-4" />
+            <h3 className="text-gray-900 font-medium">暂无业务术语</h3>
+            <p className="text-gray-500 text-sm mt-1">当前项目下还没有定义任何业务术语。</p>
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 gap-3 pb-4">
+            {/* 全选控制 */}
+            <div className="flex items-center gap-3 px-2 text-sm text-gray-500">
+              <button onClick={toggleAll} className="flex items-center gap-2 hover:text-primary">
+                {selectedIds.size === terms.length && terms.length > 0 ? <CheckSquare size={16} className="text-primary" /> : <Square size={16} />}
+                <span className="hidden sm:inline">全选本页</span>
+              </button>
+              <span className="text-xs sm:text-sm">共 {total} 条记录</span>
+            </div>
+
+            {terms.map((term) => (
+              <Card key={term.knowledge_id} className={`transition-all duration-200 group border-l-4 ${selectedIds.has(term.knowledge_id) ? 'border-l-primary bg-blue-50/30' : 'border-l-transparent hover:border-l-primary'}`}>
+                <div className="p-2 sm:p-3 flex gap-2 sm:gap-3">
+                  <div className="pt-1 shrink-0">
+                    <button
+                      onClick={() => toggleSelection(term.knowledge_id)}
+                      className="text-gray-400 hover:text-primary focus:outline-none transition-colors"
+                    >
+                      {selectedIds.has(term.knowledge_id) ? (
+                        <CheckSquare className="h-5 w-5 text-primary" />
+                      ) : (
+                        <Square className="h-5 w-5" />
+                      )}
+                    </button>
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="flex-1 min-w-0">
+                        <h3 className="text-sm sm:text-base font-bold text-gray-900 group-hover:text-primary transition-colors flex items-center gap-2 truncate">
+                          {term.term}
+                        </h3>
+                        <p className="mt-1 text-gray-600 leading-snug text-xs sm:text-sm line-clamp-2">
+                          <span className="font-semibold text-gray-400 text-xs mr-2">定义</span>
+                          {term.definition}
+                        </p>
+                        {term.examples && (
+                          <div className="mt-1.5 flex gap-2 items-start text-xs text-gray-500">
+                            <FileText size={12} className="mt-0.5 shrink-0 text-gray-400" />
+                            <div className="line-clamp-1">
+                              <span className="text-gray-400">示例：</span>
+                              {term.examples}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+
+                      <div className="flex items-center gap-1 opacity-100 sm:opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
+                        <button
+                          onClick={() => openModal(term)}
+                          className="p-1.5 text-gray-400 hover:text-primary hover:bg-blue-50 rounded-full transition-all"
+                          title="编辑"
+                        >
+                          <Edit2 size={14} />
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </Card>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* 分页控制栏 - 固定在底部，始终显示 */}
+      {total > 0 && (
+        <div className="pagination-container">
+          <div className="pagination-wrapper">
+            <Pagination
+              current={page}
+              total={total}
+              pageSize={pageSize}
+              onChange={setPage}
+              showTotal={true}
+              simple={window.innerWidth < 640}
+            />
+          </div>
+        </div>
+      )}
+
+      {/* 1. 新增/编辑 模态框 */}
+      <Modal
+        isOpen={isModalOpen}
+        onClose={() => setIsModalOpen(false)}
+        title={editingTerm ? "编辑业务术语" : "新增业务术语"}
+        footer={
+          <>
+            <Button onClick={() => setIsModalOpen(false)}>取消</Button>
+            <Button variant="primary" onClick={handleSave} disabled={isSaving}>
+              {isSaving ? '保存中...' : '保存'}
+            </Button>
+          </>
+        }
+      >
+        <div className="space-y-4">
+          <Input
+            label="术语名称"
+            value={formData.term}
+            onChange={(e) => handleInputChange(e, 'term')}
+            placeholder="例如：GMV"
+            required
+          />
+          <div className="flex flex-col gap-1.5">
+            <label className="text-sm font-medium text-gray-700">定义描述 <span className="text-red-500 ml-1">*</span></label>
+            <textarea
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary outline-none transition-colors min-h-[100px] text-sm"
+              value={formData.definition}
+              onChange={(e) => handleInputChange(e, 'definition')}
+              placeholder="请详细描述该术语的业务含义..."
+            />
+          </div>
+          <div className="flex flex-col gap-1.5">
+            <label className="text-sm font-medium text-gray-700">使用示例 (可选)</label>
+            <textarea
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary outline-none transition-colors min-h-[60px] text-sm"
+              value={formData.examples || ''}
+              onChange={(e) => handleInputChange(e, 'examples')}
+              placeholder="例如：2023年第一季度的GMV统计..."
+            />
+          </div>
+        </div>
+      </Modal>
+
+      {/* 2. 导入结果模态框 */}
+      <Modal
+        isOpen={isImportResultModalOpen}
+        onClose={() => setIsImportResultModalOpen(false)}
+        title="文件导入结果"
+        maxWidth="max-w-lg"
+        footer={
+          <Button onClick={() => setIsImportResultModalOpen(false)}>关闭</Button>
+        }
+      >
+        {importResult && (
+          <div className="space-y-4">
+            <div className="flex gap-6 text-sm mb-2">
+              <div className="flex items-center gap-2 text-green-700">
+                <CheckCircle2 size={18} />
+                <span className="font-medium">成功: {importResult.imported_count}</span>
+              </div>
+              <div className="flex items-center gap-2 text-red-700">
+                <AlertCircle size={18} />
+                <span className="font-medium">失败: {importResult.failed_count}</span>
+              </div>
+            </div>
+
+            {/* 失败列表 */}
+            {importResult.failed_count > 0 && (
+              <div className="bg-red-50 border border-red-100 rounded-lg overflow-hidden">
+                <div className="px-4 py-2 bg-red-100/50 border-b border-red-100 text-xs font-bold text-red-800 uppercase tracking-wide">
+                  错误详情 ({importResult.failed_count} 条)
+                </div>
+                <div className="max-h-[240px] overflow-y-auto p-0">
+                  <ul className="divide-y divide-red-100">
+                    {importResult.failures.map((fail, idx) => (
+                      <li key={idx} className="px-4 py-3 text-xs text-red-800 flex gap-3 hover:bg-red-100/30 transition-colors">
+                        <span className="font-mono bg-white border border-red-200 px-1.5 py-0.5 rounded text-red-600 shrink-0 h-fit">
+                          Row {fail.row}
+                        </span>
+                        <span className="leading-relaxed">{fail.error}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              </div>
+            )}
+
+            {/* 全部成功提示 */}
+            {importResult.failed_count === 0 && (
+              <div className="text-center py-8 text-gray-500 bg-green-50 rounded-lg border border-green-100 border-dashed">
+                <p className="text-green-700 font-medium">文件中的所有数据均已成功导入。</p>
+              </div>
+            )}
+          </div>
+        )}
+      </Modal>
+
+      {/* 批量删除确认对话框 */}
+      <ConfirmDialog
+        isOpen={isDeleteConfirmOpen}
+        onClose={() => setIsDeleteConfirmOpen(false)}
+        onConfirm={confirmBatchDelete}
+        title="批量删除术语"
+        message={`确定要删除选中的 ${selectedIds.size} 个术语吗？删除后无法恢复。`}
+        confirmText="删除"
+        cancelText="取消"
+        isDangerous={true}
+        showWarningIcon={true}
+      />
+    </div>
+  );
+};

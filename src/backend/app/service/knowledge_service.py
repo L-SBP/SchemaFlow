@@ -1,0 +1,370 @@
+"""
+术语服务。
+
+管理项目的领域术语，包括增删改查、导入与分页；负责权限校验、数据校验
+与错误处理。
+"""
+
+# backend/app/service/knowledge_service.py
+
+import pandas as pd
+from typing import List, Optional
+from fastapi import UploadFile
+from sqlalchemy.ext.asyncio import AsyncSession as Session
+import io
+
+# 隐式绝对导入
+from crud.crud_knowledge import crud_knowledge
+from crud.crud_project import crud_project  # 用于检查项目权限
+from schema import knowledge as schemas
+from core.exceptions import ItemNotFoundException, ValidationException, \
+    OperationNotPermittedException
+from core.log import log
+
+# RAG 服务导入
+from service.rag_service import rag_service
+
+# ----------------------------------------------------------------------
+# 术语创建
+# ----------------------------------------------------------------------
+async def create_knowledge_service(
+    db: Session, 
+    project_id: int, 
+    user_id: int, 
+    data: schemas.KnowledgeCreate
+) -> schemas.KnowledgeResponse:
+    """
+    创建新术语，并检查权限与唯一性。
+
+    Args:
+        db (Session): 数据库会话。
+        project_id (int): 项目 ID。
+        user_id (int): 用户 ID。
+        data (schemas.KnowledgeCreate): 术语创建数据。
+
+    Returns:
+        schemas.KnowledgeResponse: 创建后的术语信息。
+
+    Raises:
+        ItemNotFoundException: 项目不存在或无权限。
+        ValidationException: 术语已存在。
+    """
+    # 1. 检查项目权限
+    project = await crud_project.get(db, project_id)
+    if not project or project.user_id != user_id:
+        raise ItemNotFoundException("项目未找到或访问被拒绝")
+
+    # 2. 检查术语是否已存在
+    if await crud_knowledge.check_term_exists(db, project_id, data.term):
+        raise ValidationException(f"术语 '{data.term}' 在此项目中已存在")
+
+    # 3. 创建
+    new_term = await crud_knowledge.create(db, project_id=project_id, **data.model_dump())
+    
+    # 4. 异步触发向量索引（不阻塞主流程）
+    try:
+        import asyncio
+        asyncio.create_task(
+            rag_service.index_knowledge(
+                project_id=project_id,
+                knowledge_id=new_term.knowledge_id,
+                term=new_term.term,
+                definition=new_term.definition
+            )
+        )
+    except Exception as e:
+        log.warning(f"Failed to trigger knowledge indexing: {e}")
+    
+    return schemas.KnowledgeResponse.model_validate(new_term)
+
+# ----------------------------------------------------------------------
+# 术语更新
+# ----------------------------------------------------------------------
+async def update_knowledge_service(
+    db: Session,
+    project_id: int,
+    knowledge_id: int,
+    user_id: int,
+    update_data: schemas.KnowledgeUpdate  # 建议使用 Update 模型，而不是 Create
+) -> schemas.KnowledgeResponse:
+    """
+    更新术语内容，验证项目归属与权限。
+
+    Args:
+        db (Session): 数据库会话。
+        project_id (int): 项目 ID。
+        knowledge_id (int): 术语 ID。
+        user_id (int): 用户 ID。
+        update_data (schemas.KnowledgeUpdate): 更新数据。
+
+    Returns:
+        schemas.KnowledgeResponse: 更新后的术语信息。
+
+    Raises:
+        ItemNotFoundException: 术语不存在或不属于该项目。
+        OperationNotPermittedException: 无权限。
+    """
+    # 1. 查数据
+    db_obj = await crud_knowledge.get(db, knowledge_id)
+    if not db_obj:
+        raise ItemNotFoundException(f"术语 {knowledge_id} 未找到")
+
+    # 2. 安全校验：确保 URL 里的 project_id 和数据库里记录的一致
+    # 防止用户在 URL A 项目下，却试图修改 B 项目的术语
+    if db_obj.project_id != project_id:
+        raise ItemNotFoundException("术语不属于此项目")
+
+    # 3. 查权限 (检查用户是否拥有该项目)
+    project = await crud_project.get(db, project_id=project_id)
+    if not project or project.user_id != user_id:
+        raise OperationNotPermittedException("访问被拒绝")
+
+    # 4. 更新
+    updated_obj = await crud_knowledge.update(db, db_obj, update_data.model_dump(exclude_unset=True))
+    
+    # 5. 异步更新向量索引
+    try:
+        import asyncio
+        asyncio.create_task(
+            rag_service.index_knowledge(
+                project_id=project_id,
+                knowledge_id=updated_obj.knowledge_id,
+                term=updated_obj.term,
+                definition=updated_obj.definition
+            )
+        )
+    except Exception as e:
+        log.warning(f"Failed to trigger knowledge re-indexing: {e}")
+    
+    return schemas.KnowledgeResponse.model_validate(updated_obj)
+
+
+# ----------------------------------------------------------------------
+# 批量删除术语
+# ----------------------------------------------------------------------
+async def batch_delete_knowledge_service(
+    db: Session, 
+    project_id: int, 
+    user_id: int, 
+    knowledge_ids: List[int]
+) -> int:
+    """
+    批量删除术语。
+
+    Args:
+        db (Session): 数据库会话。
+        project_id (int): 项目 ID。
+        user_id (int): 用户 ID。
+        knowledge_ids (List[int]): 待删除术语 ID 列表。
+
+    Returns:
+        int: 删除成功的数量。
+
+    Raises:
+        OperationNotPermittedException: 无权限。
+    """
+    # 1. 权限检查
+    project = await crud_project.get(db, project_id)
+    if not project or project.user_id != user_id:
+        raise OperationNotPermittedException("访问被拒绝")
+
+    count = await crud_knowledge.remove_multi(db, project_id, knowledge_ids)
+    
+    # 异步删除向量索引
+    try:
+        import asyncio
+        for k_id in knowledge_ids:
+            asyncio.create_task(
+                rag_service.delete_knowledge_item(k_id)
+            )
+    except Exception as e:
+        log.warning(f"Failed to trigger knowledge vector deletion: {e}")
+    
+    return count
+
+
+
+# ----------------------------------------------------------------------
+# 术语列表（分页）
+# ----------------------------------------------------------------------
+async def get_knowledge_list_service(
+    db: Session, 
+    project_id: int, 
+    user_id: int, 
+    page: int, 
+    page_size: int, 
+    search: Optional[str]
+) -> schemas.PaginatedKnowledgeList:
+    """
+    获取术语列表（分页）。
+
+    Args:
+        db (Session): 数据库会话。
+        project_id (int): 项目 ID。
+        user_id (int): 用户 ID。
+        page (int): 页码。
+        page_size (int): 每页数量。
+        search (Optional[str]): 搜索关键字。
+
+    Returns:
+        schemas.PaginatedKnowledgeList: 分页结果。
+
+    Raises:
+        ItemNotFoundException: 项目不存在。
+    """
+    # 1. 检查项目权限
+    project = await crud_project.get(db, project_id)
+    if not project or project.user_id != user_id:
+        raise ItemNotFoundException("项目未找到")
+
+    skip = (page - 1) * page_size
+    total = await crud_knowledge.get_total_count(db, project_id, search)
+    items = await crud_knowledge.get_by_project(db, project_id, skip, page_size, search)
+
+    return schemas.PaginatedKnowledgeList(
+        total=total, page=page, page_size=page_size, items=items
+    )
+
+
+# ----------------------------------------------------------------------
+# 批量导入术语
+# ----------------------------------------------------------------------
+async def import_knowledge_service(
+    db: Session, 
+    project_id: int, 
+    user_id: int, 
+    file: UploadFile
+) -> schemas.ImportResponse:
+    """
+    解析 Excel/CSV 文件并批量导入术语。
+
+    Args:
+        db (Session): 数据库会话。
+        project_id (int): 项目 ID。
+        user_id (int): 用户 ID。
+        file (UploadFile): 上传文件。
+
+    Returns:
+        schemas.ImportResponse: 导入结果统计。
+
+    Raises:
+        ItemNotFoundException: 项目不存在。
+        ValidationException: 文件类型或内容解析失败。
+    """
+    # 1. 权限检查
+    project = await crud_project.get(db, project_id)
+    if not project or project.user_id != user_id:
+        raise ItemNotFoundException("项目未找到")
+
+    # 2. 文件读取与解析 ---- 改为支持excel和csv
+    if not file.filename.endswith(('.xlsx', '.xls', '.csv')):
+        raise ValidationException("仅支持 .xlsx, .xls, .csv 文件")
+
+    # 2. 读取文件
+    content = await file.read()
+    try:
+        if file.filename.endswith('.csv'):
+            # [修复] 增加编码自动回退机制
+            try:
+                # 1. 优先尝试标准 UTF-8
+                df = pd.read_csv(io.BytesIO(content), encoding='utf-8', index_col=False)
+            except UnicodeDecodeError:
+                try:
+                    # 2. 失败则尝试 GB18030 (包含 GBK 和 GB2312 的超集，兼容性最好)
+                    df = pd.read_csv(io.BytesIO(content), encoding='gb18030', index_col=False)
+                except UnicodeDecodeError:
+                    # 3. 还是不行，尝试 Windows-1252 (西欧常见)
+                    df = pd.read_csv(io.BytesIO(content), encoding='cp1252', index_col=False)
+
+        else:
+            # Excel 文件是二进制格式，不需要指定 encoding
+            df = pd.read_excel(io.BytesIO(content))
+        
+        # 重置索引确保索引为数字
+        df = df.reset_index(drop=True)
+    except Exception as e:
+        raise ValidationException(f"解析文件失败: {str(e)}")
+
+    # 检查文件是否为空或列数不足
+    if df.empty:
+        raise ValidationException("文件格式错误：文件内容为空")
+    
+    if len(df.columns) < 2:
+        raise ValidationException("文件格式错误：至少需要两列数据（术语、定义）")
+
+    # 3. 校验表头 (假设模板列名为 term, definition, examples)
+    # 支持中文列名，如 "术语", "定义", "示例"
+    required_cols = ['term', 'definition']
+    # 简单的列名映射，兼容中文
+    rename_map = {'术语': 'term', '定义': 'definition', '示例': 'examples', '备注': 'examples'}
+    df.rename(columns=rename_map, inplace=True)
+
+    # 检查是否缺少表头（第一行被当作数据而非列名）
+    # 如果列名不包含预期的表头，说明可能缺少表头行
+    current_cols = set(df.columns)
+    expected_cols = {'term', 'definition', '术语', '定义'}
+    if not current_cols.intersection(expected_cols):
+        raise ValidationException(
+            "文件格式错误：缺少表头行。请确保第一行为列名，且包含「术语」和「定义」两列"
+        )
+
+    if not all(col in df.columns for col in required_cols):
+        raise ValidationException("文件格式错误：缺少必需的列。请确保文件包含「术语」和「定义」两列")
+
+    # 4. 遍历处理
+    success_items = []
+    failures = []
+
+    # 获取现有术语用于去重
+    existing_items = await crud_knowledge.get_all_by_project(db, project_id)
+    existing_terms = {item.term for item in existing_items}
+
+    for index, row in df.iterrows():
+        # 安全转换行号，处理非数字索引的情况
+        try:
+            row_num = int(index) + 2  # Excel 行号从 1 开始，表头占 1 行
+        except (ValueError, TypeError):
+            # 如果索引无法转换为整数，说明文件格式可能有问题
+            raise ValidationException(
+                "文件格式错误：数据列解析异常，可能是某行数据中包含了多余的逗号(,)分隔符，"
+                "导致列数不匹配。请检查并修正文件内容。"
+            )
+        try:
+            # 安全地获取和转换字段值
+            term_val = row.get('term', '')
+            definition_val = row.get('definition', '')
+            examples_val = row.get('examples', '')
+            
+            # 处理可能的 NaN 值和类型转换
+            term = '' if pd.isna(term_val) else str(term_val).strip()
+            definition = '' if pd.isna(definition_val) else str(definition_val).strip()
+            examples = '' if pd.isna(examples_val) else str(examples_val).strip()
+
+            if not term or not definition:
+                failures.append(schemas.ImportFailure(row=row_num, error="术语或定义为空"))
+                continue
+
+            if term in existing_terms:
+                failures.append(schemas.ImportFailure(row=row_num, error="术语已存在"))
+                continue
+
+            success_items.append({
+                "term": term,
+                "definition": definition,
+                "examples": examples
+            })
+            existing_terms.add(term)  # 防止文件内重复
+        except Exception as e:
+            failures.append(schemas.ImportFailure(row=row_num, error=f"数据格式错误: {str(e)}"))
+            continue
+
+    # 5. 批量写入
+    imported_count = 0
+    if success_items:
+        imported_count = await crud_knowledge.batch_create(db, project_id, success_items)
+
+    return schemas.ImportResponse(
+        imported_count=imported_count,
+        failed_count=len(failures),
+        failures=failures
+    )

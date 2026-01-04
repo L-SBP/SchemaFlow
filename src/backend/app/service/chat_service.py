@@ -1,0 +1,1395 @@
+"""
+聊天服务。
+
+处理与 AI 模型的聊天交互，负责 SQL 生成任务。
+包含：
+- 模型注册与配置管理
+- 会话所有权校验
+- AI 响应的解析与格式化
+- 会话模型记忆逻辑
+
+重构说明：
+1. 将长 AI 调用移出数据库事务，确保连接池不会被耗尽
+2. 拆分 process_chat 为多个小函数，每个函数控制在 50 行以内
+3. Prompt 模板移至 core/prompts.py
+4. 模型配置支持从数据库动态读取，硬编码配置作为后备
+"""
+
+# backend/app/service/chat_service.py
+
+import json
+import httpx
+import sqlparse
+from typing import List, Dict, Any, Optional, Tuple
+from fastapi import HTTPException
+from sqlalchemy.future import select
+from sqlalchemy import update
+from sqlalchemy.orm import selectinload
+from sqlalchemy.ext.asyncio import AsyncSession
+from fastapi.encoders import jsonable_encoder
+from core.exceptions import ForbiddenException, ItemNotFoundException, InvalidOperationException, BusinessException, AppException
+
+from core.config import settings
+from core.log import log
+from core.prompts import build_ai_messages
+from crud.crud_database_instance import crud_database_instance
+from crud.crud_message import crud_message
+from crud.crud_project import crud_project
+from crud.crud_knowledge import crud_knowledge
+from crud.crud_ai_model_config import crud_ai_model_config
+from models.session import Session as SessionModel
+from schema.chat import ChatResponse, MessageType
+from service.mysql_service import execute_mysql_sql_with_user_check
+from service.postgresql_service import execute_postgres_sql_with_user_check
+from service.sqlite_service import execute_sqlite_sql_with_user_check as execute_sqlite
+from models.ai_generated_statement import AIGeneratedStatement
+from models.query_result import QueryResult
+from models.message import Message as MessageModel 
+from models.project import Project as ProjectModel
+from models.domain_knowledge import DomainKnowledge
+
+# RAG 服务导入
+from service.rag_service import rag_service, retrieve_chat_context, index_new_message
+
+
+# =========================================================
+# 1. 模型配置注册表（后备配置，当数据库无配置时使用）
+# =========================================================
+
+FALLBACK_MODEL_REGISTRY = {
+    "my-finetuned-sql": {
+        "name": "My Fine-Tuned SQL Model",
+        "api_url": "http://1.92.127.206:8080/v1/chat/completions",
+        "model_id": "codellama/CodeLlama-13b-Instruct-hf",
+        "api_key": "sk-2025texttosql",
+        "type": "local_finetune"
+    },
+    "xiyan-sql": {
+        "name": "XiYan-SQL (QwenCoder-32B)",
+        "api_url": "https://api-inference.modelscope.cn/v1/chat/completions",
+        "model_id": "XGenerationLab/XiYanSQL-QwenCoder-32B-2504",
+        "api_key": settings.ai.modelscope_api_key, 
+        "type": "general_llm"
+    },
+    "qwen-coder-32b": {
+        "name": "Qwen2.5-Coder-32B",
+        "api_url": "https://api-inference.modelscope.cn/v1/chat/completions",
+        "model_id": "Qwen/Qwen2.5-Coder-32B-Instruct",
+        "api_key": settings.ai.modelscope_api_key, 
+        "type": "general_llm"
+    },
+    "deepseek-v3": {
+        "name": "DeepSeek V3.1",
+        "api_url": "https://api-inference.modelscope.cn/v1/chat/completions",
+        "model_id": "deepseek-ai/DeepSeek-V3.1",
+        "api_key": settings.ai.modelscope_api_key, 
+        "type": "general_llm"
+    }
+}
+
+# 保留旧变量名以兼容可能的外部引用
+MODEL_REGISTRY = FALLBACK_MODEL_REGISTRY
+
+DEFAULT_MODEL = "my-finetuned-sql"
+
+
+# =========================================================
+# 1.1 动态模型配置获取
+# =========================================================
+
+async def get_model_registry(db: AsyncSession) -> Dict[str, Dict[str, Any]]:
+    """
+    获取模型配置注册表。
+
+    优先从数据库读取，如果数据库无配置则使用后备配置。
+
+    Args:
+        db (AsyncSession): 数据库会话。
+
+    Returns:
+        Dict[str, Dict[str, Any]]: 模型配置字典。
+    """
+    try:
+        db_registry = await crud_ai_model_config.get_model_registry(db)
+        if db_registry:
+            return db_registry
+    except Exception as e:
+        log.warning(f"Failed to load model config from database: {e}, using fallback")
+
+    return FALLBACK_MODEL_REGISTRY
+
+
+async def get_default_model_key(db: AsyncSession) -> str:
+    """
+    获取默认模型名称。
+
+    由于移除了 is_default 字段，这里返回第一个配置的模型名称。
+    如果数据库无配置则使用后备默认值。
+
+    Args:
+        db (AsyncSession): 数据库会话。
+
+    Returns:
+        str: 默认模型名称。
+    """
+    try:
+        configs = await crud_ai_model_config.get_all(db, limit=1)
+        if configs:
+            return configs[0].model_name
+    except Exception as e:
+        log.warning(f"Failed to load default model from database: {e}, using fallback")
+
+    return DEFAULT_MODEL
+
+
+# =========================================================
+# 2. 会话与权限校验
+# =========================================================
+
+async def _verify_session_ownership(db: AsyncSession, session_id: int, user_id: int) -> int:
+    """验证会话所有权，防止越权。返回 project_id。"""
+    stmt = (
+        select(SessionModel)
+        .options(selectinload(SessionModel.project))
+        .where(SessionModel.session_id == session_id)
+    )
+    result = await db.execute(stmt)
+    session = result.scalar_one_or_none()
+
+    if not session:
+        raise ItemNotFoundException(message="会话未找到")
+    
+    if not session.project:
+        raise ItemNotFoundException(message="此会话的项目未找到")
+
+    if session.project.user_id != user_id:
+        log.warning("Security Alert: User {} tried to access session {}", user_id, session_id)
+        raise ForbiddenException(message="权限拒绝")
+
+    return session.project_id
+
+
+async def _get_session_obj(db: AsyncSession, session_id: int) -> SessionModel:
+    """获取会话对象。"""
+    stmt = select(SessionModel).where(SessionModel.session_id == session_id)
+    result = await db.execute(stmt)
+    session_obj = result.scalar_one_or_none()
+    if not session_obj:
+        raise ItemNotFoundException(message="会话已丢失")
+    return session_obj
+
+
+# =========================================================
+# 3. 模型选择策略
+# =========================================================
+
+async def _resolve_model_key(
+    db: AsyncSession,
+    selected_model: Optional[str],
+    session_current_model: Optional[str]
+) -> Tuple[str, Dict[str, Dict[str, Any]]]:
+    """
+    解析最终使用的模型 key。
+    优先级：用户本次指定 > 会话记忆 > 默认模型
+
+    同时返回模型注册表，避免重复查询数据库。
+
+    Returns:
+        Tuple[str, Dict]: (模型 key, 模型配置注册表)
+    """
+    # 获取模型注册表
+    registry = await get_model_registry(db)
+    default_key = await get_default_model_key(db)
+
+    if selected_model and selected_model in registry:
+        return selected_model, registry
+    if session_current_model and session_current_model in registry:
+        return session_current_model, registry
+
+    return default_key, registry
+
+
+async def _update_session_model(
+    db: AsyncSession,
+    session_obj: SessionModel,
+    new_model: str
+) -> None:
+    """更新会话的当前模型（如果有变化）。"""
+    if session_obj.current_model != new_model:
+        session_obj.current_model = new_model
+        db.add(session_obj)
+
+
+# =========================================================
+# 3.1 RAG 结果转换辅助函数
+# =========================================================
+
+async def _convert_rag_history_to_messages(
+    db: AsyncSession,
+    rag_results: List[Dict[str, Any]]
+) -> List[MessageModel]:
+    """
+    将 RAG 检索的历史结果转换为 MessageModel 兼容格式。
+    
+    Args:
+        db: 数据库会话
+        rag_results: RAG 检索结果列表
+        
+    Returns:
+        List[MessageModel]: 消息列表
+    """
+    if not rag_results:
+        return []
+    
+    # 从 RAG 结果中提取 message_id
+    message_ids = []
+    for result in rag_results:
+        metadata = result.get("metadata", {})
+        msg_id = metadata.get("message_id")
+        if msg_id:
+            message_ids.append(msg_id)
+    
+    if not message_ids:
+        return []
+    
+    # 从数据库获取完整的消息对象
+    from sqlalchemy import select
+    stmt = select(MessageModel).where(MessageModel.message_id.in_(message_ids))
+    result = await db.execute(stmt)
+    messages = result.scalars().all()
+    
+    # 按 RAG 相关性顺序排序（保持检索顺序）
+    message_map = {msg.message_id: msg for msg in messages}
+    ordered_messages = []
+    for result in rag_results:
+        msg_id = result.get("metadata", {}).get("message_id")
+        if msg_id and msg_id in message_map:
+            ordered_messages.append(message_map[msg_id])
+    
+    return ordered_messages
+
+
+async def _convert_rag_knowledge_to_domain(
+    db: AsyncSession,
+    rag_results: List[Dict[str, Any]]
+) -> List[DomainKnowledge]:
+    """
+    将 RAG 检索的知识结果转换为 DomainKnowledge 兼容格式。
+    
+    Args:
+        db: 数据库会话
+        rag_results: RAG 检索结果列表
+        
+    Returns:
+        List[DomainKnowledge]: 领域知识列表
+    """
+    if not rag_results:
+        return []
+    
+    # 从 RAG 结果中提取 knowledge_id
+    knowledge_ids = []
+    for result in rag_results:
+        metadata = result.get("metadata", {})
+        k_id = metadata.get("knowledge_id")
+        if k_id:
+            knowledge_ids.append(k_id)
+    
+    if not knowledge_ids:
+        return []
+    
+    # 从数据库获取完整的知识对象
+    from sqlalchemy import select
+    stmt = select(DomainKnowledge).where(DomainKnowledge.knowledge_id.in_(knowledge_ids))
+    result = await db.execute(stmt)
+    knowledge_items = result.scalars().all()
+    
+    # 按 RAG 相关性顺序排序
+    knowledge_map = {k.knowledge_id: k for k in knowledge_items}
+    ordered_knowledge = []
+    for result in rag_results:
+        k_id = result.get("metadata", {}).get("knowledge_id")
+        if k_id and k_id in knowledge_map:
+            ordered_knowledge.append(knowledge_map[k_id])
+    
+    return ordered_knowledge
+
+
+def _build_ddl_from_rag_results(rag_results: List[Dict[str, Any]]) -> str:
+    """
+    从 RAG 检索结果构建 DDL 文本。
+    
+    将分片检索的表DDL重新组合为完整的DDL文本。
+    外键关联的表会自动包含在结果中（由RAG服务保证）。
+    
+    Args:
+        rag_results: RAG 检索结果列表
+        
+    Returns:
+        str: 组合后的DDL文本
+    """
+    if not rag_results:
+        return "-- No DDL found"
+    
+    ddl_fragments = []
+    seen_tables = set()
+    
+    for result in rag_results:
+        # 从不同可能的字段中获取DDL内容
+        ddl_content = (
+            result.get("content") or 
+            result.get("document") or 
+            result.get("metadata", {}).get("ddl_fragment") or
+            ""
+        )
+        
+        # 获取表名（用于去重）
+        table_name = (
+            result.get("metadata", {}).get("table_name") or
+            result.get("table_name") or
+            ""
+        )
+        
+        if ddl_content and table_name.lower() not in seen_tables:
+            ddl_fragments.append(ddl_content.strip())
+            if table_name:
+                seen_tables.add(table_name.lower())
+    
+    if not ddl_fragments:
+        return "-- No DDL found"
+    
+    # 添加注释说明这是RAG检索的部分DDL
+    header = "-- [RAG Retrieved Schema - Related Tables]\n"
+    return header + "\n\n".join(ddl_fragments)
+
+
+# =========================================================
+# 4. AI 调用（事务外执行）
+# =========================================================
+
+
+# 注意：大多数场景可保持同步，用户体验更好
+
+def _clean_ai_response(content: str) -> str:
+    """清洗 AI 返回的 SQL 内容。"""
+    # 移除所有可能的停止符（INST 格式 + ChatML 格式兜底）
+    stop_tokens = [
+        "[/INST]", "[INST]", "<<SYS>>", "<</SYS>>",
+        "<|im_end|>", "<|im_start|>",  # ChatML 格式兜底清理
+        "<|endoftext|>", "<|end|>", "</s>", "<s>"
+    ]
+    for stop_token in stop_tokens:
+        if stop_token in content:
+            content = content.split(stop_token)[0]
+    
+    # 去除 Markdown 标记
+    clean_sql = content.strip().replace("```sql", "").replace("```", "").strip()
+    
+    # 移除可能的前缀文本（如"已生成sql语句："等）
+    prefixes_to_remove = [
+        "已生成sql语句：",
+        "已生成SQL语句：", 
+        "生成的SQL语句：",
+        "SQL语句：",
+        "查询语句："
+    ]
+    
+    for prefix in prefixes_to_remove:
+        if clean_sql.startswith(prefix):
+            clean_sql = clean_sql[len(prefix):].strip()
+    
+    # 只取第一条 SQL
+    if ";\n" in clean_sql:
+        clean_sql = clean_sql.split(";\n")[0] + ";"
+    elif clean_sql.count(";") > 1:
+        clean_sql = clean_sql.split(";")[0] + ";"
+    
+    return clean_sql
+
+
+async def call_ai_agent(
+    ddl_text: str,
+    question: str,
+    history: List[MessageModel] = None,
+    knowledge: List[DomainKnowledge] = None,
+    model_key: str = None,
+    model_registry: Dict[str, Dict[str, Any]] = None,
+    db_type: str = None
+) -> str:
+    """
+    调用 AI 接口生成 SQL。
+    
+    【重要】此函数不应在数据库事务内调用，因为 AI 调用可能耗时很长（最长 300s）。
+
+    Args:
+        ddl_text: 数据库 DDL 语句
+        question: 用户问题
+        history: 历史消息列表
+        knowledge: 领域知识列表
+        model_key: 模型标识符
+        model_registry: 模型配置注册表（从数据库或后备配置获取）
+        db_type: 数据库类型（mysql/postgresql/sqlite）
+    """
+    history = history or []
+    knowledge = knowledge or []
+    
+    # 使用传入的注册表或后备配置
+    registry = model_registry or FALLBACK_MODEL_REGISTRY
+    
+    if not model_key or model_key not in registry:
+        model_key = DEFAULT_MODEL if DEFAULT_MODEL in registry else list(registry.keys())[0]
+
+    config = registry[model_key]
+    log.info(f"Using AI Model: {config['name']} ({config['model_id']})")
+
+    ai_input = build_ai_messages(
+        model_type=config["type"],
+        schema_text=ddl_text,
+        question=question,
+        history=history,
+        knowledge=knowledge,
+        db_type=db_type
+    )
+
+    # 根据返回类型决定使用 completions 还是 chat completions 端点
+    if isinstance(ai_input, dict) and ai_input.get("is_completion"):
+        # 微调模型：使用 /v1/completions 端点，直接发送格式化的 prompt
+        # 这样可以避免服务器应用错误的 chat template (如 ChatML)
+        payload = {
+            "model": config["model_id"],
+            "prompt": ai_input["prompt"],
+            "temperature": 0.1,
+            "stream": False,
+            "max_tokens": 512,
+            "stop": ["[/INST]", "[INST]", "<<SYS>>", "<</SYS>>", "\n\n\n"]
+        }
+        use_completion_api = True
+    else:
+        # 在线模型：使用 /v1/chat/completions 端点
+        payload = {
+            "model": config["model_id"],
+            "messages": ai_input,
+            "temperature": 0.1,
+            "stream": False,
+            "max_tokens": 512,
+            "stop": ["User:", "Assistant:", "\n\n\n"]
+        }
+        use_completion_api = False
+
+    headers = {
+        "Authorization": f"Bearer {config['api_key']}",
+        "Content-Type": "application/json"
+    }
+
+    try:
+        # 根据模型类型选择 API 端点
+        if use_completion_api:
+            # 微调模型：使用 /v1/completions 端点
+            # 将 /v1/chat/completions 替换为 /v1/completions
+            api_url = config["api_url"].replace("/chat/completions", "/completions")
+        else:
+            api_url = config["api_url"]
+
+        # 设置细粒度超时：
+        # - connect: 10秒连接超时，快速检测服务不可用
+        # - read: 120秒读取超时，等待AI模型响应
+        # - write: 30秒写入超时
+        # - pool: 10秒连接池超时
+        timeout_config = httpx.Timeout(
+            connect=10.0,   # 连接超时：快速检测AI服务是否可达
+            read=120.0,     # 读取超时：等待AI模型生成响应
+            write=30.0,     # 写入超时
+            pool=10.0       # 连接池超时
+        )
+        async with httpx.AsyncClient(timeout=timeout_config) as client:
+            resp = await client.post(
+                api_url,
+                content=json.dumps(payload, ensure_ascii=False).encode("utf-8"), 
+                headers=headers
+            )
+        resp.raise_for_status()
+        raw = resp.json()
+        
+        content = ""
+        if "choices" in raw and len(raw["choices"]) > 0:
+            if use_completion_api:
+                # completions 端点返回 text 字段
+                content = raw["choices"][0].get("text", "")
+            else:
+                # chat completions 端点返回 message.content
+                content = raw["choices"][0]["message"]["content"]
+        
+        return _clean_ai_response(content)
+
+    except httpx.ConnectError as e:
+        log.error("AI Connect Error ({}): {}", model_key, e)
+        return f"-- AI Service Error: 无法连接到AI服务 ({config['api_url'][:50]}...)"
+    except httpx.ConnectTimeout as e:
+        log.error("AI Connect Timeout ({}): {}", model_key, e)
+        return f"-- AI Service Error: 连接AI服务超时，服务可能不可用"
+    except httpx.ReadTimeout as e:
+        log.error("AI Read Timeout ({}): {}", model_key, e)
+        return f"-- AI Service Error: AI服务响应超时，请稍后重试"
+    except httpx.HTTPStatusError as e:
+        log.error("AI HTTP Error ({}): {} - {}", model_key, e.response.status_code, e.response.text[:200])
+        return f"-- AI Service Error: AI服务返回错误 (HTTP {e.response.status_code})"
+    except Exception as e:
+        error_msg = str(e) if str(e) else type(e).__name__
+        log.error("AI Call Error ({}): {}", model_key, error_msg)
+        return f"-- AI Service Error: {error_msg}"
+
+
+# =========================================================
+# 5. SQL 解析与执行
+# =========================================================
+
+def _parse_sql_type(sql_text: str) -> str:
+    """解析 SQL 语句类型。"""
+    sql_type = "UNKNOWN"
+    try:
+        if sql_text and not sql_text.startswith("--"):
+            # 先清洗SQL文本，移除可能的前缀
+            clean_sql = sql_text.strip()
+            
+            # 移除可能的前缀文本
+            prefixes_to_remove = [
+                "已生成sql语句：",
+                "已生成SQL语句：", 
+                "生成的SQL语句：",
+                "SQL语句：",
+                "查询语句："
+            ]
+            
+            for prefix in prefixes_to_remove:
+                if clean_sql.startswith(prefix):
+                    clean_sql = clean_sql[len(prefix):].strip()
+            
+            # 使用sqlparse解析
+            parsed = sqlparse.parse(clean_sql)
+            if parsed:
+                sql_type = parsed[0].get_type().upper()
+                
+            # 兜底逻辑：如果sqlparse无法识别，使用简单的关键字匹配
+            if sql_type == "UNKNOWN":
+                clean_upper = clean_sql.strip().upper()
+                if clean_upper.startswith("SELECT"):
+                    sql_type = "SELECT"
+                elif clean_upper.startswith("INSERT"):
+                    sql_type = "INSERT"
+                elif clean_upper.startswith("UPDATE"):
+                    sql_type = "UPDATE"
+                elif clean_upper.startswith("DELETE"):
+                    sql_type = "DELETE"
+                elif clean_upper.startswith("CREATE"):
+                    sql_type = "CREATE"
+                elif clean_upper.startswith("DROP"):
+                    sql_type = "DROP"
+                elif clean_upper.startswith("ALTER"):
+                    sql_type = "ALTER"
+                elif clean_upper.startswith("TRUNCATE"):
+                    sql_type = "TRUNCATE"
+                    
+    except Exception as e:
+        log.warning("SQL parsing failed for: {}..., error: {}", sql_text[:100], e)
+        
+    return sql_type
+
+
+def _is_ai_service_error(sql_text: str) -> tuple:
+    """
+    检测是否为AI服务调用错误。
+    
+    Returns:
+        tuple: (is_error: bool, error_message: str)
+    """
+    if not sql_text:
+        return False, ""
+    
+    # 检测 AI 服务错误标记
+    if sql_text.startswith("-- AI Service Error:"):
+        # 提取错误详情
+        error_detail = sql_text.replace("-- AI Service Error:", "").strip()
+        return True, error_detail
+    
+    return False, ""
+
+
+def _is_meta_sql(sql_text: str) -> bool:
+    """判断是否为元数据/错误 SQL（不包括AI服务错误）。"""
+    if not sql_text:
+        return False
+    
+    # 先排除 AI 服务错误（由专门的函数处理）
+    if sql_text.startswith("-- AI Service Error:"):
+        return False
+        
+    sql_upper = sql_text.upper()
+    
+    # 检查是否包含错误关键字
+    error_patterns = [
+        "'CANCELED'",
+        "'ERROR'", 
+        "ERROR:",
+        "CANNOT ANSWER",
+        "无法回答",
+        "CAN'T ANSWER",
+        "UNABLE TO",
+        "NOT SUPPORTED"
+    ]
+    
+    return any(pattern in sql_upper for pattern in error_patterns)
+
+
+def _requires_confirmation(sql_type: str) -> bool:
+    """判断 SQL 类型是否需要用户确认。"""
+    return sql_type in ["INSERT", "UPDATE", "DELETE", "DROP", "ALTER", "TRUNCATE", "CREATE", "DDL"]
+
+
+def _is_forbidden_sql_type(sql_type: str) -> bool:
+    """判断 SQL 类型是否被禁止执行（DDL 类操作）。"""
+    return sql_type in ["DROP", "ALTER", "TRUNCATE", "CREATE", "DDL"]
+
+
+def _normalize_sql_type_for_db(sql_type: str) -> str:
+    """
+    将 SQL 类型标准化为数据库允许的类型。
+    数据库约束: statement_type IN ('SELECT', 'INSERT', 'UPDATE', 'DELETE', 'DDL', 'OTHER')
+    """
+    if sql_type in ["SELECT", "INSERT", "UPDATE", "DELETE"]:
+        return sql_type
+    elif sql_type in ["CREATE", "DROP", "ALTER", "TRUNCATE"]:
+        return "DDL"
+    else:
+        return "OTHER"
+
+
+async def _execute_sql_by_type(sql: str, sql_type: str, instance: Any, user_id: int):
+    """根据数据库类型分发执行逻辑。"""
+    if instance.db_type == 'mysql':
+        return await execute_mysql_sql_with_user_check(sql, sql_type, instance)
+    elif instance.db_type == 'postgresql':
+        return await execute_postgres_sql_with_user_check(sql, sql_type, instance)
+    elif instance.db_type == 'sqlite':
+        return await execute_sqlite(sql, sql_type, instance, user_id)
+    else:
+        raise InvalidOperationException(message=f"不支持的数据库类型: {instance.db_type}")
+
+
+# =========================================================
+# 6. 消息持久化（独立事务）+ RAG 索引
+# =========================================================
+
+async def _save_user_message(
+    db: AsyncSession,
+    session_id: int,
+    content: str
+) -> MessageModel:
+    """保存用户消息（独立事务），并异步触发向量索引。"""
+    message = await crud_message.create_message(db, session_id, content, role="user")
+    
+    # 异步触发消息向量索引（不阻塞主流程）
+    try:
+        import asyncio
+        asyncio.create_task(
+            index_new_message(
+                session_id=session_id,
+                message_id=message.message_id,
+                content=content,
+                role="user"
+            )
+        )
+    except Exception as e:
+        # 索引失败不影响主流程
+        log.warning(f"Failed to trigger message indexing: {e}")
+    
+    return message
+
+
+
+async def _save_ai_response(
+    db: AsyncSession,
+    session_id: int,
+    sql_text: str,
+    sql_type: str,
+    requires_confirm: bool,
+    execution_status: str,
+    data: List[Dict],
+    error_message: str = None
+) -> Tuple[MessageModel, AIGeneratedStatement]:
+    """
+    保存 AI 响应和执行结果（独立事务），并异步触发向量索引。
+    
+    Args:
+        error_message: 执行失败时的错误信息，如果提供则保存错误内容
+    """
+    # 确保sql_text是干净的，不包含前缀
+    clean_sql_text = sql_text
+    prefixes_to_remove = [
+        "已生成sql语句：",
+        "已生成SQL语句：", 
+        "生成的SQL语句：",
+        "SQL语句：",
+        "查询语句："
+    ]
+    
+    for prefix in prefixes_to_remove:
+        if clean_sql_text.startswith(prefix):
+            clean_sql_text = clean_sql_text[len(prefix):].strip()
+    
+    # 根据执行状态构建回复内容
+    if execution_status == "failed" and error_message:
+        reply_content = f"❌ 执行失败：\n{error_message}"
+    else:
+        reply_content = f"已生成SQL语句：\n{clean_sql_text}"
+    
+    ai_message = await crud_message.create_message(db, session_id, reply_content, role="assistant")
+    
+    # 仅对执行失败的SQL进行向量索引，帮助AI避免类似错误
+    # 正常执行成功的SQL不索引
+    if execution_status == "failed" and error_message:
+        try:
+            import asyncio
+            index_content = f"错误SQL案例：\nSQL语句：{clean_sql_text}\n执行错误：{error_message}"
+            asyncio.create_task(
+                index_new_message(
+                    session_id=session_id,
+                    message_id=ai_message.message_id,
+                    content=index_content,
+                    role="assistant"
+                )
+            )
+        except Exception as e:
+            log.warning(f"Failed to trigger error case indexing: {e}")
+    
+    if requires_confirm:
+        ai_message.requires_confirmation = True
+        db.add(ai_message)
+
+    safe_data = jsonable_encoder(data)
+    # 将 SQL 类型标准化为数据库允许的类型
+    db_sql_type = _normalize_sql_type_for_db(sql_type)
+    new_statement = AIGeneratedStatement(
+        message_id=ai_message.message_id,
+        sql_text=clean_sql_text,  # 存储干净的SQL文本
+        statement_type=db_sql_type,
+        execution_status=execution_status,
+        execution_result=safe_data,
+        statement_order=1
+    )
+    db.add(new_statement)
+    await db.flush()
+
+    # 仅对成功的查询落库 QueryResult
+    if execution_status == "success" and sql_type == "SELECT":
+        query_result = QueryResult(
+            statement_id=new_statement.statement_id,
+            result_data=safe_data,
+            data_summary=None,
+            chart_type="table",
+        )
+        db.add(query_result)
+    
+    await db.commit()
+    return ai_message, new_statement
+
+
+# =========================================================
+# 7. 核心业务逻辑（重构后）
+# =========================================================
+
+async def process_chat(
+    db: AsyncSession, 
+    session_id: int, 
+    user_input: str, 
+    user_id: int, 
+    selected_model: str = None
+) -> ChatResponse:
+    """
+    处理用户聊天请求的主流程。
+    
+    【原子性修复】将流程拆分为三个阶段：
+    1. 事务1：保存用户消息，获取上下文
+    2. 事务外：调用 AI（长连接，最长 300s）
+    3. 事务2：保存 AI 响应和执行结果
+    """
+    # === 阶段1：验证权限并获取上下文 ===
+    project_id = await _verify_session_ownership(db, session_id, user_id)
+    session_obj = await _get_session_obj(db, session_id)
+    
+    # 解析模型（异步，从数据库获取配置）
+    final_model_key, model_registry = await _resolve_model_key(db, selected_model, session_obj.current_model)
+    await _update_session_model(db, session_obj, final_model_key)
+    log.info("Session {} using model: {}", session_id, final_model_key)
+    
+    # 获取项目信息
+    project = await crud_project.get(db, project_id)
+    full_ddl_text = project.ddl_statement if project and project.ddl_statement else ""
+    instance_id = project.instance_id
+    
+    # 获取数据库类型
+    db_type = None
+    if instance_id:
+        database_instance = await crud_database_instance.get(db, instance_id)
+        if database_instance:
+            db_type = database_instance.db_type
+    
+    # === RAG 检索优化 ===
+    # 1. 历史对话：向量检索与当前问题相关的历史
+    # 2. 领域知识：向量检索相关业务术语
+    # 3. DDL分片：向量检索相关表DDL，并自动扩展外键关联表
+    
+    history_context = []
+    knowledge_context = []
+    ddl_text = "-- No DDL found"
+    
+    # 判断是否使用DDL分片检索（表数量阈值）
+    table_count = full_ddl_text.upper().count("CREATE TABLE") if full_ddl_text else 0
+    use_ddl_rag = table_count > 5  # 表数量超过5个时启用DDL分片检索
+    
+    try:
+        # 使用 RAG 检索相关上下文
+        rag_context = await retrieve_chat_context(
+            query=user_input,
+            project_id=project_id,
+            session_id=session_id,
+            history_top_k=5,
+            knowledge_top_k=5,
+            enable_ddl=use_ddl_rag,
+            ddl_top_k=5
+        )
+        
+        # 将 RAG 检索结果转换为兼容格式
+        # 历史对话：从向量检索结果构建 MessageModel 兼容对象
+        if rag_context.relevant_history:
+            history_context = await _convert_rag_history_to_messages(
+                db, rag_context.relevant_history
+            )
+        
+        # 领域知识：从向量检索结果构建 DomainKnowledge 兼容对象  
+        if rag_context.relevant_knowledge:
+            knowledge_context = await _convert_rag_knowledge_to_domain(
+                db, rag_context.relevant_knowledge
+            )
+        
+        # DDL：从向量检索结果构建DDL文本
+        if use_ddl_rag and rag_context.relevant_ddl:
+            ddl_text = _build_ddl_from_rag_results(rag_context.relevant_ddl)
+            # 详细日志：显示检索到的表名
+            retrieved_tables = [
+                r.get("metadata", {}).get("table_name") or r.get("table_name", "unknown")
+                for r in rag_context.relevant_ddl
+            ]
+            log.info(f"[RAG-DDL] Retrieved {len(rag_context.relevant_ddl)} tables: {retrieved_tables}")
+        else:
+            # 表数量少时使用全量DDL
+            ddl_text = full_ddl_text if full_ddl_text else "-- No DDL found"
+            log.info(f"[RAG-DDL] Using full DDL (table_count={table_count}, threshold=5)")
+        
+        # 详细日志：显示检索到的历史和知识
+        if rag_context.relevant_history:
+            history_contents = [r.get("content", "")[:50] + "..." for r in rag_context.relevant_history[:3]]
+            log.info(f"[RAG-History] Retrieved {len(rag_context.relevant_history)} items: {history_contents}")
+        
+        log.info(f"[RAG-Summary] history={len(history_context)}, knowledge={len(knowledge_context)}, DDL_RAG={use_ddl_rag}")
+        
+    except Exception as e:
+        # RAG 检索失败，降级为传统方式
+        log.warning(f"RAG retrieval failed, falling back to traditional method: {e}")
+        history_context = await crud_message.get_recent_messages(db, session_id, limit=20)
+        knowledge_context = await crud_knowledge.get_all_by_project(db, project_id)
+        ddl_text = full_ddl_text if full_ddl_text else "-- No DDL found"
+    
+    # 保存用户消息
+    await _save_user_message(db, session_id, user_input)
+
+    # 提交事务1，释放数据库连接
+    await db.commit()
+    
+    # 检查取消指令（需要持久化提示消息）
+    if user_input.strip() in ["取消", "cancel", "Stop"]:
+        return await _handle_cancel_response(db, session_id)
+    
+    # === 阶段2：调用 AI（事务外，长连接） ===
+    sql_text = await call_ai_agent(
+        ddl_text,
+        user_input,
+        history=history_context,
+        knowledge=knowledge_context,
+        model_key=final_model_key,
+        model_registry=model_registry,
+        db_type=db_type
+    )
+    
+    # 优先检查 AI 服务错误（模型不可用、超时等）
+    is_ai_error, ai_error_detail = _is_ai_service_error(sql_text)
+    if is_ai_error:
+        return await _handle_ai_service_error_response(db, session_id, ai_error_detail)
+    
+    # 检查元数据 SQL（AI无法理解的请求）
+    if _is_meta_sql(sql_text):
+        return await _handle_meta_sql_response(db, session_id)
+    
+    # === 阶段3：解析、执行、持久化 ===
+    sql_type = _parse_sql_type(sql_text)
+    requires_confirm = _requires_confirmation(sql_type)
+    
+    data = []
+    execution_status = "pending"
+    execution_error = None
+    
+    # 检查是否为被禁止的 DDL 操作
+    if _is_forbidden_sql_type(sql_type):
+        execution_status = "failed"
+        execution_error = f"执行失败：此类别sql无法使用"
+        data = [{"error": execution_error}]
+    elif not requires_confirm:
+        data, execution_status = await _try_execute_sql(
+            db, sql_text, sql_type, instance_id, user_id
+        )
+        # 如果执行失败，从data中提取错误信息
+        if execution_status == "failed" and data and isinstance(data, list) and len(data) > 0:
+            if isinstance(data[0], dict) and "error" in data[0]:
+                execution_error = data[0]["error"]
+    
+    ai_message, _ = await _save_ai_response(
+        db, session_id, sql_text, sql_type, 
+        False if _is_forbidden_sql_type(sql_type) else requires_confirm, 
+        execution_status, data, 
+        error_message=execution_error  # 传入错误信息
+    )
+    
+    # 构建响应内容
+    if execution_error:
+        response_content = f"❌ 执行失败：\n{execution_error}"
+    elif execution_status == "failed":
+        response_content = f"❌ 执行失败"
+    else:
+        response_content = f"已生成SQL语句：\n{sql_text}"
+    
+    return ChatResponse(
+        message_id=ai_message.message_id,
+        content=response_content,
+        message_type=MessageType.ASSISTANT,
+        sql_text=sql_text,
+        sql_type=sql_type,
+        requires_confirmation=False if _is_forbidden_sql_type(sql_type) else requires_confirm,
+        data=jsonable_encoder(data) if data else ([{"error": execution_error}] if execution_error else None)
+    )
+
+
+async def _handle_cancel_response(db: AsyncSession, session_id: int) -> ChatResponse:
+    """持久化并返回取消操作的响应。"""
+    reply_content = "好的，已为您取消当前操作。"
+    ai_message = await crud_message.create_message(db, session_id, reply_content, role="assistant")
+    await db.commit()
+
+    return ChatResponse(
+        message_id=ai_message.message_id,
+        content=reply_content,
+        message_type=MessageType.ASSISTANT,
+        sql_text=None,
+        sql_type="ACTION_CANCEL",
+        requires_confirmation=False,
+        data=None
+    )
+
+
+async def cancel_message(
+    db: AsyncSession,
+    message_id: int,
+    user_id: int
+) -> ChatResponse:
+    """
+    取消需要确认的消息：
+    - 权限校验（会话归属）
+    - 将原消息标记为已确认（用于隐藏前端按钮）
+    - 将其关联的语句执行状态标记为 failed
+    - 更新原消息内容，附加取消提示（与 SQL 语句合并显示）
+    """
+    log.info(f"cancel_message called: message_id={message_id}, user_id={user_id}")
+    
+    # 获取消息与会话信息
+    stmt = select(MessageModel).where(MessageModel.message_id == message_id)
+    result = await db.execute(stmt)
+    message = result.scalar_one_or_none()
+    if not message:
+        log.warning(f"Message not found: message_id={message_id}")
+        raise ItemNotFoundException(message="消息未找到")
+
+    # 权限校验：仅会话所属用户可操作
+    await _verify_session_ownership(db, message.session_id, user_id)
+
+    # 获取关联的 SQL 语句
+    stmt_query = select(AIGeneratedStatement).where(AIGeneratedStatement.message_id == message_id)
+    stmt_result = await db.execute(stmt_query)
+    ai_statement = stmt_result.scalar_one_or_none()
+    
+    sql_text = ai_statement.sql_text if ai_statement else None
+    sql_type = ai_statement.statement_type if ai_statement else "UNKNOWN"
+
+    # 标记原消息为"已确认"（用于隐藏确认/取消按钮）
+    message.user_confirmed = True
+    # 更新原消息内容，附加取消提示
+    message.content = f"{message.content}❌ 已取消执行"
+    db.add(message)
+
+    # 更新关联的语句执行状态为 failed（数据库约束只允许 pending/completed/failed）
+    if ai_statement:
+        await db.execute(
+            update(AIGeneratedStatement)
+            .where(AIGeneratedStatement.message_id == message_id)
+            .values(execution_status="failed")
+        )
+
+    await db.commit()
+
+    # 返回更新后的原消息（不再创建新消息）
+    return ChatResponse(
+        message_id=message.message_id,
+        content=message.content,
+        message_type=MessageType.ASSISTANT,
+        sql_text=sql_text,
+        sql_type=sql_type,
+        requires_confirmation=False,
+        data=None
+    )
+
+async def _handle_ai_service_error_response(
+    db: AsyncSession, 
+    session_id: int, 
+    error_detail: str
+) -> ChatResponse:
+    """
+    处理AI服务调用错误的响应。
+    
+    当AI模型不可用、API超时或连接失败时，保存准确的错误消息。
+    
+    Args:
+        db: 数据库会话
+        session_id: 会话ID
+        error_detail: 错误详情
+    """
+    # 根据错误类型生成友好的错误消息
+    friendly_message = _get_ai_service_friendly_error(error_detail)
+    
+    reply_content = f"❌ AI服务错误：{friendly_message}"
+    ai_message = await crud_message.create_message(db, session_id, reply_content, role="assistant")
+    await db.commit()
+    
+    return ChatResponse(
+        message_id=ai_message.message_id,
+        content=reply_content,
+        message_type=MessageType.ASSISTANT,
+        sql_text=None,
+        sql_type="ERROR",
+        requires_confirmation=False,
+        data=[{"error": friendly_message}]
+    )
+
+
+def _get_ai_service_friendly_error(error_detail: str) -> str:
+    """
+    将AI服务错误详情转换为用户友好的消息。
+    
+    Args:
+        error_detail: 原始错误详情
+        
+    Returns:
+        str: 用户友好的错误消息
+    """
+    # 处理空错误详情
+    if not error_detail or not error_detail.strip():
+        return "AI服务暂时不可用，请稍后重试。"
+    
+    error_lower = error_detail.lower()
+    
+    # 连接/网络错误
+    if any(keyword in error_lower for keyword in ["connect", "connection", "network", "unreachable"]):
+        return "无法连接到AI服务，请检查网络连接或稍后重试。"
+    
+    # 超时错误
+    if any(keyword in error_lower for keyword in ["timeout", "timed out", "timedout"]):
+        return "AI服务响应超时，请稍后重试。"
+    
+    # 模型不存在/不可用
+    if any(keyword in error_lower for keyword in ["model not found", "model_not_found", "invalid model", "no such model"]):
+        return "所选AI模型当前不可用，请尝试切换其他模型。"
+    
+    # 认证/授权错误
+    if any(keyword in error_lower for keyword in ["unauthorized", "401", "403", "forbidden", "api key", "authentication"]):
+        return "AI服务认证失败，请联系管理员检查API配置。"
+    
+    # 服务端错误
+    if any(keyword in error_lower for keyword in ["500", "502", "503", "504", "internal server", "service unavailable"]):
+        return "AI服务暂时不可用，请稍后重试。"
+    
+    # 请求限制
+    if any(keyword in error_lower for keyword in ["rate limit", "too many requests", "429"]):
+        return "请求过于频繁，请稍后重试。"
+    
+    # 默认消息
+    return f"AI服务调用失败：{error_detail[:100]}{'...' if len(error_detail) > 100 else ''}"
+
+
+async def _handle_meta_sql_response(db: AsyncSession, session_id: int) -> ChatResponse:
+    """处理元数据/错误 SQL 的响应。"""
+    reply_content = "抱歉，我无法执行该操作或理解您的指令。请提供具体的业务需求（如：查询书籍）。"
+    ai_message = await crud_message.create_message(db, session_id, reply_content, role="assistant")
+    await db.commit()
+    
+    return ChatResponse(
+        message_id=ai_message.message_id,
+        content=reply_content,
+        message_type=MessageType.ASSISTANT,
+        sql_text=None,
+        sql_type="ERROR_FEEDBACK",
+        requires_confirmation=False,
+        data=None
+    )
+
+
+async def _try_execute_sql(
+    db: AsyncSession,
+    sql_text: str,
+    sql_type: str,
+    instance_id: int,
+    user_id: int
+) -> Tuple[List[Dict], str]:
+    """尝试执行 SQL 并返回结果和状态。"""
+    try:
+        database_instance = await crud_database_instance.get(db, instance_id)
+        exec_type = sql_type if sql_type != "UNKNOWN" else "SELECT"
+        raw_result = await _execute_sql_by_type(sql_text, exec_type, database_instance, user_id)
+        
+        if isinstance(raw_result, list):
+            data = raw_result
+        elif isinstance(raw_result, dict):
+            data = [raw_result]
+        else:
+            data = []
+        
+        return data, "success"
+    except Exception as e:
+        log.error("SQL Execution Error: {}", str(e))
+        # 返回错误信息，便于后续处理
+        error_msg = str(e)
+        if hasattr(e, 'detail') and e.detail:
+            error_msg = str(e.detail)
+        friendly_msg = _get_friendly_error_message(error_msg)
+        return [{"error": friendly_msg}], "failed"
+
+
+# =========================================================
+# 8. 确认执行逻辑
+# =========================================================
+
+async def _get_message_context(
+    db: AsyncSession,
+    message_id: int
+) -> Tuple[MessageModel, SessionModel, ProjectModel]:
+    """获取消息相关的上下文对象。"""
+    stmt = select(MessageModel).where(MessageModel.message_id == message_id)
+    result = await db.execute(stmt)
+    message = result.scalar_one_or_none()
+    if not message:
+        raise ItemNotFoundException(message="消息未找到")
+
+    stmt_session = select(SessionModel).where(SessionModel.session_id == message.session_id)
+    result_session = await db.execute(stmt_session)
+    session_obj = result_session.scalar_one_or_none()
+    if not session_obj:
+        raise ItemNotFoundException(message="Session not found")
+
+    stmt_project = select(ProjectModel).where(ProjectModel.project_id == session_obj.project_id)
+    result_project = await db.execute(stmt_project)
+    project = result_project.scalar_one_or_none()
+    if not project:
+        raise ItemNotFoundException(message="项目未找到")
+
+    return message, session_obj, project
+
+
+def _validate_confirmation(message: MessageModel, project: ProjectModel, user_id: int) -> None:
+    """验证确认操作的合法性。"""
+    if project.user_id != user_id:
+        raise ForbiddenException(message="访问拒绝")
+    if not message.requires_confirmation:
+        raise InvalidOperationException(message="此消息不需要确认")
+    if message.user_confirmed:
+        raise InvalidOperationException(message="已确认/执行")
+
+
+def _extract_sql_from_content(content: str) -> str:
+    """从消息内容中提取 SQL。"""
+    sql_text = ""
+    if "：\n" in content:
+        sql_text = content.split("：\n")[-1].strip()
+    else:
+        sql_text = content.strip()
+    return sql_text.replace("```sql", "").replace("```", "").strip()
+
+
+async def _update_statement_result(
+    db: AsyncSession,
+    message_id: int,
+    execute_res: List[Dict]
+) -> None:
+    """更新 SQL 语句的执行结果。"""
+    stmt_query = select(AIGeneratedStatement).where(AIGeneratedStatement.message_id == message_id)
+    stmt_res = await db.execute(stmt_query)
+    db_stmt = stmt_res.scalar_one_or_none()
+    
+    if db_stmt:
+        db_stmt.execution_result = execute_res
+        db_stmt.execution_status = "success"
+        db.add(db_stmt)
+
+
+async def _handle_execution_error(
+    db: AsyncSession,
+    original_message_id: int,
+    error: Exception
+) -> ChatResponse:
+    """处理执行错误并返回错误响应，同时更新数据库状态。"""
+    # 优先获取 detail，因为 BusinessException/AppException 的 message 可能是类属性默认值"内部错误"
+    error_msg = str(error)
+    if hasattr(error, 'detail') and error.detail:
+        error_msg = str(error.detail)
+    elif hasattr(error, 'message') and error.message and error.message != "内部错误":
+        error_msg = str(error.message)
+    
+    # 提供更友好的错误信息
+    friendly_msg = _get_friendly_error_message(error_msg)
+    content = f"❌ 执行失败：\n{friendly_msg}"
+    
+    # 获取原消息并更新状态
+    stmt = select(MessageModel).where(MessageModel.message_id == original_message_id)
+    result = await db.execute(stmt)
+    message = result.scalar_one_or_none()
+    
+    sql_text = None
+    session_id = None
+    if message:
+        # 提取SQL文本用于返回（在更新内容之前）
+        sql_text = _extract_sql_from_content(message.content)
+        session_id = message.session_id
+        
+        # 标记消息为已确认（执行过了，虽然失败），直接更新为错误内容
+        message.user_confirmed = True
+        message.content = content  # 直接替换为错误信息，保持刷新后显示一致
+        db.add(message)
+    
+    # 更新关联的 AIGeneratedStatement 状态为 failed
+    await db.execute(
+        update(AIGeneratedStatement)
+        .where(AIGeneratedStatement.message_id == original_message_id)
+        .values(
+            execution_status="failed",
+            execution_result=[{"error": friendly_msg}]
+        )
+    )
+    
+    await db.commit()
+    
+    # 索引错误案例到向量数据库，帮助AI避免类似错误
+    if session_id and sql_text:
+        try:
+            import asyncio
+            index_content = f"错误SQL案例：\nSQL语句：{sql_text}\n执行错误：{friendly_msg}"
+            asyncio.create_task(
+                index_new_message(
+                    session_id=session_id,
+                    message_id=original_message_id,
+                    content=index_content,
+                    role="assistant"
+                )
+            )
+        except Exception as e:
+            log.warning(f"Failed to index error case: {e}")
+    
+    return ChatResponse(
+        message_id=original_message_id,  # 使用原始消息ID
+        content=content,
+        message_type=MessageType.ASSISTANT,
+        sql_text=sql_text,
+        sql_type="ERROR",
+        requires_confirmation=False,
+        data=[{"error": friendly_msg}]
+    )
+
+
+def _get_friendly_error_message(error_msg: str) -> str:
+    """将技术错误信息转换为用户友好的错误信息。"""
+    error_lower = error_msg.lower()
+    
+    # 常见数据库错误的友好提示
+    if "duplicate entry" in error_lower or "unique constraint" in error_lower:
+        return "数据重复（违反唯一约束）。\n详细信息: " + error_msg
+    elif "doesn't have a default value" in error_lower:
+        return "必填字段缺失（字段没有默认值且未提供值，可能是主键未设置AUTO_INCREMENT）。\n详细信息: " + error_msg
+    elif "cannot be null" in error_lower:
+        return "字段不能为空。\n详细信息: " + error_msg
+    elif "can't specify target table" in error_lower and "update in from clause" in error_lower:
+        return "MySQL限制：INSERT/UPDATE语句中不能直接从同一张表SELECT。\n详细信息: " + error_msg
+    elif "foreign key constraint" in error_lower:
+        return "外键约束错误，请检查关联数据是否存在。\n详细信息: " + error_msg
+    elif "table doesn't exist" in error_lower or "no such table" in error_lower:
+        return "表不存在，请检查表名是否正确。\n详细信息: " + error_msg
+    elif ("column" in error_lower and "doesn't exist" in error_lower) or "unknown column" in error_lower:
+        return "列不存在，请检查列名是否正确。\n详细信息: " + error_msg
+    elif "syntax error" in error_lower:
+        return "SQL语法错误，请检查SQL语句。\n详细信息: " + error_msg
+    elif "access denied" in error_lower or "permission denied" in error_lower:
+        return "权限不足，无法执行此操作。\n详细信息: " + error_msg
+    elif "data too long" in error_lower:
+        return "数据过长，超出字段长度限制。\n详细信息: " + error_msg
+    elif "incorrect" in error_lower and "value" in error_lower:
+        return "数据类型或格式不正确。\n详细信息: " + error_msg
+    else:
+        # 对于未枚举的错误，仍然返回原始错误信息，而不是"内部错误"
+        return "执行失败。\n详细信息: " + error_msg
+
+
+async def confirm_and_execute_sql(
+    db: AsyncSession,
+    message_id: int,
+    user_id: int
+) -> ChatResponse:
+    """
+    用户确认执行某条消息中的 SQL (通常是增删改操作)。
+    """
+    # 获取上下文
+    message, session_obj, project = await _get_message_context(db, message_id)
+    
+    # 验证
+    _validate_confirmation(message, project, user_id)
+    
+    # 提取 SQL
+    sql_text = _extract_sql_from_content(message.content)
+    
+    # 执行
+    try:
+        database_instance = await crud_database_instance.get(db, project.instance_id)
+        result = await _execute_sql_by_type(sql_text, "UPDATE", database_instance, user_id)
+        execute_res = [result] if isinstance(result, dict) else result
+        
+        message.user_confirmed = True
+        db.add(message)
+        
+        await _update_statement_result(db, message_id, execute_res)
+        await db.commit()
+        
+        log.info("User {} executed DML and persisted results.", user_id)
+        
+    except Exception as e:
+        log.error("Execution failed: {}", e)
+        return await _handle_execution_error(db, message_id, e)
+
+    return ChatResponse(
+        message_id=message.message_id,
+        content=message.content,
+        message_type=MessageType.ASSISTANT,
+        sql_text=sql_text,
+        sql_type="DML_EXECUTED",
+        requires_confirmation=False,
+        data=execute_res
+    )

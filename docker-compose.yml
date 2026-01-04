@@ -1,0 +1,221 @@
+version: '3.8'
+
+services:
+  # -----------------------------------------------------------------------------
+  # 1. 基础设施服务 (数据库 & 缓存)
+  # -----------------------------------------------------------------------------
+
+  # PostgreSQL (后端业务数据库)
+  postgres-meta:
+    image: postgres:15
+    container_name: meta_postgres
+    restart: always
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_DB: auto_db_deployment
+      POSTGRES_USER: admin
+      POSTGRES_PASSWORD: secure_2025
+    command: >
+      postgres -c listen_addresses='*' -c max_connections=100
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      # 如果你有初始化脚本，请取消下面的注释
+      # - ./init-db/postgres-init.sh:/docker-entrypoint-initdb.d/init.sh:ro
+    networks:
+      - app-network
+
+  # MySQL (用户生成的数据库实例资源池)
+  mysql-user:
+      image: mysql:8.0
+      container_name: user_mysql
+      restart: always
+      ports:
+        - "3306:3306"
+      environment:
+        MYSQL_ROOT_PASSWORD: root_secure_2025
+        TZ: Asia/Shanghai
+      command: --skip-name-resolve=OFF
+      volumes:
+        - mysql_data:/var/lib/mysql
+      networks:
+        - app-network
+
+  postgres-user:
+      image: postgres:15
+      container_name: user_postgres
+      restart: always
+      ports:
+          - "2345:5432"
+      environment:
+        TZ: Asia/Shanghai
+        POSTGRES_PASSWORD: root_secure_2025
+      volumes:
+        - postgres_user_data:/var/lib/postgresql/data
+      networks:
+        - app-network
+
+
+  # Redis (缓存 & 消息队列)
+  redis:
+    image: redis:7-alpine
+    container_name: redis
+    restart: always
+    ports:
+      - "6379:6379"
+    # 注意：你的 backend/app/celery_app.py 中硬编码了 redis://redis:6379/0 (无密码)
+    # 为了匹配代码，这里暂时去掉 --requirepass，或者你需要修改代码中的 broker URL
+    command: redis-server --bind 0.0.0.0 --appendonly yes --notify-keyspace-events Ex
+    volumes:
+      - redis_data:/data
+    networks:
+      - app-network
+
+  # ChromaDB (向量数据库，用于 RAG 检索)
+  chromadb:
+    image: chromadb/chroma:0.5.23
+    container_name: chromadb
+    restart: always
+    ports:
+      - "8100:8000"
+    environment:
+      - IS_PERSISTENT=TRUE
+      - PERSIST_DIRECTORY=/chroma/chroma
+      - ANONYMIZED_TELEMETRY=FALSE
+    volumes:
+      - chroma_data:/chroma/chroma
+    networks:
+      - app-network
+
+  # -----------------------------------------------------------------------------
+  # 2. 应用服务 (后端 & 任务队列 & 前端)
+  # -----------------------------------------------------------------------------
+
+  # 后端 API 服务 (FastAPI)
+  backend:
+    build:
+      context: ./src/backend
+      dockerfile: Dockerfile.dev
+    container_name: backend
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./src/backend:/app
+    environment:
+      # Fix import errors by adding inner app directory to PYTHONPATH
+      - PYTHONPATH=/app/app
+      # --- Pydantic BaseSettings 覆盖配置 (使用双下划线映射嵌套配置) ---
+      # 覆盖 config.yaml 中的 db 部分
+      - DB__HOST=postgres-meta
+      - DB__PORT=5432
+      - DB__USERNAME=admin
+      - DB__PASSWORD=secure_2025
+      - DB__DATABASE=auto_db_deployment
+
+      # 覆盖 config.yaml 中的 redis_client 部分
+      - REDIS__HOST=redis
+      - REDIS__PORT=6379
+
+      # ChromaDB 配置
+      - CHROMA__HOST=chromadb
+      - CHROMA__PORT=8000
+
+      # 覆盖 config.yaml 中的 app 部分
+      - APP__HOST=0.0.0.0
+
+      # MySQL 用户数据库配置 (Docker 内部网络)
+      - MYSQL__HOST=mysql-user
+      - MYSQL__PORT=3306
+
+      # PostgreSQL 用户数据库配置 (Docker 内部网络)
+      - POSTGRESQL__HOST=postgres-user
+      - POSTGRESQL__PORT=5432
+
+      # 如果代码中有逻辑读取这些非标准变量，保留它们以防万一
+      - POSTGRES_SERVER=postgres-meta
+      - POSTGRES_USER=admin
+      - POSTGRES_PASSWORD=secure_2025
+      - REDIS_HOST=redis
+    command: uvicorn app.server:my_app --host 0.0.0.0 --port 8000 --reload --proxy-headers --forwarded-allow-ips='*'
+    depends_on:
+      - postgres-meta
+      - redis
+      - chromadb
+    networks:
+      - app-network
+
+  # Celery Worker (异步任务处理)
+  celery_worker:
+    build:
+      context: ./src/backend
+      dockerfile: Dockerfile.dev
+    container_name: celery
+    environment:
+      # Fix import errors
+      - PYTHONPATH=/app/app
+      # 同样注入配置以确保 Worker 能连接到正确的 DB 和 Redis
+      - DB__HOST=postgres-meta
+      - DB__PORT=5432
+      - DB__USERNAME=admin
+      - DB__PASSWORD=secure_2025
+      - DB__DATABASE=auto_db_deployment
+      - REDIS__HOST=redis
+      - REDIS__PORT=6379
+      # 显式覆盖 Celery Broker URL (以防代码没读配置)
+      - CELERY_BROKER_URL=redis://redis:6379/0
+      - CELERY_RESULT_BACKEND=redis://redis:6379/0
+      # ChromaDB 配置
+      - CHROMA__HOST=chromadb
+      - CHROMA__PORT=8000
+      # MySQL 用户数据库配置 (Docker 内部网络)
+      - MYSQL__HOST=mysql-user
+      - MYSQL__PORT=3306
+      # PostgreSQL 用户数据库配置 (Docker 内部网络)
+      - POSTGRESQL__HOST=postgres-user
+      - POSTGRESQL__PORT=5432
+    working_dir: /app/app
+    # 启动命令 (添加 -Q celery 确保监听默认队列)
+    command: celery -A celery_app worker --loglevel=info -Q celery,default,ai_tasks
+    depends_on:
+      - redis
+      - backend
+    volumes:
+      - ./src/backend:/app
+    networks:
+      - app-network
+
+  # 前端服务 (React + Vite)
+  frontend:
+    build:
+      context: ./src/frontend
+      dockerfile: Dockerfile.dev
+    container_name: frontend
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./src/frontend:/app
+      - /app/node_modules
+    environment:
+      # 浏览器访问的后端地址
+      - VITE_API_BASE_URL=/api
+      # 如果你需要传入 Gemini Key
+      # - GEMINI_API_KEY=${GEMINI_API_KEY}
+    depends_on:
+      - backend
+    networks:
+      - app-network
+
+# -----------------------------------------------------------------------------
+# 数据卷 & 网络定义
+# -----------------------------------------------------------------------------
+volumes:
+  postgres_data:
+  mysql_data:
+  postgres_user_data:
+  redis_data:
+  chroma_data:
+
+
+networks:
+  app-network:
+    driver: bridge

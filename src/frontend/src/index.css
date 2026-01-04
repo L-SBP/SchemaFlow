@@ -1,0 +1,519 @@
+/**
+ * ???? - ???
+ * ???? Ant Design ?????????????????
+ */
+
+/* ========================================
+   1. CSS ????
+   ======================================== */
+
+:root {
+  /* ??????? */
+  --workspace-left-panel-width: 800px;
+  --workspace-right-panel-width: 256px;
+  --workspace-min-chat-width: 320px;
+  --workspace-left-panel-max-width-percent: 40%;
+
+  /* ???? */
+  --workspace-gap: 0px;
+  --input-bar-padding: 1.5rem;
+  --header-bar-padding: 1.5rem;
+
+  /* ???? - ???????? */
+  --button-min-size: 44px;
+  --button-min-size-compact: 36px;
+
+  /* ???? */
+  --font-size-xs: 0.75rem;
+  --font-size-sm: 0.875rem;
+  --font-size-base: 1rem;
+  --font-size-lg: 1.125rem;
+  --font-size-xl: 1.25rem;
+  --font-size-min: 12px;
+
+  /* ???? */
+  --icon-size-sm: 16px;
+  --icon-size-base: 20px;
+  --icon-size-lg: 24px;
+
+  /* ?? */
+  --spacing-1: 0.25rem;
+  --spacing-2: 0.5rem;
+  --spacing-3: 0.75rem;
+  --spacing-4: 1rem;
+  --spacing-6: 1.5rem;
+  --spacing-8: 2rem;
+
+  /* ???? */
+  --compact-padding: 0.75rem;
+  --compact-button-size: 36px;
+}
+
+/* ========================================
+   2. ????
+   ======================================== */
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html {
+  font-size: 16px;
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+}
+
+body {
+  margin: 0;
+  padding: 0;
+  min-height: 100vh;
+  min-height: 100dvh;
+  overflow-x: hidden;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+#root {
+  min-height: 100vh;
+  min-height: 100dvh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+/* ========================================
+   3. ?????
+   ======================================== */
+
+/* Webkit ?????? */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: #f1f1f1;
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #c1c1c1;
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #a1a1a1;
+}
+
+/* Firefox ??? */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: #c1c1c1 #f1f1f1;
+}
+
+/* 隐藏滚动条工具类 */
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+/* ========================================
+   4. ?????????
+   ======================================== */
+
+:focus-visible {
+  outline: 2px solid #1677ff;
+  outline-offset: 2px;
+}
+
+:focus:not(:focus-visible) {
+  outline: none;
+}
+
+/* ========================================
+   5. ??????
+   ======================================== */
+
+.pagination-container {
+  flex-shrink: 0;
+  background-color: rgba(255, 255, 255, 0.95);
+  backdrop-filter: blur(8px);
+  padding: 1rem 1.5rem;
+  margin-top: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  width: 100%;
+  z-index: 10;
+  border: 1px solid rgba(229, 231, 235, 0.8);
+  border-radius: 1rem;
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 10px 15px -3px rgba(0, 0, 0, 0.03);
+}
+
+@media screen and (min-width: 640px) {
+  .pagination-container {
+    flex-direction: row;
+    align-items: center;
+    justify-content: flex-end;
+  }
+}
+
+.pagination-wrapper {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* ========================================
+   6. ????????
+   ======================================== */
+
+.input-bar-container {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  overflow: hidden;
+  position: relative;
+}
+
+.input-bar-textarea {
+  flex: 1;
+  min-width: 0;
+}
+
+.input-bar-controls {
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+  flex-shrink: 0;
+  min-width: 0;
+  max-width: 50%;
+}
+
+/* ========================================
+   7. ??????
+   ======================================== */
+
+.send-button {
+  min-width: 36px;
+  min-height: 36px;
+  flex-shrink: 0;
+  box-sizing: border-box;
+}
+
+@media screen and (max-width: 320px) {
+  .send-button {
+    min-width: 32px;
+    min-height: 32px;
+    padding: 0.375rem;
+  }
+}
+
+/* ========================================
+   8. ???????
+   ======================================== */
+
+.model-selector-compact {
+  max-width: 200px;
+  min-width: 80px;
+}
+
+.model-selector-compact .model-select {
+  max-width: 160px;
+  min-width: 60px;
+  text-overflow: ellipsis;
+  overflow: hidden;
+  white-space: nowrap;
+}
+
+@media screen and (max-width: 640px) {
+  .model-label {
+    display: none !important;
+  }
+
+  .input-bar-controls {
+    max-width: 45%;
+  }
+
+  .model-selector-compact {
+    max-width: 150px;
+    min-width: 60px;
+  }
+}
+
+@media screen and (max-width: 400px) {
+  .model-selector-compact .model-select {
+    max-width: 100px !important;
+    min-width: 50px !important;
+    font-size: 10px;
+  }
+
+  .model-selector-compact {
+    padding-left: 0.375rem;
+    padding-right: 0.375rem;
+    max-width: 120px;
+    min-width: 60px;
+  }
+
+  .input-bar-controls {
+    gap: 0.25rem;
+    max-width: 40%;
+  }
+}
+
+/* ========================================
+   9. ????????
+   ======================================== */
+
+.panel-toggle-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: var(--button-min-size);
+  min-height: var(--button-min-size);
+  padding: 0.625rem;
+  border-radius: 0.375rem;
+  background-color: transparent;
+  border: none;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  color: #6b7280;
+  box-sizing: border-box;
+}
+
+.panel-toggle-button:hover {
+  background-color: #f3f4f6;
+  color: #1f2937;
+}
+
+.panel-toggle-button:focus-visible {
+  outline: 2px solid #1677ff;
+  outline-offset: 2px;
+}
+
+.panel-toggle-button svg,
+.panel-toggle-button .icon {
+  width: var(--icon-size-base);
+  height: var(--icon-size-base);
+}
+
+@media screen and (max-width: 768px) {
+  .panel-toggle-button {
+    min-width: var(--button-min-size-compact);
+    min-height: var(--button-min-size-compact);
+    padding: 0.375rem;
+  }
+
+  .panel-toggle-button svg,
+  .panel-toggle-button .icon {
+    width: var(--icon-size-sm);
+    height: var(--icon-size-sm);
+  }
+}
+
+/* ========================================
+   10. ??????
+   ======================================== */
+
+@media screen and (max-width: 768px) {
+  .header-button-text {
+    display: none !important;
+  }
+
+  .header-button-icon-only {
+    padding: 0.5rem !important;
+    min-width: 44px;
+    min-height: 44px;
+  }
+}
+
+@media screen and (max-width: 480px) {
+  .header-button-icon-only {
+    padding: 0.375rem !important;
+    min-width: 36px;
+    min-height: 36px;
+  }
+}
+
+/* ========================================
+   11. ????????
+   ======================================== */
+
+.session-action-btn {
+  min-width: 24px !important;
+  min-height: 24px !important;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transform: none !important;
+}
+
+/* ========================================
+   12. ????????
+   ======================================== */
+
+/* ????? */
+.workspace-mobile {
+  --workspace-header-padding: 0.75rem;
+  --workspace-content-padding: 0.75rem;
+  --workspace-input-padding: 0.75rem;
+  --workspace-button-size: 32px;
+  --workspace-icon-size: 14px;
+  --workspace-font-size: 0.875rem;
+  --workspace-gap: 0.25rem;
+}
+
+/* ???? */
+.workspace-tablet {
+  --workspace-header-padding: 1rem;
+  --workspace-content-padding: 1rem;
+  --workspace-input-padding: 1rem;
+  --workspace-button-size: 36px;
+  --workspace-icon-size: 16px;
+  --workspace-font-size: 1rem;
+  --workspace-gap: 0.375rem;
+}
+
+/* ???? */
+.workspace-desktop {
+  --workspace-header-padding: 1.5rem;
+  --workspace-content-padding: 1.5rem;
+  --workspace-input-padding: 1.5rem;
+  --workspace-button-size: 44px;
+  --workspace-icon-size: 16px;
+  --workspace-font-size: 1rem;
+  --workspace-gap: 0.5rem;
+}
+
+/* ????? */
+.workspace-zoom-adaptive .input-bar-container {
+  padding: clamp(0.25rem, 0.8vw, 0.75rem);
+}
+
+.workspace-zoom-adaptive .model-selector-compact {
+  max-width: clamp(80px, 12vw, 160px);
+  min-width: clamp(50px, 8vw, 80px);
+  padding: clamp(0.125rem, 0.4vw, 0.5rem);
+}
+
+.workspace-zoom-adaptive .send-button,
+.workspace-zoom-adaptive .panel-toggle-button,
+.workspace-zoom-adaptive .header-button-icon-only {
+  min-width: var(--button-min-size-compact);
+  min-height: var(--button-min-size-compact);
+  padding: clamp(0.25rem, 0.5vw, 0.5rem);
+}
+
+/* ========================================
+   13. ???????
+   ======================================== */
+
+@media screen and (max-width: 1024px) {
+  :root {
+    --workspace-left-panel-max-width-percent: 35%;
+    --input-bar-padding: var(--compact-padding);
+    --header-bar-padding: var(--compact-padding);
+  }
+}
+
+@media screen and (max-width: 768px) {
+  :root {
+    --workspace-left-panel-max-width-percent: 30%;
+    --button-min-size: var(--button-min-size-compact);
+    --input-bar-padding: 1rem;
+    --header-bar-padding: 1rem;
+  }
+}
+
+@media screen and (max-width: 480px) {
+  :root {
+    --workspace-left-panel-max-width-percent: 25%;
+    --input-bar-padding: 0.75rem;
+    --header-bar-padding: 0.75rem;
+    --compact-button-size: 32px;
+  }
+}
+
+/* ========================================
+   14. ????
+   ======================================== */
+
+@media (prefers-reduced-motion: reduce) {
+
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes slideInUp {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-fade-in {
+  animation: fadeIn 0.2s ease-out;
+}
+
+.animate-slide-up {
+  animation: slideInUp 0.2s ease-out;
+}
+
+/* ========================================
+   15. ????
+   ======================================== */
+
+@media print {
+  .no-print {
+    display: none !important;
+  }
+}
+
+/* ========================================
+   16. ???????
+   ======================================== */
+
+.text-truncate {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+/* Hide default password reveal button */
+input[type='password']::-ms-reveal,
+input[type='password']::-ms-clear {
+  display: none;
+}
+
+input[type='password']::-webkit-password-reveal-button {
+  display: none;
+  -webkit-appearance: none;
+}

@@ -1,0 +1,14 @@
+# ./src/frontend/Dockerfile.dev
+FROM node:20-alpine
+
+WORKDIR /app
+
+COPY package*.json ./
+
+# 1. 🟢 设置淘宝/阿里云镜像源（大幅提升下载速度）
+RUN npm config set registry https://registry.npmmirror.com/
+
+# 2. 🟢 换成 npm install 并不再使用 silent（容错率高，且能看到进度）
+RUN npm install
+
+CMD ["npm", "run", "dev"]
