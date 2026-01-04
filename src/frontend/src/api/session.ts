@@ -123,9 +123,13 @@ export const sessionApi = {
    * @returns {Promise<ChatResponse>} 包含代理反馈、生成的 SQL 片段及 UI 状态指令
    */
   sendMessage: (sessionId: number, content: string, model?: string) => {
+    // AI 调用可能需要较长时间（模型推理、网络延迟等），设置 120 秒超时
+    // 这样可以确保前端等待后端完成处理，包括错误消息的持久化
     return client.post<any, ChatResponse>(`/v1/sessions/${sessionId}/messages`, {
       content,
       model
+    }, {
+      timeout: 120000  // 120秒超时，覆盖大多数AI模型响应场景
     });
   },
 

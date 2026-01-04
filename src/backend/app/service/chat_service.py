@@ -489,7 +489,18 @@ async def call_ai_agent(
         else:
             api_url = config["api_url"]
 
-        async with httpx.AsyncClient(timeout=300.0) as client:
+        # 设置细粒度超时：
+        # - connect: 10秒连接超时，快速检测服务不可用
+        # - read: 120秒读取超时，等待AI模型响应
+        # - write: 30秒写入超时
+        # - pool: 10秒连接池超时
+        timeout_config = httpx.Timeout(
+            connect=10.0,   # 连接超时：快速检测AI服务是否可达
+            read=120.0,     # 读取超时：等待AI模型生成响应
+            write=30.0,     # 写入超时
+            pool=10.0       # 连接池超时
+        )
+        async with httpx.AsyncClient(timeout=timeout_config) as client:
             resp = await client.post(
                 api_url,
                 content=json.dumps(payload, ensure_ascii=False).encode("utf-8"), 
@@ -509,9 +520,22 @@ async def call_ai_agent(
         
         return _clean_ai_response(content)
 
+    except httpx.ConnectError as e:
+        log.error("AI Connect Error ({}): {}", model_key, e)
+        return f"-- AI Service Error: 无法连接到AI服务 ({config['api_url'][:50]}...)"
+    except httpx.ConnectTimeout as e:
+        log.error("AI Connect Timeout ({}): {}", model_key, e)
+        return f"-- AI Service Error: 连接AI服务超时，服务可能不可用"
+    except httpx.ReadTimeout as e:
+        log.error("AI Read Timeout ({}): {}", model_key, e)
+        return f"-- AI Service Error: AI服务响应超时，请稍后重试"
+    except httpx.HTTPStatusError as e:
+        log.error("AI HTTP Error ({}): {} - {}", model_key, e.response.status_code, e.response.text[:200])
+        return f"-- AI Service Error: AI服务返回错误 (HTTP {e.response.status_code})"
     except Exception as e:
-        log.error("AI Call Error ({}): {}", model_key, e)
-        return f"-- AI Service Error: {str(e)}"
+        error_msg = str(e) if str(e) else type(e).__name__
+        log.error("AI Call Error ({}): {}", model_key, error_msg)
+        return f"-- AI Service Error: {error_msg}"
 
 
 # =========================================================
@@ -1072,6 +1096,10 @@ def _get_ai_service_friendly_error(error_detail: str) -> str:
     Returns:
         str: 用户友好的错误消息
     """
+    # 处理空错误详情
+    if not error_detail or not error_detail.strip():
+        return "AI服务暂时不可用，请稍后重试。"
+    
     error_lower = error_detail.lower()
     
     # 连接/网络错误

@@ -804,8 +804,12 @@ export const Workspace: React.FC<WorkspaceProps> = ({ project, onBack }) => {
         return next;
       });
 
-      // 无论什么错误，都立即刷新消息列表，因为后端已经处理完成并保存了消息（包括错误消息）
+      // 短暂延迟后刷新消息，给后端一点时间完成错误消息的持久化
+      // 500ms 是一个合理的平衡点：足够快让用户感知到响应，又足够后端完成保存
       try {
+        console.log('Waiting briefly for backend to persist error message...');
+        await new Promise(resolve => setTimeout(resolve, 500));
+        
         console.log('Refreshing messages from backend...');
         const res = await sessionApi.getMessages(Number(activeSessionId));
         const messageItems = Array.isArray(res) ? res : [];
