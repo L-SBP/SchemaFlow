@@ -795,8 +795,7 @@ export const Workspace: React.FC<WorkspaceProps> = ({ project, onBack }) => {
 
     } catch (error: any) {
       console.error('Send message failed:', error);
-      // 网络错误等异常情况，使用全局提示（后端会保存AI服务错误消息，这里只处理网络不可达等情况）
-      GlobalMessage.error('请求失败，请检查网络连接后重试');
+      // 错误已由全局错误处理器统一处理（包括弹窗提示），此处不再重复提示
     } finally {
       // 移除当前会话的处理中标记
       setProcessingSessionIds(prev => {
