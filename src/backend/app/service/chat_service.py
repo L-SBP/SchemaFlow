@@ -570,9 +570,32 @@ def _parse_sql_type(sql_text: str) -> str:
     return sql_type
 
 
-def _is_meta_sql(sql_text: str) -> bool:
-    """判断是否为元数据/错误 SQL。"""
+def _is_ai_service_error(sql_text: str) -> tuple:
+    """
+    检测是否为AI服务调用错误。
+    
+    Returns:
+        tuple: (is_error: bool, error_message: str)
+    """
     if not sql_text:
+        return False, ""
+    
+    # 检测 AI 服务错误标记
+    if sql_text.startswith("-- AI Service Error:"):
+        # 提取错误详情
+        error_detail = sql_text.replace("-- AI Service Error:", "").strip()
+        return True, error_detail
+    
+    return False, ""
+
+
+def _is_meta_sql(sql_text: str) -> bool:
+    """判断是否为元数据/错误 SQL（不包括AI服务错误）。"""
+    if not sql_text:
+        return False
+    
+    # 先排除 AI 服务错误（由专门的函数处理）
+    if sql_text.startswith("-- AI Service Error:"):
         return False
         
     sql_upper = sql_text.upper()
@@ -872,7 +895,12 @@ async def process_chat(
         db_type=db_type
     )
     
-    # 检查元数据 SQL
+    # 优先检查 AI 服务错误（模型不可用、超时等）
+    is_ai_error, ai_error_detail = _is_ai_service_error(sql_text)
+    if is_ai_error:
+        return await _handle_ai_service_error_response(db, session_id, ai_error_detail)
+    
+    # 检查元数据 SQL（AI无法理解的请求）
     if _is_meta_sql(sql_text):
         return await _handle_meta_sql_response(db, session_id)
     
@@ -1000,6 +1028,79 @@ async def cancel_message(
         requires_confirmation=False,
         data=None
     )
+
+async def _handle_ai_service_error_response(
+    db: AsyncSession, 
+    session_id: int, 
+    error_detail: str
+) -> ChatResponse:
+    """
+    处理AI服务调用错误的响应。
+    
+    当AI模型不可用、API超时或连接失败时，保存准确的错误消息。
+    
+    Args:
+        db: 数据库会话
+        session_id: 会话ID
+        error_detail: 错误详情
+    """
+    # 根据错误类型生成友好的错误消息
+    friendly_message = _get_ai_service_friendly_error(error_detail)
+    
+    reply_content = f"❌ AI服务错误：{friendly_message}"
+    ai_message = await crud_message.create_message(db, session_id, reply_content, role="assistant")
+    await db.commit()
+    
+    return ChatResponse(
+        message_id=ai_message.message_id,
+        content=reply_content,
+        message_type=MessageType.ASSISTANT,
+        sql_text=None,
+        sql_type="ERROR",
+        requires_confirmation=False,
+        data=[{"error": friendly_message}]
+    )
+
+
+def _get_ai_service_friendly_error(error_detail: str) -> str:
+    """
+    将AI服务错误详情转换为用户友好的消息。
+    
+    Args:
+        error_detail: 原始错误详情
+        
+    Returns:
+        str: 用户友好的错误消息
+    """
+    error_lower = error_detail.lower()
+    
+    # 连接/网络错误
+    if any(keyword in error_lower for keyword in ["connect", "connection", "network", "unreachable"]):
+        return "无法连接到AI服务，请检查网络连接或稍后重试。"
+    
+    # 超时错误
+    if any(keyword in error_lower for keyword in ["timeout", "timed out", "timedout"]):
+        return "AI服务响应超时，请稍后重试。"
+    
+    # 模型不存在/不可用
+    if any(keyword in error_lower for keyword in ["model not found", "model_not_found", "invalid model", "no such model"]):
+        return "所选AI模型当前不可用，请尝试切换其他模型。"
+    
+    # 认证/授权错误
+    if any(keyword in error_lower for keyword in ["unauthorized", "401", "403", "forbidden", "api key", "authentication"]):
+        return "AI服务认证失败，请联系管理员检查API配置。"
+    
+    # 服务端错误
+    if any(keyword in error_lower for keyword in ["500", "502", "503", "504", "internal server", "service unavailable"]):
+        return "AI服务暂时不可用，请稍后重试。"
+    
+    # 请求限制
+    if any(keyword in error_lower for keyword in ["rate limit", "too many requests", "429"]):
+        return "请求过于频繁，请稍后重试。"
+    
+    # 默认消息
+    return f"AI服务调用失败：{error_detail[:100]}{'...' if len(error_detail) > 100 else ''}"
+
 
 async def _handle_meta_sql_response(db: AsyncSession, session_id: int) -> ChatResponse:
     """处理元数据/错误 SQL 的响应。"""

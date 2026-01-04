@@ -795,17 +795,8 @@ export const Workspace: React.FC<WorkspaceProps> = ({ project, onBack }) => {
 
     } catch (error: any) {
       console.error('Send message failed:', error);
-      // 错误已由API客户端统一处理，这里只需记录日志和显示用户友好的错误消息
-      const errorMsg: Message = {
-        id: `err_${Date.now()}`,
-        role: 'model',
-        text: '抱歉，请求失败或超时，请稍后重试。如果问题持续存在，请联系管理员。',
-        type: 'error',
-        timestamp: Date.now()
-      };
-      setSessions(prev => prev.map(s =>
-        s.id === activeSessionId ? { ...s, messages: [...s.messages, errorMsg] } : s
-      ));
+      // 网络错误等异常情况，使用全局提示（后端会保存AI服务错误消息，这里只处理网络不可达等情况）
+      GlobalMessage.error('请求失败，请检查网络连接后重试');
     } finally {
       // 移除当前会话的处理中标记
       setProcessingSessionIds(prev => {
