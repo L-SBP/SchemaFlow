@@ -7,6 +7,7 @@
 from pydantic import BaseModel, EmailStr, Field, field_validator, model_validator, ConfigDict, validator
 from typing import Optional, Literal, List, Any
 from datetime import datetime
+import re
 
 
 # 基础用户信息
@@ -136,6 +137,32 @@ class UserUpdateAvatar(BaseModel):
         avatar_url (Optional[str]): 头像 URL。
     """
     avatar_url: Optional[str] = None
+
+    @field_validator('avatar_url')
+    @classmethod
+    def validate_avatar_url(cls, v: Optional[str]) -> Optional[str]:
+        if v is None:
+            return v
+
+        value = v.strip()
+        if value == '':
+            return None
+
+        # 1) Base64 Data URL：data:image/png;base64,...
+        if value.lower().startswith('data:'):
+            match = re.match(r'^data:(?P<mime>[^;]+);base64,', value, flags=re.IGNORECASE)
+            if not match:
+                raise ValueError('头像数据格式不正确')
+            mime = match.group('mime').lower()
+            if mime not in {'image/png', 'image/jpeg', 'image/gif'}:
+                raise ValueError('头像只支持 PNG、JPG、GIF 格式')
+            return value
+
+        # 2) 普通 URL：按后缀名限制（防止明显的非图片地址）
+        lower = value.lower()
+        if not re.search(r'\.(png|jpe?g|gif)(\?.*)?$', lower):
+            raise ValueError('头像只支持 PNG、JPG、GIF 格式')
+        return value
 
 # 更新密码
 class UserUpdatePassword(BaseModel):

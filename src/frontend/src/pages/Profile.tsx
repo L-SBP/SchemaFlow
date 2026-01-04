@@ -144,11 +144,36 @@ export const Profile: React.FC<ProfileProps> = ({ onLogout, onUpdateUser }) => {
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
+      const allowedMimeTypes = new Set(['image/png', 'image/jpeg', 'image/gif']);
+      const allowedExtPattern = /\.(png|jpe?g|gif)$/i;
+
       // 限制文件大小 (例如 2MB)
       if (file.size > 2 * 1024 * 1024) {
         message.error('图片大小不能超过 2MB');
+        e.target.value = '';
         return;
       }
+
+      // 文件格式校验：仅允许 PNG/JPG(JPEG)/GIF
+      if (file.type) {
+        if (!allowedMimeTypes.has(file.type)) {
+          message.error('仅支持上传 PNG、JPG、GIF 格式图片');
+          e.target.value = '';
+          setSelectedFile(null);
+          setPreviewUrl('');
+          return;
+        }
+      } else {
+        // 某些环境下可能拿不到 MIME Type，回退到扩展名判断
+        if (!allowedExtPattern.test(file.name)) {
+          message.error('仅支持上传 PNG、JPG、GIF 格式图片');
+          e.target.value = '';
+          setSelectedFile(null);
+          setPreviewUrl('');
+          return;
+        }
+      }
+
       setSelectedFile(file);
       // 创建预览 URL
       const reader = new FileReader();
@@ -618,7 +643,7 @@ export const Profile: React.FC<ProfileProps> = ({ onLogout, onUpdateUser }) => {
             type="file"
             ref={fileInputRef}
             onChange={handleFileChange}
-            accept="image/png, image/jpeg, image/jpg, image/gif"
+            accept="image/png,image/jpeg,image/gif"
             className="hidden"
           />
 
