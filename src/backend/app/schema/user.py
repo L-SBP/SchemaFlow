@@ -16,16 +16,25 @@ class UserBase(BaseModel):
 
     Attributes:
         username (str): 用户名。
-        email (EmailStr): 邮箱。
+        email (str): 邮箱。
     """
     username: str = Field(..., description="用户名")
-    email: EmailStr
+    email: str
     
     @validator('username')
     def username_length(cls, v):
         if not 3 <= len(v) <= 50:
             raise ValueError('用户名长度必须在3到50个字符之间')
         return v
+    
+    @validator('email')
+    def validate_email(cls, v):
+        try:
+            EmailStr.validate(v)
+        except Exception:
+            raise ValueError('邮箱格式不正确，请输入有效的邮箱地址')
+        return v
+
 # 当前用户响应
 class UserMe(BaseModel):
     """
@@ -34,7 +43,7 @@ class UserMe(BaseModel):
     Attributes:
         user_id (int): 用户 ID。
         username (str): 用户名。
-        email (EmailStr): 邮箱。
+        email (str): 邮箱。
         status (str): 用户状态。
         used_databases (int): 已使用的数据库项目数。
         max_databases (int): 最大数据库额度。
@@ -45,7 +54,7 @@ class UserMe(BaseModel):
     """
     user_id: int
     username: str
-    email: EmailStr
+    email: str
     status: Literal['normal', 'suspended', 'banned']
     #  字段名必须与数据库一致 (used_databases)
     used_databases: int
@@ -80,9 +89,17 @@ class UserUpdateEmailRequest(BaseModel):
     更新邮箱请求 Schema。
 
     Attributes:
-        new_email (EmailStr): 新邮箱地址。
+        new_email (str): 新邮箱地址。
     """
-    new_email: EmailStr
+    new_email: str  # 修改为 str 类型
+    
+    @validator('new_email')
+    def validate_new_email(cls, v):
+        try:
+            EmailStr.validate(v)
+        except Exception:
+            raise ValueError('邮箱格式不正确，请输入有效的邮箱地址')
+        return v
 
 # 更新用户邮箱确认
 class UserUpdateEmailConfirm(BaseModel):
@@ -90,16 +107,24 @@ class UserUpdateEmailConfirm(BaseModel):
     更新邮箱确认 Schema。
 
     Attributes:
-        new_email (EmailStr): 新邮箱地址。
+        new_email (str): 新邮箱地址。
         code (str): 验证码。
     """
-    new_email: EmailStr
+    new_email: str
     code: str = Field(..., description="验证码")
     
     @validator('code')
     def code_length(cls, v):
         if not 6 <= len(v) <= 6:
             raise ValueError('验证码必须为6个字符')
+        return v
+    
+    @validator('new_email')
+    def validate_new_email(cls, v):
+        try:
+            EmailStr.validate(v)
+        except Exception:
+            raise ValueError('邮箱格式不正确，请输入有效的邮箱地址')
         return v
 
 # 更新头像
