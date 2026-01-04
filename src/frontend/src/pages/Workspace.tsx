@@ -747,11 +747,17 @@ export const Workspace: React.FC<WorkspaceProps> = ({ project, onBack }) => {
       timestamp: Date.now()
     };
 
-    setSessions(prev => prev.map(s =>
-      s.id === activeSessionId
-        ? { ...s, messages: [...s.messages, userMsg], updated_at: Date.now() }
-        : s
-    ));
+    // 更新会话消息和时间戳，并重新排序使当前会话置顶
+    const now = Date.now();
+    setSessions(prev => {
+      const updated = prev.map(s =>
+        s.id === activeSessionId
+          ? { ...s, messages: [...s.messages, userMsg], updated_at: now }
+          : s
+      );
+      // 按 updated_at 降序排序，最近活跃的会话在前
+      return updated.sort((a, b) => b.updated_at - a.updated_at);
+    });
     setInputValue('');
     // 标记当前会话为处理中
     setProcessingSessionIds(prev => new Set(prev).add(activeSessionId));
