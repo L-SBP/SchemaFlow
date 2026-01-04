@@ -74,7 +74,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ onProjectSelect }) => {
       setProjects(data.items);
     } catch (error) {
       console.error("Failed to load projects:", error);
-      setError("Failed to load projects. Please try again.");
+      setError("项目列表加载失败，请稍后重试。");
     } finally {
       setLoading(false);
     }
