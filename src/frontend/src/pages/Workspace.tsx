@@ -164,8 +164,32 @@ const mapBackendMessageToFrontend = (msg: ChatResponse): Message => {
   // 2. 如果有 data 字段且不为空，优先展示表格
   else if (msg.data && Array.isArray(msg.data) && msg.data.length > 0) {
     type = 'table';
+    
+    // 获取列名
+    let columns = Object.keys(msg.data[0]);
+    
+    // 自定义列排序：确保"受影响行数"在"最后插入ID"之前
+    // 优先级映射：数字越小越靠前
+    const columnPriority: Record<string, number> = {
+      '受影响行数': 1,
+      'affected_rows': 1,
+      '最后插入ID': 2,
+      'last_insert_id': 2,
+      'id': 3
+    };
+
+    columns.sort((a, b) => {
+      const priorityA = columnPriority[a] || 999;
+      const priorityB = columnPriority[b] || 999;
+      
+      if (priorityA !== priorityB) {
+        return priorityA - priorityB;
+      }
+      return a.localeCompare(b);
+    });
+
     tableData = {
-      columns: msg.data.length > 0 ? Object.keys(msg.data[0]) : [],
+      columns: columns,
       data: msg.data
     };
   }
@@ -208,6 +232,15 @@ const mapBackendMessageToFrontend = (msg: ChatResponse): Message => {
     // 额外的清理：移除可能残留的空 Markdown 标记
     displayText = displayText.replace(/```\s*```/g, '');
     displayText = displayText.trim();
+  }
+
+  // 3. 针对非查询类操作（INSERT/UPDATE/DELETE等），如果执行成功且不需要确认，追加"执行成功"提示
+  // 这解决了历史记录中缺少"执行成功"提示的问题
+  const isActionQuery = sqlText && /^\s*(INSERT|UPDATE|DELETE|DROP|CREATE|ALTER|TRUNCATE)/i.test(sqlText);
+  const shouldAppendSuccess = !isError && !msg.requires_confirmation && isActionQuery && tableData;
+  
+  if (shouldAppendSuccess && !displayText.includes('执行成功')) {
+    displayText = displayText ? `${displayText}\n\n✅ 执行成功` : '✅ 执行成功';
   }
 
   // 2. 映射字段
@@ -1203,9 +1236,25 @@ export const Workspace: React.FC<WorkspaceProps> = ({ project, onBack }) => {
                                   <tbody>
                                     {msg.tableData.data.map((row, i) => (
                                       <tr key={i} className="border-b last:border-0 hover:bg-gray-50 transition-colors">
-                                        {msg.tableData?.columns.map(col => (
-                                          <td key={col} className="px-4 py-2 text-gray-700 whitespace-nowrap">{row[col]}</td>
-                                        ))}
+                                        {msg.tableData?.columns.map(col => {
+                                          const val = row[col];
+                                          let displayVal = val;
+                                          
+                                          // 针对"最后插入ID"列的特殊处理：0 或 null 显示为 "null"
+                                          if (col === '最后插入ID' || col === 'last_insert_id') {
+                                            if (val === 0 || val === '0' || val === null) {
+                                              displayVal = <span className="text-gray-400">null</span>;
+                                            }
+                                          } else if (val === null) {
+                                            displayVal = <span className="text-gray-400">null</span>;
+                                          }
+
+                                          return (
+                                            <td key={col} className="px-4 py-2 text-gray-700 whitespace-nowrap">
+                                              {displayVal}
+                                            </td>
+                                          );
+                                        })}
                                       </tr>
                                     ))}
                                     {msg.tableData.data.length === 0 && (
