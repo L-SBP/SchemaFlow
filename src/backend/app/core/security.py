@@ -273,8 +273,35 @@ class RemoteLoginDetector:
     
     # IP变更检测参数
     IP_CHANGE_WINDOW = 1800  # 30分钟
-    IP_CHANGE_THRESHOLD = 15  # 阈值15次
+    IP_CHANGE_THRESHOLD = 4  # 阈值4次
     
+    @staticmethod
+    async def clear_ip_history(user_id: int) -> bool:
+        """
+        清除用户的 IP 变更历史记录。
+        
+        Args:
+            user_id: 用户ID
+            
+        Returns:
+            bool: 是否成功清除
+        """
+        try:
+            from redis_client.redis import get_redis
+            redis = get_redis()
+            if not redis:
+                return False
+                
+            ip_history_key = f"user:{user_id}:ip_history_zset"
+            
+            await redis.delete(ip_history_key)
+            
+            log.info(f"已清除用户 {user_id} 的 IP 变更历史记录")
+            return True
+        except Exception as e:
+            log.error(f"清除用户 IP 历史记录失败: {e}")
+            return False
+
     @staticmethod
     async def check_frequent_ip_changes(
         user_id: int,
@@ -282,6 +309,8 @@ class RemoteLoginDetector:
     ) -> tuple[bool, Optional[str]]:
         """
         检测用户是否在短时间内频繁变更IP。
+        
+        逻辑：统计 30 分钟内出现的不同 IP 数量。
         
         Args:
             user_id: 用户ID
@@ -297,63 +326,32 @@ class RemoteLoginDetector:
                 log.warning("Redis 不可用，跳过IP变更检测")
                 return False, None
 
-            # Redis Set key: user:{id}:ip_history
-            key = f"user:{user_id}:ip_history"
-            
-            # 使用有序集合(ZSET)存储IP变更记录，Score为时间戳
+            # 使用 Redis ZSET 存储 IP 历史，Member 为 IP，Score 为最后出现的时间戳
+            ip_history_key = f"user:{user_id}:ip_history_zset"
             current_timestamp = int(datetime.now(timezone.utc).timestamp())
-            
-            # 1. 添加当前记录 (使用IP作为Member，确保同一IP在同一时间窗口只算一次变更？ 
-            # 或者是记录每次请求的IP？ 需求是"IP改变15次"，意味着不同的IP数量？ 
-            # 或者是切换次数？ 通常理解为IP变动次数。如果IP相同不应该算"改变"。
-            # 这里我们使用 "IP:Timestamp" 作为 member 来记录每次带IP的活动，
-            # 但为了检测"改变"，我们需要对比上一次。
-            
-            # 简化逻辑：记录最近的IP列表，并计数不同IP的数量或者变更事件。
-            # 更精准的逻辑：
-            # 维护一个List，记录 (timestamp, ip)。
-            # 每次请求，如果 ip != last_ip，则记录一次变更。
-            # 统计 30分钟内的变更次数。
-            
-            # 使用 Redis List 记录最近的变更历史
-            change_log_key = f"user:{user_id}:ip_changes"
-            
-            # 获取上一次的IP
-            last_ip_key = f"user:{user_id}:last_ip"
-            last_ip = await redis.get(last_ip_key)
-            
-            if last_ip and last_ip != current_ip:
-                # IP 发生了改变，记录一次变更事件
-                # 记录时间戳
-                await redis.lpush(change_log_key, current_timestamp)
-                # 仅保留最近 20 条记录（稍微多存点，以免边界误差）
-                await redis.ltrim(change_log_key, 0, 19)
-                # 设置过期时间，避免永久占用
-                await redis.expire(change_log_key, RemoteLoginDetector.IP_CHANGE_WINDOW + 60)
-            
-            # 更新 Last IP
-            if last_ip != current_ip:
-                await redis.set(last_ip_key, current_ip, ex=RemoteLoginDetector.IP_CHANGE_WINDOW)
-            
-            # 2. 统计30分钟内的变更次数
-            # 获取列表中的所有时间戳
-            timestamps = await redis.lrange(change_log_key, 0, -1)
-            
-            change_count = 0
             window_start = current_timestamp - RemoteLoginDetector.IP_CHANGE_WINDOW
+
+            # 1. 添加/更新当前 IP 的时间戳
+            await redis.zadd(ip_history_key, {current_ip: current_timestamp})
             
-            for ts in timestamps:
-                if int(ts) >= window_start:
-                    change_count += 1
-                else:
-                    # List 是按时间倒序的，一旦遇到过期时间，后面的都过期了
-                    break
+            # 2. 移除 30 分钟之前的过期记录
+            await redis.zremrangebyscore(ip_history_key, "-inf", window_start)
             
-            if change_count >= RemoteLoginDetector.IP_CHANGE_THRESHOLD:
-                description = f"IP频繁变更检测: 30分钟内IP变更 {change_count} 次 (阈值 {RemoteLoginDetector.IP_CHANGE_THRESHOLD})"
+            # 3. 设置过期时间，避免永久占用
+            await redis.expire(ip_history_key, RemoteLoginDetector.IP_CHANGE_WINDOW + 60)
+            
+            # 4. 统计当前窗口内的不同 IP 数量
+            unique_ip_count = await redis.zcard(ip_history_key)
+            
+            if unique_ip_count >= RemoteLoginDetector.IP_CHANGE_THRESHOLD:
+                description = f"IP频繁变更检测: 30分钟内出现 {unique_ip_count} 个不同IP (阈值 {RemoteLoginDetector.IP_CHANGE_THRESHOLD})"
                 log.warning(f"用户 {user_id}: {description}")
                 return True, description
                 
+            return False, None
+
+        except Exception as e:
+            log.error(f"IP变更检测失败: {e}")
             return False, None
 
         except Exception as e:
@@ -460,11 +458,9 @@ class ViolationLogger:
             # 任何违规记录都直接标记用户为异常（仅当 auto_check_suspend=True 时执行）
             if auto_check_suspend:
                 from core.security import BlacklistManager
-                # 改为调用 auto_suspend_if_needed，遵循三击机制
-                # reason = f"触发违规记录: {event_type} - {event_description}"
-                # success = await BlacklistManager.suspend_user(db, user_id, reason=reason)
-                is_suspended, reason = await BlacklistManager.auto_suspend_if_needed(db, user_id)
-                if is_suspended:
+                reason = f"触发违规记录: {event_type} - {event_description}"
+                success = await BlacklistManager.suspend_user(db, user_id, reason=reason)
+                if success:
                     log.warning(f"用户 {user_id} 因违规行为被系统自动标记为异常: {reason}")
             
             return violation
@@ -529,57 +525,8 @@ class BlacklistManager:
     """
     黑名单管理器。
     
-    负责自动检测违规用户并将其加入黑名单，以及管理员的黑名单操作。
+    负责自动检测违规用户并将其标记为异常，以及管理员的黑名单操作。
     """
-    
-    # 自动封禁的阈值
-    VIOLATION_THRESHOLD = 3  # 24小时内3次违规记录触发自动标记为异常
-    
-    @staticmethod
-    async def auto_suspend_if_needed(
-        db: AsyncSession,
-        user_id: int,
-        violation_logger: ViolationLogger = ViolationLogger()
-    ) -> Tuple[bool, Optional[str]]:
-        """
-        检查用户是否应该被自动标记为异常（三击机制）。
-        
-        注意：系统只会将用户标记为 suspended（异常），真正的封禁（banned）需要管理员手动操作。
-        
-        触发条件：
-        1. 频率超限（Redis 记录）
-        2. 24小时内违规记录 ≥ 3 条
-        
-        Args:
-            db: 数据库会话
-            user_id: 用户ID
-            violation_logger: 违规日志记录器实例
-            
-        Returns:
-            Tuple[bool, Optional[str]]: (是否被标记为异常, 原因)
-        """
-        try:
-            # 获取违规记录数
-            violation_count = await violation_logger.get_violation_count(
-                db, user_id, time_hours=24
-            )
-            
-            if violation_count >= BlacklistManager.VIOLATION_THRESHOLD:
-                # 自动标记用户为异常状态（suspended）
-                reason = f"24小时内违规记录达到 {violation_count} 条，系统自动标记为异常"
-                success = await BlacklistManager.suspend_user(
-                    db, user_id, reason=reason
-                )
-                
-                if success:
-                    log.warning("自动标记用户 {} 为异常: {}", user_id, reason)
-                    return True, reason
-            
-            return False, None
-        
-        except Exception as e:
-            log.error("自动异常标记检查失败: {}", e)
-            return False, None
     
     @staticmethod
     async def suspend_user(
@@ -667,6 +614,10 @@ class BlacklistManager:
             
             await db.commit()
             
+            # 清除 IP 变更历史记录
+            from core.security import RemoteLoginDetector
+            await RemoteLoginDetector.clear_ip_history(user_id)
+            
             # 在封禁用户后，强制登出用户的所有活跃会话
             # 导入用户服务以强制登出用户的所有会话
             from service.user_service import force_logout_user_sessions
@@ -718,6 +669,10 @@ class BlacklistManager:
             user.status = 'normal'
             
             await db.commit()
+            
+            # 清除 IP 变更历史记录
+            from core.security import RemoteLoginDetector
+            await RemoteLoginDetector.clear_ip_history(user_id)
             
             log.info("管理员 {} 解封了用户 {} (原状态: {})", admin_id, user_id, old_status)
             return True
