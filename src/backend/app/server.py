@@ -58,6 +58,12 @@ async def startup_services(app: FastAPI):
     log.info("initialize database linking")
     app.state.psql_engine = await PsqlHelper.init_conn_psql(app.state.config.db)
 
+    # 初始化 LLM 模型注册表（从 ai_model_config 表加载）
+    log.info("initialize LLM model registry")
+    from core.llm import init_model_registry
+    async with PsqlHelper.get_session(app.state.psql_engine) as db:
+        await init_model_registry(db)
+
     # 初始化Mysql连接
     await MysqlHelper.init_root_engine(config.mysql)
 

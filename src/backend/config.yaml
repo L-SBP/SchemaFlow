@@ -5,7 +5,7 @@ dev:
   # 应用配置
   app:
     # 应用名称
-    name: Auto Database Deployment
+    name: SchemaFlow
     # 应用描述
     description: 自然语言创建、操作数据库
     # 应用接口
@@ -234,10 +234,41 @@ dev:
         - "^SET *"
         - "^KILL *"
 
+  # 任务→模型默认映射（Phase 2）
+  tasks:
+    schema_generation:
+      model: deepseek-v3
+      temperature: 0.1
+      max_tokens: 4096
+    ddl_generation:
+      model: deepseek-v3
+      temperature: 0.0
+      max_tokens: 8192
+    er_generation:
+      model: deepseek-v3
+      temperature: 0.2
+      max_tokens: 2048
+
+  # 任务→模型默认映射（Phase 2）
+  # 用户前端传了 ai_model 则覆盖这里的默认值
+  tasks:
+    schema_generation:
+      model: deepseek-v3
+      temperature: 0.1
+      max_tokens: 4096
+    ddl_generation:
+      model: deepseek-v3
+      temperature: 0.0
+      max_tokens: 8192
+    er_generation:
+      model: deepseek-v3
+      temperature: 0.2
+      max_tokens: 2048
+
 # 生产环境
 prod:
   app:
-    name: Auto Database Deployment
+    name: SchemaFlow
     description: 自然语言创建、操作数据库
     api: /api/v1
     host: 0.0.0.0

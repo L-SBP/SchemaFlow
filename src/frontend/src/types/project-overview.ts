@@ -37,7 +37,7 @@ export interface ProjectData {
    * - active: 数据库实例已就绪，可正常进行 NL2SQL 对话交互。
    * - inactive: 逻辑归档状态，资源被暂时挂起。
    */
-  project_status: 'initializing' | 'active' | 'inactive';
+   project_status: 'initializing' | 'active' | 'pending_confirmation' | 'deleted' | 'completed';
   /** 记录项目的最后变更时间戳（遵循 ISO 8601 标准格式，便于前端时区转换） */
   updated_at: string; 
   /** * 目标数据库引擎类型。

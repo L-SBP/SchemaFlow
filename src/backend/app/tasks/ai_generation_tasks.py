@@ -195,7 +195,7 @@ def generate_schema_task(
             run_async(_update_project_field(
                 project_id,
                 creation_stage=schemas.CreationStageEnum.INITIALIZING.value,
-                project_status="schema_generation_failed"
+                project_status=schemas.ProjectStatusEnum.INITIALIZING.value
             ))
             return {
                 "success": False,
@@ -248,7 +248,7 @@ def generate_schema_task(
         run_async(_update_project_field(
             project_id,
             creation_stage=schemas.CreationStageEnum.INITIALIZING.value,
-            project_status="schema_generation_failed"
+            project_status=schemas.ProjectStatusEnum.INITIALIZING.value
         ))
         return {
             "success": False,
@@ -391,14 +391,14 @@ def generate_ddl_task(
             run_async(_update_project_field(
                 project_id,
                 creation_stage=schemas.CreationStageEnum.SCHEMA_GENERATED.value,
-                project_status="ddl_generation_failed"
+                project_status=schemas.ProjectStatusEnum.PENDING_CONFIRMATION.value
             ))
             return {
                 "success": False,
                 "project_id": project_id,
                 "error": "DDL generation returned empty result"
             }
-        
+
         # 构建完整 DDL（添加数据库创建语句）
         if db_type == 'mysql':
             full_ddl = f"CREATE DATABASE IF NOT EXISTS `{db_name}`;\nUSE `{db_name}`;\n\n{ddl_res}"
@@ -443,7 +443,7 @@ def generate_ddl_task(
         run_async(_update_project_field(
             project_id,
             creation_stage=schemas.CreationStageEnum.SCHEMA_GENERATED.value,
-            project_status="ddl_generation_failed"
+            project_status=schemas.ProjectStatusEnum.PENDING_CONFIRMATION.value
         ))
         return {
             "success": False,

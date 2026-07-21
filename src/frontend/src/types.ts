@@ -172,6 +172,7 @@ export enum ProjectStatusEnum {
   INITIALIZING = 'initializing',
   PENDING_CONFIRMATION = 'pending_confirmation',
   ACTIVE = 'active',
+  COMPLETED = 'completed',
   DELETED = 'deleted'
 }
 

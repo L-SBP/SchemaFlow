@@ -14,15 +14,20 @@
 # backend/app/service/project_service.py
 
 import asyncio
+import uuid
 from typing import Optional, Dict, Any
 from sqlalchemy.ext.asyncio import AsyncSession as Session
 from datetime import datetime, timedelta, timezone
 from jose import jwt, JWTError
 from fastapi import BackgroundTasks
 
+from core.llm import model_registry, TASK_DEFAULT_MODEL
 from crud.crud_project import crud_project
 from crud.crud_database_instance import crud_database_instance
 from crud.crud_user_account import crud_user_account
+from graphs.ddl_er_graph import ddl_er_graph
+from graphs.schema_er_graph import schema_er_graph
+from graphs.state import ProjectState
 from schema import project as schemas
 from core.exceptions import (
     ItemNotFoundException,
@@ -35,18 +40,11 @@ from core.config import config
 from core.database import PsqlHelper
 from core.log import log
 from core.utils import generate_meaningful_db_name
+from schema.project import CreationStageEnum
 
 from service.ai_service import AIService
 from service.db_executor_service import DBExecutorService
 from service.rag_service import rag_service
-
-# Celery 任务导入
-from tasks.ai_generation_tasks import (
-    schema_er_pipeline_task,
-    ddl_er_parallel_task,
-    generate_er_task,
-    get_task_status,
-)
 
 # 缓存相关
 from redis_client.redis_keys import redis_key_manager
@@ -163,8 +161,22 @@ def _get_db_host_port(db_type: str) -> tuple:
 
 
 # =========================================================
-# Celery 任务调度辅助函数
+# 任务调度辅助函数
 # =========================================================
+
+async def _run_graph(task_id: str, graph, state: ProjectState):
+    """后台执行 LangGraph graph，更新任务状态"""
+    try:
+        result = await graph.ainvoke(state)
+        _running_tasks[task_id] = {
+            "status": "FAILURE" if result.get("error_message") else "SUCCESS",
+            "project_id": state["project_id"],
+            "result": result,
+        }
+    except Exception as e:
+        _running_tasks[task_id] = {"status": "FAILURE", "project_id": state["project_id"], "error": str(e)}
+
+_running_tasks: dict[str, dict] = {}
 
 def _dispatch_schema_er_task(
     project_id: int,
@@ -179,15 +191,22 @@ def _dispatch_schema_er_task(
     Returns:
         task_id: Celery 任务 ID
     """
-    task = schema_er_pipeline_task.delay(
-        project_id=project_id,
-        requirements=requirements,
-        db_name=db_name,
-        db_type=db_type,
-        ai_model=ai_model
-    )
-    log.info(f"[Celery] Dispatched schema_er_pipeline_task for Project {project_id}, task_id={task.id}")
-    return task.id
+    task_id = str(uuid.uuid4())
+    _running_tasks[task_id] = {"status": "PENDING", "project_id": project_id}
+
+    state: ProjectState = {
+        "project_id": project_id,
+        "requirements": requirements,
+        "db_name": db_name,
+        "db_type": db_type,
+        "ai_model": ai_model,
+        "current_stage": CreationStageEnum.GENERATING_SCHEMA.value,
+        "regenerate_er": False,
+        "node_history": []
+    }
+
+    asyncio.create_task(_run_graph(task_id, schema_er_graph, state))
+    return task_id
 
 
 def _dispatch_ddl_er_task(
@@ -196,46 +215,74 @@ def _dispatch_ddl_er_task(
     requirements: str,
     db_type: str,
     db_name: str,
-    ai_model: str = "gpt4",
+    ai_model: str,
     regenerate_er: bool = True
 ) -> str:
     """
     调度 DDL + ER 并行生成任务。
 
     Returns:
-        task_id: Celery 任务 ID
+        task_id: 任务 ID
     """
-    task = ddl_er_parallel_task.delay(
-        project_id=project_id,
-        schema_text=schema_text,
-        requirements=requirements,
-        db_type=db_type,
-        db_name=db_name,
-        ai_model=ai_model,
-        regenerate_er=regenerate_er
-    )
-    log.info(f"[Celery] Dispatched ddl_er_parallel_task for Project {project_id}, task_id={task.id}")
-    return task.id
+    task_id = str(uuid.uuid4())
+    _running_tasks[task_id] = {"status": "PENDING", "project_id": project_id}
+
+    state: ProjectState = {
+        "project_id": project_id,
+        "schema_text": schema_text,
+        "requirements": requirements,
+        "db_type": db_type,
+        "db_name": db_name,
+        "ai_model": ai_model,
+        "regenerate_er": regenerate_er,
+        "current_stage": CreationStageEnum.GENERATING_DDL.value,
+        "node_history": [],
+    }
+
+    asyncio.create_task(_run_graph(task_id, ddl_er_graph, state))
+    return task_id
 
 
-def _dispatch_er_only_task(
-    project_id: int,
-    schema_text: str,
-    ai_model: str = "gpt4"
-) -> str:
-    """
-    调度仅 ER 图生成任务。
+def _dispatch_er_only_task(project_id: int, schema_text: str, ai_model: str) -> str:
+    """单独触发 ER 生成（当前没有独立 graph，直接用 er node）"""
+    task_id = str(uuid.uuid4())
+    _running_tasks[task_id] = {"status": "PENDING", "project_id": project_id}
 
-    Returns:
-        task_id: Celery 任务 ID
-    """
-    task = generate_er_task.delay(
-        project_id=project_id,
-        schema_text=schema_text,
-        ai_model=ai_model
-    )
-    log.info(f"[Celery] Dispatched generate_er_task for Project {project_id}, task_id={task.id}")
-    return task.id
+    from graphs.nodes.er_node import generate_er_node
+
+    state: ProjectState = {
+        "project_id": project_id,
+        "schema_text": schema_text,
+        "ai_model": ai_model,
+        "current_stage": "generating_er",
+        "node_history": [],
+    }
+
+    async def _run_er_node():
+        try:
+            result = await generate_er_node(state)
+            _running_tasks[task_id] = {
+                "status": "FAILURE" if result.get("error_message") else "SUCCESS",
+                "project_id": project_id,
+                "result": result,
+            }
+        except Exception as e:
+            _running_tasks[task_id] = {"status": "FAILURE", "project_id": project_id, "error": str(e)}
+
+    asyncio.create_task(_run_er_node())
+    return task_id
+
+
+def get_graph_task_status(task_id: str) -> dict:
+    """查询 graph 任务状态 —— 替代原有的 Celery AsyncResult 查询"""
+
+    task_info = _running_tasks.get(task_id, {"status": "NOT_FOUND"})
+    return {
+        "task_id": task_id,
+        "status": task_info["status"],
+        "result": task_info.get("project_id", None),
+        "info": task_info.get("result") or task_info.get("error"),
+    }
 
 
 # =========================================================
@@ -299,9 +346,8 @@ async def create_project_service(
     # 2. 解析请求参数
     project_data = project_in.model_dump()
     db_type = project_data.pop('db_type')
-    # 统一使用 GPT-4：即使旧客户端传入 ai_model 也忽略
-    project_data.pop('ai_model', None)
-    ai_model = 'gpt4'
+    ai_model = project_data.get('ai_model') or model_registry.get_default_name()
+
     requirements_text = project_data.get('description', '')
     project_name = project_data.get('project_name', 'project')
 
@@ -384,14 +430,17 @@ async def request_ddl_generation_service(
     # 获取数据库实例信息
     instance = await crud_database_instance.get(db, project.instance_id)
 
-    # 调度 Celery 任务：DDL 生成 + 可选 ER 重新生成
+    # 确定 DDL 生成使用的模型：用户传值 > 任务默认配置 > 注册表默认
+    ddl_model = data.ai_model or TASK_DEFAULT_MODEL.get("ddl_generation", {}).get("model") or model_registry.get_default_name()
+
+    # DDL 生成 + 可选 ER 重新生成
     task_id = _dispatch_ddl_er_task(
         project_id=project.project_id,
         schema_text=new_schema,
         requirements=project.description,
         db_type=instance.db_type,
         db_name=instance.db_name,
-        ai_model="gpt4",
+        ai_model=ddl_model,
         regenerate_er=schema_changed  # Schema 有变化时重新生成 ER 图
     )
 
@@ -718,7 +767,7 @@ async def regenerate_project_er_service(
     project_id: int,
     user_id: int,
     schema_text: str,
-    ai_model: str = "gpt4"
+    ai_model: str = None
 ) -> schemas.ProjectAsyncResponse:
     """
     更新项目的 Schema 定义，并异步重新生成 Mermaid ER 代码。
@@ -745,11 +794,14 @@ async def regenerate_project_er_service(
     # 清除项目缓存，确保前端能立即看到更新
     await _invalidate_project_cache(project_id, user_id)
 
+    # 确定 ER 生成使用的模型
+    er_model = ai_model or TASK_DEFAULT_MODEL.get("er_generation", {}).get("model") or model_registry.get_default_name()
+
     # 调度 Celery 任务重新生成 ER 图
     task_id = _dispatch_er_only_task(
         project_id=project_id,
         schema_text=schema_text,
-        ai_model=ai_model
+        ai_model=er_model
     )
     log.info(f"[RegenER] Dispatched ER regeneration for Project {project_id}, task_id={task_id}")
 
@@ -761,19 +813,3 @@ async def regenerate_project_er_service(
         task_id=task_id
     )
 
-
-# =========================================================
-# 任务状态查询服务
-# =========================================================
-
-async def get_task_status_service(task_id: str) -> Dict[str, Any]:
-    """
-    查询 Celery 任务状态。
-
-    Args:
-        task_id: Celery 任务 ID
-
-    Returns:
-        任务状态信息字典
-    """
-    return get_task_status(task_id)

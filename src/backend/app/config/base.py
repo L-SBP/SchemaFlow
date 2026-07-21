@@ -3,7 +3,7 @@
 from typing import List, Optional
 
 from pydantic_settings import BaseSettings
-from pydantic import SecretStr, BaseModel
+from pydantic import SecretStr, BaseModel, Field
 from sqlalchemy import URL
 
 class Appconfig(BaseSettings):
@@ -334,3 +334,5 @@ class BaseConfig(BaseSettings):
     sqlite: SQLiteConfig
     # SQL权限配置
     sql_permissions: SQLPermissions
+    # 任务→模型映射（Phase 2 新增，用户可在 config.yaml 中配置）
+    tasks: dict = Field(default_factory=dict, description="任务到模型的默认映射")

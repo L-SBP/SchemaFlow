@@ -13,22 +13,43 @@ from enum import Enum
 
 
 # --- 1. 枚举定义 ---
-class ProjectStatusEnum(str, Enum):
-    INITIALIZING = "initializing"          # 正在生成或等待确认
-    PENDING_CONFIRMATION = "pending_confirmation" # (新增建议) 生成完毕，等待用户确认
-    ACTIVE = "active"                      # 已部署
-    DELETED = "deleted"
-
-
 class CreationStageEnum(str, Enum):
-    """3.2.2. 创建进度阶段"""
-    INITIALIZING = "initializing"
-    GENERATING_SCHEMA = "generating_schema"  # 正在生成 Schema
-    SCHEMA_GENERATED = "schema_generated"  # Schema 生成完毕，等待用户确认
-    GENERATING_DDL = "generating_ddl"  # 正在生成 DDL
-    DDL_GENERATED = "ddl_generated"  # DDL 生成完毕，等待用户部署
-    EXECUTING_DDL = "executing_ddl"  # 正在部署
-    COMPLETED = "completed"  # 完成
+    """
+    项目创建进度阶段枚举。
+
+    Attributes:
+        INITIALIZING: 初始化阶段。
+        GENERATING_SCHEMA: 生成Schema阶段。
+        SCHEMA_GENERATED: Schema生成完成阶段。
+        GENERATING_DDL: 生成DDL阶段。
+        DDL_GENERATED: DDL生成完成阶段。
+        EXECUTING_DDL: 执行DDL阶段。
+        COMPLETED: 项目创建完成阶段。
+    """
+    INITIALIZING = 'initializing'
+    GENERATING_SCHEMA = 'generating_schema'
+    SCHEMA_GENERATED = 'schema_generated'
+    GENERATING_DDL = 'generating_ddl'
+    DDL_GENERATED = 'ddl_generated'
+    EXECUTING_DDL = 'executing_ddl'
+    COMPLETED = 'completed'
+
+class ProjectStatusEnum(str, Enum):
+    """
+    项目状态枚举。
+
+    Attributes:
+        ACTIVE: 项目正常状态。
+        INITIALIZING: 项目初始化中。
+        PENDING_CONFIRMATION: 项目待确认状态。
+        DELETED: 项目已删除状态。
+        COMPLETED: 项目已完成状态。
+    """
+    ACTIVE = 'active'
+    INITIALIZING = 'initializing'
+    PENDING_CONFIRMATION = 'pending_confirmation'
+    DELETED = 'deleted'
+    COMPLETED = 'completed'
 
 
 # --- 2. 请求 DTOs ---
@@ -46,7 +67,7 @@ class ProjectCreate(BaseModel):
     project_name: str = Field(..., description="项目名称")
     db_type: Literal['mysql', 'postgresql', 'sqlite'] = Field(..., description="数据库类型")
     description: str = Field(..., description="项目描述")
-    ai_model: Literal["gpt4", "deepseek", "chatgpt"] = Field("gpt4",description="用于生成Schema的AI模型")
+    ai_model: Optional[str] = Field(None, description="用于生成Schema的AI模型名。不传则用系统默认")
     
     @validator('project_name')
     def project_name_length(cls, v):
@@ -101,6 +122,7 @@ class GenerateDDLRequest(BaseModel):
     confirmed_schema: str = Field(..., description="用户确认或修改后的 Schema 内容")
     # 如果用户在确认 Schema 阶段同时也微调了需求，可以传此参数更新项目描述，否则使用原描述
     requirements: Optional[str] = Field(None, description="可选：修正后的需求描述")
+    ai_model: Optional[str] = Field(None, description="用于生成DDL的AI模型名。不传则用系统默认")
 
 
 class RegenerateERRequest(BaseModel):
@@ -108,7 +130,7 @@ class RegenerateERRequest(BaseModel):
     重新生成 ER 图的请求体。
     """
     schema_text: str = Field(..., description="Schema 内容")
-    ai_model: Literal["gpt4", "deepseek", "chatgpt", "qwen"] = Field("gpt4", description="AI 模型标识")
+    ai_model: Optional[str] = Field(None, description="AI 模型名。不传则用系统默认")
 
 
 # --- ：部署请求 DTO ---

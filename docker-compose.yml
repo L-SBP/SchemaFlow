@@ -144,46 +144,6 @@ services:
     networks:
       - app-network
 
-  # Celery Worker (异步任务处理)
-  celery_worker:
-    build:
-      context: ./src/backend
-      dockerfile: Dockerfile.dev
-    container_name: celery
-    environment:
-      # Fix import errors
-      - PYTHONPATH=/app/app
-      # 同样注入配置以确保 Worker 能连接到正确的 DB 和 Redis
-      - DB__HOST=postgres-meta
-      - DB__PORT=5432
-      - DB__USERNAME=admin
-      - DB__PASSWORD=secure_2025
-      - DB__DATABASE=auto_db_deployment
-      - REDIS__HOST=redis
-      - REDIS__PORT=6379
-      # 显式覆盖 Celery Broker URL (以防代码没读配置)
-      - CELERY_BROKER_URL=redis://redis:6379/0
-      - CELERY_RESULT_BACKEND=redis://redis:6379/0
-      # ChromaDB 配置
-      - CHROMA__HOST=chromadb
-      - CHROMA__PORT=8000
-      # MySQL 用户数据库配置 (Docker 内部网络)
-      - MYSQL__HOST=mysql-user
-      - MYSQL__PORT=3306
-      # PostgreSQL 用户数据库配置 (Docker 内部网络)
-      - POSTGRESQL__HOST=postgres-user
-      - POSTGRESQL__PORT=5432
-    working_dir: /app/app
-    # 启动命令 (添加 -Q celery 确保监听默认队列)
-    command: celery -A celery_app worker --loglevel=info -Q celery,default,ai_tasks
-    depends_on:
-      - redis
-      - backend
-    volumes:
-      - ./src/backend:/app
-    networks:
-      - app-network
-
   # 前端服务 (React + Vite)
   frontend:
     build:

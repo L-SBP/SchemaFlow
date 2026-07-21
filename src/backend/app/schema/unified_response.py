@@ -94,7 +94,7 @@ class ProjectListData(BaseModel):
     project_id: int = Field(..., description="项目 ID")
     project_name: str = Field(..., description="项目名称")
     description: str = Field(..., description="项目描述")
-    project_status: Literal['initializing', 'activate', 'deleted'] = Field(..., description="项目状态：初始化/激活/已删除")
+    project_status: Literal['initializing', 'active', 'pending_confirmation', 'deleted', 'completed'] = Field(..., description="项目状态：初始化/激活/待确认/已删除/已完成")
     updated_at: datetime = Field(..., description="最后更新时间（UTC 时间或本地时间，建议统一格式）")
 
 class SessionListData(BaseModel):

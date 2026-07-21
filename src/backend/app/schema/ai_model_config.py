@@ -32,6 +32,7 @@ class AIModelConfigCreate(BaseModel):
     model_id: str = Field(..., min_length=1, max_length=200, description="模型在 API 服务中的标识")
     api_key: str = Field(..., min_length=1, max_length=500, description="API 密钥")
     model_type: str = Field(default="general_llm", description="模型类型：local_finetune, general_llm")
+    provider: str = Field(default="openai_compatible", description="模型供应商")
 
     # 禁用 Pydantic 保护命名空间，允许 model_ 前缀字段
     model_config = ConfigDict(protected_namespaces=())
@@ -52,6 +53,7 @@ class AIModelConfigUpdate(BaseModel):
     model_id: Optional[str] = Field(None, min_length=1, max_length=200, description="模型在 API 服务中的标识")
     api_key: Optional[str] = Field(None, min_length=1, max_length=500, description="API 密钥")
     model_type: Optional[str] = Field(None, description="模型类型")
+    provider: Optional[str] = Field(None, description="模型供应商")
 
     model_config = ConfigDict(from_attributes=True, protected_namespaces=())
 
@@ -69,6 +71,7 @@ class AIModelConfigResponse(BaseModel):
         model_name (str): 模型名称。
         api_url (str): API 接口地址。
         model_id (str): 模型在 API 服务中的标识。
+        provider (str): 适配器类型。
         model_type (str): 模型类型。
         created_at (datetime): 创建时间。
         updated_at (datetime): 更新时间。
@@ -77,6 +80,7 @@ class AIModelConfigResponse(BaseModel):
     model_name: str
     api_url: str
     model_id: str
+    provider: str = "openai_compatible"
     model_type: str
     created_at: datetime
     updated_at: datetime

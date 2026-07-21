@@ -27,16 +27,16 @@ async def get_task_status(
     current_user: Any = Depends(deps.get_current_active_user),
 ) -> Any:
     """
-    查询 Celery 异步任务状态。
+    查询异步任务状态。
 
     Args:
-        task_id (str): Celery 任务 ID。
+        task_id (str): 任务 ID。
         current_user (Any): 当前登录用户。
 
     Returns:
         UnifiedResponse[schemas.TaskStatusResponse]: 任务状态响应。
     """
-    result = await project_service.get_task_status_service(task_id)
+    result = project_service.get_graph_task_status(task_id)
     return UnifiedResponse.success(data=result, message="获取任务状态成功")
 
 

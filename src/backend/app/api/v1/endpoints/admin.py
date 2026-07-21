@@ -5,6 +5,7 @@ from typing import Optional, List, Literal, Any
 from fastapi import APIRouter, Depends, Query, Path, Body, Request
 from sqlalchemy.ext.asyncio import AsyncSession as Session
 
+from core.llm import model_registry, ModelDef
 # 导入 Service 和 Schema
 from service import admin_service as service
 from schema.admin import (
@@ -413,6 +414,7 @@ async def create_ai_model_config(
         raise ValidationException(f"模型名称 '{data.model_name}' 已存在")
     
     config = await crud_ai_model_config.create(db, data)
+    model_registry.register(ModelDef(config.to_registry_format()))
     result = AIModelConfigResponse.model_validate(config)
     return UnifiedResponse.success(data=result, message="创建 AI 模型配置成功")
 
@@ -469,11 +471,16 @@ async def delete_ai_model_config(
         UnifiedResponse[None]: 删除成功响应。
     """
     # 检查配置是否存在
-    existing = await crud_ai_model_config.get(db, config_id)
-    if not existing:
+    config = await crud_ai_model_config.get(db, config_id)
+    if not config:
         raise ItemNotFoundException("AI 模型配置")
+    if config.is_preset:
+        raise ValidationException("预设模型无法删除")
     
     await crud_ai_model_config.delete(db, config_id)
+    # 从运行时注册表中移除（避免仍需重启才能生效）
+    from core.llm import model_registry
+    model_registry.unregister(config.model_name)
     return UnifiedResponse.success(message="删除 AI 模型配置成功")
 
 

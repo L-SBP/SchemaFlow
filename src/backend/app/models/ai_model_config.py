@@ -7,7 +7,7 @@ AI 模型配置模型。
 
 # backend/app/models/ai_model_config.py
 
-from sqlalchemy import Column, Integer, String, DateTime, Index
+from sqlalchemy import Column, Integer, String, DateTime, Index, Boolean
 from sqlalchemy.sql import func
 from core.database import Base
 
@@ -40,6 +40,18 @@ class AIModelConfig(Base):
         primary_key=True,
         autoincrement=True,
         comment='配置ID'
+    )
+    provider = Column(
+        String(32),
+        nullable=False,
+        default='openai',
+        comment='适配器: openai | openai_compatible | anthropic | ollama'
+    )
+    is_preset = Column(
+        Boolean,
+        nullable=False,
+        default=False,
+        comment='是否为预设模型'
     )
     model_name = Column(
         String(200),
@@ -89,6 +101,8 @@ class AIModelConfig(Base):
         """
         return {
             "name": self.model_name,
+            "provider": self.provider,
+            "is_preset": self.is_preset,
             "api_url": self.api_url,
             "model_id": self.model_id,
             "api_key": self.api_key,

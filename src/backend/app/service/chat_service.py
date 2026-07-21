@@ -56,67 +56,44 @@ from service.rag_service import rag_service, retrieve_chat_context, index_new_me
 # 1. 模型配置注册表（后备配置，当数据库无配置时使用）
 # =========================================================
 
-FALLBACK_MODEL_REGISTRY = {
-    "my-finetuned-sql": {
-        "name": "My Fine-Tuned SQL Model",
-        "api_url": "http://1.92.127.206:8080/v1/chat/completions",
-        "model_id": "codellama/CodeLlama-13b-Instruct-hf",
-        "api_key": "sk-2025texttosql",
-        "type": "local_finetune"
-    },
-    "xiyan-sql": {
-        "name": "XiYan-SQL (QwenCoder-32B)",
-        "api_url": "https://api-inference.modelscope.cn/v1/chat/completions",
-        "model_id": "XGenerationLab/XiYanSQL-QwenCoder-32B-2504",
-        "api_key": settings.ai.modelscope_api_key, 
-        "type": "general_llm"
-    },
-    "qwen-coder-32b": {
-        "name": "Qwen2.5-Coder-32B",
-        "api_url": "https://api-inference.modelscope.cn/v1/chat/completions",
-        "model_id": "Qwen/Qwen2.5-Coder-32B-Instruct",
-        "api_key": settings.ai.modelscope_api_key, 
-        "type": "general_llm"
-    },
-    "deepseek-v3": {
-        "name": "DeepSeek V3.1",
-        "api_url": "https://api-inference.modelscope.cn/v1/chat/completions",
-        "model_id": "deepseek-ai/DeepSeek-V3.1",
-        "api_key": settings.ai.modelscope_api_key, 
-        "type": "general_llm"
-    }
-}
-
-# 保留旧变量名以兼容可能的外部引用
-MODEL_REGISTRY = FALLBACK_MODEL_REGISTRY
-
-DEFAULT_MODEL = "my-finetuned-sql"
+DEFAULT_MODEL = "deepseek-v3"
 
 
 # =========================================================
 # 1.1 动态模型配置获取
 # =========================================================
 
+def _model_def_to_dict(m) -> Dict[str, Any]:
+    """将 ModelDef 转为 chat_service 需要的历史 dict 格式"""
+    from core.llm import ModelDef
+    return {
+        "name": m.name,
+        "api_url": m.api_url,
+        "model_id": m.model_id,
+        "api_key": m.api_key,
+        "type": m.model_type,
+        "provider": m.provider,
+    }
+
+
 async def get_model_registry(db: AsyncSession) -> Dict[str, Dict[str, Any]]:
     """
     获取模型配置注册表。
-
-    优先从数据库读取，如果数据库无配置则使用后备配置。
-
-    Args:
-        db (AsyncSession): 数据库会话。
-
-    Returns:
-        Dict[str, Dict[str, Any]]: 模型配置字典。
+    优先从数据库读取，数据库为空则从 core.llm 的内存注册表读取。
     """
     try:
         db_registry = await crud_ai_model_config.get_model_registry(db)
         if db_registry:
             return db_registry
     except Exception as e:
-        log.warning(f"Failed to load model config from database: {e}, using fallback")
+        log.warning(f"Failed to load model config from database: {e}")
 
-    return FALLBACK_MODEL_REGISTRY
+    # 数据库为空 → 从已初始化的 core.llm.model_registry 读取
+    from core.llm import model_registry, ModelDef
+    registry = {}
+    for m in model_registry.list_all():
+        registry[m.name] = _model_def_to_dict(m)
+    return registry
 
 
 async def get_default_model_key(db: AsyncSession) -> str:
@@ -432,8 +409,14 @@ async def call_ai_agent(
     history = history or []
     knowledge = knowledge or []
     
-    # 使用传入的注册表或后备配置
-    registry = model_registry or FALLBACK_MODEL_REGISTRY
+    # 使用传入的注册表或从内存注册表读取
+    if model_registry is None:
+        from core.llm import model_registry as core_registry
+        registry = {}
+        for m in core_registry.list_all():
+            registry[m.name] = _model_def_to_dict(m)
+    else:
+        registry = model_registry
     
     if not model_key or model_key not in registry:
         model_key = DEFAULT_MODEL if DEFAULT_MODEL in registry else list(registry.keys())[0]
