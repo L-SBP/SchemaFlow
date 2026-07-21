@@ -45,6 +45,5 @@ node_modules
 src/backend/todo.md
 mcp/
 
-src/.env
-
 .vite
+/src/backend/.env
