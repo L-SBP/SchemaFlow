@@ -233,15 +233,15 @@ dev:
   # 用户前端传了 ai_model 则覆盖这里的默认值
   tasks:
     schema_generation:
-      model: deepseek-v3
+      model: deepseek-v4-pro
       temperature: 0.1
       max_tokens: 4096
     ddl_generation:
-      model: deepseek-v3
+      model: deepseek-v4-pro
       temperature: 0.0
       max_tokens: 8192
     er_generation:
-      model: deepseek-v3
+      model: deepseek-v4-pro
       temperature: 0.2
       max_tokens: 2048
 

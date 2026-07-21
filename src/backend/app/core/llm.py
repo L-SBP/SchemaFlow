@@ -1,3 +1,4 @@
+import os
 from typing import Optional, Dict, Any
 
 from langchain_anthropic import ChatAnthropic
@@ -11,9 +12,9 @@ from langchain_openai import ChatOpenAI
 # ═══════════════════════════════════════════════════
 
 _FALLBACK_TASK_CONFIG: Dict[str, Any] = {
-    "schema_generation": {"model": "deepseek-v3", "temperature": 0.1, "max_tokens": 4096},
-    "ddl_generation": {"model": "deepseek-v3", "temperature": 0.0, "max_tokens": 8192},
-    "er_generation": {"model": "deepseek-v3", "temperature": 0.2, "max_tokens": 2048},
+    "schema_generation": {"model": "deepseek-v4-pro", "temperature": 0.1, "max_tokens": 4096},
+    "ddl_generation": {"model": "deepseek-v4-pro", "temperature": 0.0, "max_tokens": 8192},
+    "er_generation": {"model": "deepseek-v4-pro", "temperature": 0.2, "max_tokens": 2048},
 }
 
 
@@ -39,9 +40,13 @@ class ModelDef:
         self.provider: str = data.get("provider", "openai_compatible")
         self.api_url: str = data.get("api_url", "")
         self.model_id: str = data.get("model_id", "")
-        self.api_key: str = data.get("api_key", "")
+        self.api_key_env: str = data.get("api_key_env", "")
         self.model_type: str = data.get("type", "general_llm")
         self.is_preset: bool = data.get("is_preset", False)
+
+        # api_key 取值优先级：环境变量 api_key_env > 直接存的 api_key
+        env_val = os.getenv(self.api_key_env) if self.api_key_env else None
+        self.api_key: str = env_val or data.get("api_key", "")
 
 
 class ModelRegistry:
@@ -189,18 +194,18 @@ async def init_model_registry(db):
 
 
 async def _seed_preset_models(db):
-    """启动时同步预设模型到 ai_model_config 表，已有记录则更新 api_key/api_url"""
-    import os
+    """启动时同步预设模型到 ai_model_config 表，已有记录则更新 api_url/model_id 并清除旧 api_key"""
     from sqlalchemy import select as sa_select
     from models.ai_model_config import AIModelConfig
 
     presets = [
         {
-            "model_name": "deepseek-v3",
+            "model_name": "deepseek-v4-pro",
             "provider": "openai_compatible",
             "model_id": "deepseek-v4-pro",
             "api_url": "https://api.deepseek.com",
-            "api_key": os.getenv("DEEPSEEK_API_KEY", ""),
+            "api_key_env": "DEEPSEEK_API_KEY",
+            "api_key": "",
             "model_type": "general_llm",
             "is_preset": True,
         },
@@ -216,7 +221,7 @@ async def _seed_preset_models(db):
             if not existing_row.is_preset:
                 continue
             changed = False
-            for field in ("api_key", "api_url", "model_id", "provider"):
+            for field in ("api_url", "model_id", "provider", "api_key_env", "api_key"):
                 if getattr(existing_row, field, None) != cfg[field]:
                     setattr(existing_row, field, cfg[field])
                     changed = True

@@ -1,6 +1,7 @@
 """
 管理员 API 端点。提供用户管理、公告管理、违规记录查看及系统统计看板等管理员专属功能。
 """
+import os
 from typing import Optional, List, Literal, Any
 from fastapi import APIRouter, Depends, Query, Path, Body, Request
 from sqlalchemy.ext.asyncio import AsyncSession as Session
@@ -372,12 +373,19 @@ async def get_ai_model_config(
     if not config:
         raise ItemNotFoundException("AI 模型配置")
     
-    # 脱敏 API Key：只显示前4位和后4位
-    api_key = config.api_key
-    if len(api_key) > 8:
-        api_key_masked = api_key[:4] + "*" * (len(api_key) - 8) + api_key[-4:]
+    # 脱敏 API Key：
+    # - preset 模型（走 env 引用）：显示环境变量名
+    # - 非 preset 模型：显示前4后4位
+    if config.api_key_env:
+        api_key_masked = f"via env: {config.api_key_env}"
     else:
-        api_key_masked = "*" * len(api_key)
+        api_key = config.api_key or ""
+        if len(api_key) > 8:
+            api_key_masked = api_key[:4] + "*" * (len(api_key) - 8) + api_key[-4:]
+        elif api_key:
+            api_key_masked = "*" * len(api_key)
+        else:
+            api_key_masked = "(未设置)"
     
     result = AIModelConfigDetailResponse(
         config_id=config.config_id,
@@ -517,7 +525,10 @@ async def test_ai_model_connection(
         from crud.crud_ai_model_config import crud_ai_model_config
         existing_config = await crud_ai_model_config.get(db, data.config_id)
         if existing_config:
-            clean_api_key = existing_config.api_key
+            if existing_config.api_key_env:
+                clean_api_key = os.getenv(existing_config.api_key_env)
+            else:
+                clean_api_key = existing_config.api_key
         else:
             return UnifiedResponse.success(AIModelTestConnectionResponse(
                 success=False,

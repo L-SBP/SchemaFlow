@@ -18,14 +18,16 @@ Your ONLY task is to generate valid, executable SQL queries based on the provide
 4. If the question cannot be answered with the schema, return SELECT 'ERROR: Cannot answer';
 5. Always use single quotes ('value') for string literals. NEVER use double quotes ("value").
 6. If a term is defined in [Domain Knowledge], you MUST use the exact definition and values provided there. Do NOT use general knowledge.
+7. **RESPECT SCHEMA CONSTRAINTS**: When generating INSERT values, carefully check the column types and length limits in the DDL (e.g. CHAR(13) means max 13 characters, INT UNSIGNED means integers ≥ 0). Your generated values MUST fit within the column's defined constraints. If you cannot generate values that fit, return SELECT 'ERROR: Cannot generate valid values';
+8. **LEARN FROM EXECUTION FEEDBACK**: If [Conversation History] shows previous SQL execution failures (e.g. "数据过长", "duplicate entry"), you MUST analyze the error and adjust your new SQL to avoid the same mistake. Pay attention to the column definition in the DDL, not just the error message.
 
 [Output Format - CRITICAL]
-7. The output must be a DIRECTLY EXECUTABLE SQL statement.
-8. For INSERT requests, use the format: INSERT INTO table (...) VALUES (...), (...), (...); for multiple records. DO NOT generate multiple INSERT statements for multiple records. Always combine multiple inserts into a single INSERT statement with multiple VALUES clauses.
-9. For SELECT requests, output: SELECT ... FROM ... WHERE ...;
-10. For UPDATE requests, output: UPDATE table SET ... WHERE ...;
-11. For DELETE requests, output: DELETE FROM table WHERE ...;
-12. Even if the user asks the same question multiple times, generate the same type of SQL (INSERT for insert, SELECT for query, etc.)
+8. The output must be a DIRECTLY EXECUTABLE SQL statement.
+9. For INSERT requests, use the format: INSERT INTO table (...) VALUES (...), (...), (...); for multiple records. DO NOT generate multiple INSERT statements for multiple records. Always combine multiple inserts into a single INSERT statement with multiple VALUES clauses.
+10. For SELECT requests, output: SELECT ... FROM ... WHERE ...;
+11. For UPDATE requests, output: UPDATE table SET ... WHERE ...;
+12. For DELETE requests, output: DELETE FROM table WHERE ...;
+13. Even if the user asks the same question multiple times, generate the same type of SQL (INSERT for insert, SELECT for query, etc.)
 
 IMPORTANT: 
 - For string literals, YOU MUST USE SINGLE QUOTES (').
@@ -33,6 +35,8 @@ IMPORTANT:
 - DO NOT output SQL as a string literal inside SELECT.
 - For multiple record insertion, ALWAYS use a single INSERT statement with multiple VALUES tuples: INSERT INTO table (col1, col2) VALUES (val1, val2), (val3, val4), (val5, val6);
 - NEVER generate multiple INSERT statements like: INSERT INTO table ...; INSERT INTO table ...; INSERT INTO table ...;
+- For CHAR(n) or VARCHAR(n) columns, your string values MUST NOT exceed n characters.
+- For INT/TINYINT/SMALLINT columns, your integer values MUST be within the valid range.
 
 Examples:
 Correct: INSERT INTO users (name, age) VALUES ('John', 25), ('Jane', 30), ('Bob', 35);
@@ -41,9 +45,6 @@ WRONG:   INSERT INTO users (name, age) VALUES ('John', 25); INSERT INTO users (n
 WRONG:   SELECT 'INSERT INTO users (name) VALUES ('John')';
 WRONG:   SELECT * FROM users WHERE name = "John";
 """
-
-LOCAL_FINETUNE_SYSTEM_PROMPT = "You are a SQL expert."
-
 
 # =========================================================
 # Prompt 构建辅助函数
@@ -81,17 +82,13 @@ Use these terms to understand the user's intent:
 def build_history_section(history: list) -> str:
     """
     构建历史对话部分的 Prompt。
-    
+
     Args:
         history: 历史消息列表 [MessageModel]
-        
+
     Returns:
         str: 格式化后的历史对话文本
-    
-    注意：
-        - 只保留用户问题，不拼接 AI 的 SQL 回复（避免干扰）
-        - 跳过取消操作相关的消息
-    
+
     TODO: [RAG] 历史对话注入优化
         1. 接收的 history 应为 RAG 检索后的结果
         2. 检索结果按相关度排序，而非时间顺序
@@ -100,30 +97,28 @@ def build_history_section(history: list) -> str:
     """
     if not history:
         return ""
-    
+
     history_lines = []
-    
+
     for msg in history:
         content = msg.content.strip()
-        
-        # 跳过取消操作相关的消息
+
         if "已取消" in content or "已为您取消" in content:
             continue
-        
-        # 只保留用户消息，AI 的 SQL 回复不拼接（避免干扰模型判断）
+
+        clean_content = content.replace("\n", " ")
         if msg.message_type == "user":
-            # 清理内容，移除换行
-            clean_content = content.replace("\n", " ")
             history_lines.append(f"User: {clean_content}")
-    
+        elif msg.message_type == "assistant":
+            history_lines.append(f"Assistant: {clean_content}")
+
     if not history_lines:
         return ""
-    
+
     history_content = "\n".join(history_lines)
-    
+
     return f"""
 [Conversation History]
-Previous user questions for context:
 {history_content}"""
 
 
@@ -168,7 +163,6 @@ def build_context_block(
 
 
 def build_ai_messages(
-    model_type: str,
     schema_text: str,
     question: str,
     history: list = None,
@@ -176,49 +170,28 @@ def build_ai_messages(
     db_type: str = None
 ) -> list:
     """
-    构建发送给 AI 的消息列表。
-    
+    构建发送给 AI 的 chat messages。
+
     Args:
-        model_type: 模型类型 ('local_finetune' 或 'general_llm')
         schema_text: 数据库 DDL
         question: 用户当前问题
         history: 历史对话记录
         knowledge: 领域知识列表
         db_type: 数据库类型（mysql/postgresql/sqlite）
-        
+
     Returns:
-        list: 消息字典列表
+        list: [{"role": "system", "content": ...}, {"role": "user", "content": ...}]
     """
     history = history or []
     knowledge = knowledge or []
-    
+
     context_block = build_context_block(schema_text, knowledge, history, db_type)
-    
-    if model_type == "local_finetune":
-        # CodeLlama-Instruct 使用 INST 格式，直接返回格式化的 prompt 字符串
-        # 这样可以使用 /v1/completions 端点，避免服务器应用错误的 chat template
-        prompt_content = f"""{SQL_GENERATION_SYSTEM_INSTRUCTION}
-{context_block}
 
-### User Question
-{question}
-
-### SQL Query
-"""
-        # 返回 CodeLlama INST 格式的完整 prompt
-        llama_prompt = f"""<s>[INST] <<SYS>>
-{LOCAL_FINETUNE_SYSTEM_PROMPT}
-<</SYS>>
-
-{prompt_content} [/INST]
-"""
-        return {"prompt": llama_prompt, "is_completion": True}
-    else:
-        full_system_prompt = f"{SQL_GENERATION_SYSTEM_INSTRUCTION}\n{context_block}"
-        return [
-            {"role": "system", "content": full_system_prompt},
-            {"role": "user", "content": question}
-        ]
+    full_system_prompt = f"{SQL_GENERATION_SYSTEM_INSTRUCTION}\n{context_block}"
+    return [
+        {"role": "system", "content": full_system_prompt},
+        {"role": "user", "content": question}
+    ]
 
 
 # =========================================================

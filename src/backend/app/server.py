@@ -3,8 +3,8 @@
 from pathlib import Path
 from dotenv import load_dotenv
 
-# 加载 .env 文件（项目根目录: src/.env）
-env_path = Path(__file__).resolve().parent.parent.parent / ".env"
+# 加载 .env 文件（项目根目录: src/backend/.env）
+env_path = Path(__file__).resolve().parent.parent / ".env"
 load_dotenv(env_path)
 
 from contextlib import asynccontextmanager

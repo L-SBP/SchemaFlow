@@ -71,8 +71,14 @@ class AIModelConfig(Base):
     )
     api_key = Column(
         String(500),
-        nullable=False,
-        comment='API 密钥'
+        nullable=True,
+        default='',
+        comment='API 密钥（非 preset 模型使用；preset 模型留空，走 api_key_env 环境变量引用）'
+    )
+    api_key_env = Column(
+        String(64),
+        nullable=True,
+        comment='环境变量名（preset 模型通过 env 引用密钥，避免明文写库）'
     )
     model_type = Column(
         String(50),
@@ -105,6 +111,7 @@ class AIModelConfig(Base):
             "is_preset": self.is_preset,
             "api_url": self.api_url,
             "model_id": self.model_id,
-            "api_key": self.api_key,
+            "api_key": self.api_key or "",
+            "api_key_env": self.api_key_env or "",
             "type": self.model_type
         }

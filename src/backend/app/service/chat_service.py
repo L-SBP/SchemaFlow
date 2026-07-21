@@ -17,11 +17,8 @@
 
 # backend/app/service/chat_service.py
 
-import json
-import httpx
 import sqlparse
 from typing import List, Dict, Any, Optional, Tuple
-from fastapi import HTTPException
 from sqlalchemy.future import select
 from sqlalchemy import update
 from sqlalchemy.orm import selectinload
@@ -36,7 +33,6 @@ from crud.crud_database_instance import crud_database_instance
 from crud.crud_message import crud_message
 from crud.crud_project import crud_project
 from crud.crud_knowledge import crud_knowledge
-from crud.crud_ai_model_config import crud_ai_model_config
 from models.session import Session as SessionModel
 from schema.chat import ChatResponse, MessageType
 from service.mysql_service import execute_mysql_sql_with_user_check
@@ -53,70 +49,8 @@ from service.rag_service import rag_service, retrieve_chat_context, index_new_me
 
 
 # =========================================================
-# 1. 模型配置注册表（后备配置，当数据库无配置时使用）
+# 1. 模型解析（统一使用 core.llm.model_registry）
 # =========================================================
-
-DEFAULT_MODEL = "deepseek-v3"
-
-
-# =========================================================
-# 1.1 动态模型配置获取
-# =========================================================
-
-def _model_def_to_dict(m) -> Dict[str, Any]:
-    """将 ModelDef 转为 chat_service 需要的历史 dict 格式"""
-    from core.llm import ModelDef
-    return {
-        "name": m.name,
-        "api_url": m.api_url,
-        "model_id": m.model_id,
-        "api_key": m.api_key,
-        "type": m.model_type,
-        "provider": m.provider,
-    }
-
-
-async def get_model_registry(db: AsyncSession) -> Dict[str, Dict[str, Any]]:
-    """
-    获取模型配置注册表。
-    优先从数据库读取，数据库为空则从 core.llm 的内存注册表读取。
-    """
-    try:
-        db_registry = await crud_ai_model_config.get_model_registry(db)
-        if db_registry:
-            return db_registry
-    except Exception as e:
-        log.warning(f"Failed to load model config from database: {e}")
-
-    # 数据库为空 → 从已初始化的 core.llm.model_registry 读取
-    from core.llm import model_registry, ModelDef
-    registry = {}
-    for m in model_registry.list_all():
-        registry[m.name] = _model_def_to_dict(m)
-    return registry
-
-
-async def get_default_model_key(db: AsyncSession) -> str:
-    """
-    获取默认模型名称。
-
-    由于移除了 is_default 字段，这里返回第一个配置的模型名称。
-    如果数据库无配置则使用后备默认值。
-
-    Args:
-        db (AsyncSession): 数据库会话。
-
-    Returns:
-        str: 默认模型名称。
-    """
-    try:
-        configs = await crud_ai_model_config.get_all(db, limit=1)
-        if configs:
-            return configs[0].model_name
-    except Exception as e:
-        log.warning(f"Failed to load default model from database: {e}, using fallback")
-
-    return DEFAULT_MODEL
 
 
 # =========================================================
@@ -161,29 +95,24 @@ async def _get_session_obj(db: AsyncSession, session_id: int) -> SessionModel:
 # =========================================================
 
 async def _resolve_model_key(
-    db: AsyncSession,
     selected_model: Optional[str],
     session_current_model: Optional[str]
-) -> Tuple[str, Dict[str, Dict[str, Any]]]:
+) -> str:
     """
     解析最终使用的模型 key。
-    优先级：用户本次指定 > 会话记忆 > 默认模型
-
-    同时返回模型注册表，避免重复查询数据库。
+    优先级：用户本次指定 > 会话记忆 > 注册表默认模型
 
     Returns:
-        Tuple[str, Dict]: (模型 key, 模型配置注册表)
+        str: 模型 key
     """
-    # 获取模型注册表
-    registry = await get_model_registry(db)
-    default_key = await get_default_model_key(db)
+    from core.llm import model_registry
 
-    if selected_model and selected_model in registry:
-        return selected_model, registry
-    if session_current_model and session_current_model in registry:
-        return session_current_model, registry
+    if selected_model and selected_model in model_registry:
+        return selected_model
+    if session_current_model and session_current_model in model_registry:
+        return session_current_model
 
-    return default_key, registry
+    return model_registry.get_default_name()
 
 
 async def _update_session_model(
@@ -389,13 +318,10 @@ async def call_ai_agent(
     history: List[MessageModel] = None,
     knowledge: List[DomainKnowledge] = None,
     model_key: str = None,
-    model_registry: Dict[str, Dict[str, Any]] = None,
     db_type: str = None
 ) -> str:
     """
-    调用 AI 接口生成 SQL。
-    
-    【重要】此函数不应在数据库事务内调用，因为 AI 调用可能耗时很长（最长 300s）。
+    调用 AI 接口生成 SQL（统一使用 core.llm 的 LangChain ChatModel）。
 
     Args:
         ddl_text: 数据库 DDL 语句
@@ -403,29 +329,20 @@ async def call_ai_agent(
         history: 历史消息列表
         knowledge: 领域知识列表
         model_key: 模型标识符
-        model_registry: 模型配置注册表（从数据库或后备配置获取）
         db_type: 数据库类型（mysql/postgresql/sqlite）
     """
+    from core.llm import model_registry, create_chat_model
+
     history = history or []
     knowledge = knowledge or []
-    
-    # 使用传入的注册表或从内存注册表读取
-    if model_registry is None:
-        from core.llm import model_registry as core_registry
-        registry = {}
-        for m in core_registry.list_all():
-            registry[m.name] = _model_def_to_dict(m)
-    else:
-        registry = model_registry
-    
-    if not model_key or model_key not in registry:
-        model_key = DEFAULT_MODEL if DEFAULT_MODEL in registry else list(registry.keys())[0]
 
-    config = registry[model_key]
-    log.info(f"Using AI Model: {config['name']} ({config['model_id']})")
+    if not model_key or model_key not in model_registry:
+        model_key = model_registry.get_default_name()
 
-    ai_input = build_ai_messages(
-        model_type=config["type"],
+    model_def = model_registry.get(model_key)
+    log.info(f"Using AI Model: {model_def.name} ({model_def.model_id})")
+
+    messages = build_ai_messages(
         schema_text=ddl_text,
         question=question,
         history=history,
@@ -433,88 +350,21 @@ async def call_ai_agent(
         db_type=db_type
     )
 
-    # 根据返回类型决定使用 completions 还是 chat completions 端点
-    if isinstance(ai_input, dict) and ai_input.get("is_completion"):
-        # 微调模型：使用 /v1/completions 端点，直接发送格式化的 prompt
-        # 这样可以避免服务器应用错误的 chat template (如 ChatML)
-        payload = {
-            "model": config["model_id"],
-            "prompt": ai_input["prompt"],
-            "temperature": 0.1,
-            "stream": False,
-            "max_tokens": 512,
-            "stop": ["[/INST]", "[INST]", "<<SYS>>", "<</SYS>>", "\n\n\n"]
-        }
-        use_completion_api = True
-    else:
-        # 在线模型：使用 /v1/chat/completions 端点
-        payload = {
-            "model": config["model_id"],
-            "messages": ai_input,
-            "temperature": 0.1,
-            "stream": False,
-            "max_tokens": 512,
-            "stop": ["User:", "Assistant:", "\n\n\n"]
-        }
-        use_completion_api = False
+    log.info("AI Prompt:\n{}", "\n\n".join(
+        f"[{m['role']}] {m['content']}"
+        for m in messages
+    ))
 
-    headers = {
-        "Authorization": f"Bearer {config['api_key']}",
-        "Content-Type": "application/json"
-    }
+    llm = create_chat_model(
+        model_name=model_key,
+        temperature=0.1,
+        max_tokens=512,
+    )
 
     try:
-        # 根据模型类型选择 API 端点
-        if use_completion_api:
-            # 微调模型：使用 /v1/completions 端点
-            # 将 /v1/chat/completions 替换为 /v1/completions
-            api_url = config["api_url"].replace("/chat/completions", "/completions")
-        else:
-            api_url = config["api_url"]
+        raw = await llm.ainvoke(messages)
+        return _clean_ai_response(raw.content)
 
-        # 设置细粒度超时：
-        # - connect: 10秒连接超时，快速检测服务不可用
-        # - read: 120秒读取超时，等待AI模型响应
-        # - write: 30秒写入超时
-        # - pool: 10秒连接池超时
-        timeout_config = httpx.Timeout(
-            connect=10.0,   # 连接超时：快速检测AI服务是否可达
-            read=120.0,     # 读取超时：等待AI模型生成响应
-            write=30.0,     # 写入超时
-            pool=10.0       # 连接池超时
-        )
-        async with httpx.AsyncClient(timeout=timeout_config) as client:
-            resp = await client.post(
-                api_url,
-                content=json.dumps(payload, ensure_ascii=False).encode("utf-8"), 
-                headers=headers
-            )
-        resp.raise_for_status()
-        raw = resp.json()
-        
-        content = ""
-        if "choices" in raw and len(raw["choices"]) > 0:
-            if use_completion_api:
-                # completions 端点返回 text 字段
-                content = raw["choices"][0].get("text", "")
-            else:
-                # chat completions 端点返回 message.content
-                content = raw["choices"][0]["message"]["content"]
-        
-        return _clean_ai_response(content)
-
-    except httpx.ConnectError as e:
-        log.error("AI Connect Error ({}): {}", model_key, e)
-        return f"-- AI Service Error: 无法连接到AI服务 ({config['api_url'][:50]}...)"
-    except httpx.ConnectTimeout as e:
-        log.error("AI Connect Timeout ({}): {}", model_key, e)
-        return f"-- AI Service Error: 连接AI服务超时，服务可能不可用"
-    except httpx.ReadTimeout as e:
-        log.error("AI Read Timeout ({}): {}", model_key, e)
-        return f"-- AI Service Error: AI服务响应超时，请稍后重试"
-    except httpx.HTTPStatusError as e:
-        log.error("AI HTTP Error ({}): {} - {}", model_key, e.response.status_code, e.response.text[:200])
-        return f"-- AI Service Error: AI服务返回错误 (HTTP {e.response.status_code})"
     except Exception as e:
         error_msg = str(e) if str(e) else type(e).__name__
         log.error("AI Call Error ({}): {}", model_key, error_msg)
@@ -762,7 +612,7 @@ async def _save_ai_response(
     await db.flush()
 
     # 仅对成功的查询落库 QueryResult
-    if execution_status == "success" and sql_type == "SELECT":
+    if execution_status == "completed" and sql_type == "SELECT":
         query_result = QueryResult(
             statement_id=new_statement.statement_id,
             result_data=safe_data,
@@ -798,8 +648,8 @@ async def process_chat(
     project_id = await _verify_session_ownership(db, session_id, user_id)
     session_obj = await _get_session_obj(db, session_id)
     
-    # 解析模型（异步，从数据库获取配置）
-    final_model_key, model_registry = await _resolve_model_key(db, selected_model, session_obj.current_model)
+    # 解析模型
+    final_model_key = await _resolve_model_key(selected_model, session_obj.current_model)
     await _update_session_model(db, session_obj, final_model_key)
     log.info("Session {} using model: {}", session_id, final_model_key)
     
@@ -898,7 +748,6 @@ async def process_chat(
         history=history_context,
         knowledge=knowledge_context,
         model_key=final_model_key,
-        model_registry=model_registry,
         db_type=db_type
     )
     
@@ -1150,7 +999,7 @@ async def _try_execute_sql(
         else:
             data = []
         
-        return data, "success"
+        return data, "completed"
     except Exception as e:
         log.error("SQL Execution Error: {}", str(e))
         # 返回错误信息，便于后续处理
@@ -1223,7 +1072,7 @@ async def _update_statement_result(
     
     if db_stmt:
         db_stmt.execution_result = execute_res
-        db_stmt.execution_status = "success"
+        db_stmt.execution_status = "completed"
         db.add(db_stmt)
 
 

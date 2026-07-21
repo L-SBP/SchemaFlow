@@ -24,13 +24,15 @@ class AIModelConfigCreate(BaseModel):
         model_name (str): 模型名称（唯一标识）。
         api_url (str): API 接口地址。
         model_id (str): 模型在 API 服务中的标识。
-        api_key (str): API 密钥。
+        api_key (str): API 密钥（非 preset 模型填写；preset 模型留空走 api_key_env 引用）。
+        api_key_env (str): 环境变量名（preset 模型通过 env 引用密钥）。
         model_type (str): 模型类型。
     """
     model_name: str = Field(..., min_length=1, max_length=200, description="模型名称")
     api_url: str = Field(..., min_length=1, max_length=500, description="API 接口地址")
     model_id: str = Field(..., min_length=1, max_length=200, description="模型在 API 服务中的标识")
-    api_key: str = Field(..., min_length=1, max_length=500, description="API 密钥")
+    api_key: str = Field(default="", max_length=500, description="API 密钥")
+    api_key_env: str = Field(default="", max_length=64, description="环境变量名，引用 .env 中的密钥")
     model_type: str = Field(default="general_llm", description="模型类型：local_finetune, general_llm")
     provider: str = Field(default="openai_compatible", description="模型供应商")
 
@@ -51,7 +53,8 @@ class AIModelConfigUpdate(BaseModel):
     model_name: Optional[str] = Field(None, min_length=1, max_length=200, description="模型名称")
     api_url: Optional[str] = Field(None, min_length=1, max_length=500, description="API 接口地址")
     model_id: Optional[str] = Field(None, min_length=1, max_length=200, description="模型在 API 服务中的标识")
-    api_key: Optional[str] = Field(None, min_length=1, max_length=500, description="API 密钥")
+    api_key: Optional[str] = Field(None, max_length=500, description="API 密钥")
+    api_key_env: Optional[str] = Field(None, max_length=64, description="环境变量名")
     model_type: Optional[str] = Field(None, description="模型类型")
     provider: Optional[str] = Field(None, description="模型供应商")
 

@@ -46,6 +46,8 @@ class CRUDAIModelConfig:
                 api_url=config_in.api_url,
                 model_id=config_in.model_id,
                 api_key=config_in.api_key,
+                api_key_env=config_in.api_key_env,
+                provider=config_in.provider,
                 model_type=config_in.model_type
             )
             db.add(db_obj)
