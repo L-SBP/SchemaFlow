@@ -1,9 +1,9 @@
 # backend/app/service/ai_service.py
 
 from core.llm import create_chat_model, get_model_for_task
-from core.prompts.schema_prompt import SCHEMA_PROMPT
-from core.prompts.ddl_prompt import DDL_PROMPT
-from core.prompts.er_prompt import ER_PROMPT
+from core.prompt.schema_prompt import SCHEMA_PROMPT
+from core.prompt.ddl_prompt import DDL_PROMPT
+from core.prompt.er_prompt import ER_PROMPT
 
 class AIService:
     """

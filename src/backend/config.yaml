@@ -20,11 +20,6 @@ dev:
     version: 1.0.0
     # 是否自动重载
     reload: true
-  #新增ai配置
-  ai:
-    modelscope_api_key: "ms-5990c475-35aa-444d-80eb-01c7f0d5719b"
-    # mermaid的api-key
-    mermaid_api_key: "sk-VwmLWgJlhLpNCyrP5IcTfvsBZp9VfhQqXfqcz7LH35xn5lhn"
 
   # 业务数据库配置(PostgresSQL)
   db:
@@ -233,21 +228,6 @@ dev:
         - "^DROP INDEX *"
         - "^SET *"
         - "^KILL *"
-
-  # 任务→模型默认映射（Phase 2）
-  tasks:
-    schema_generation:
-      model: deepseek-v3
-      temperature: 0.1
-      max_tokens: 4096
-    ddl_generation:
-      model: deepseek-v3
-      temperature: 0.0
-      max_tokens: 8192
-    er_generation:
-      model: deepseek-v3
-      temperature: 0.2
-      max_tokens: 2048
 
   # 任务→模型默认映射（Phase 2）
   # 用户前端传了 ai_model 则覆盖这里的默认值

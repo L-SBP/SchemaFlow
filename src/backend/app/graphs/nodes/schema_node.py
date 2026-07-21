@@ -5,7 +5,7 @@ from graphs.state import ProjectState
 from redis_client.cache_service import cache_service
 from redis_client.redis_keys import redis_key_manager
 from schema.project import CreationStageEnum
-from server import my_app
+from graphs.db import _get_shared_engine
 from service.ai_service import AIService
 
 
@@ -19,7 +19,7 @@ async def generate_schema_node(state: ProjectState) -> dict:
     Returns:
 
     """
-    engine = my_app.state.psql_engine
+    engine = _get_shared_engine()
     project_id = state['project_id']
     try:
         # 更新项目状态为正在生成 Schema
@@ -30,18 +30,18 @@ async def generate_schema_node(state: ProjectState) -> dict:
             )
 
         # 调用 AI 服务生成 Schema
-        schema_text = AIService.generate_schema(
+        schema_text = await AIService.generate_schema(
             requirements=state["requirements"],
             db_name=state["db_name"],
             db_type=state["db_type"],
-            ai_model=state["ai_model"]
+            ai_model_hint=state["ai_model"]
         )
 
         if not schema_text or "error" in schema_text.lower():
             log.error(f"Schema generation failed for project {state['project_id']}")
             return {
                 "error_message": f"Schema generation failed: {schema_text}",
-                "current_stage": "failed",
+                "current_stage": CreationStageEnum.FAILED.value,
             }
 
         # 保存生成的 Schema
@@ -56,6 +56,7 @@ async def generate_schema_node(state: ProjectState) -> dict:
                 await crud_project.update(
                     db, project_id,
                     schema_definition=current_def,
+                    creation_stage=CreationStageEnum.SCHEMA_GENERATED.value,
                 )
         # 4. 清理 Redis 缓存
         async with PsqlHelper.get_session(engine) as db:
@@ -73,7 +74,7 @@ async def generate_schema_node(state: ProjectState) -> dict:
         log.info(f"[Graph] Schema generated for project {project_id}")
         return {
             "schema_text": schema_text,
-            "current_stage": "schema_generated",
+            "current_stage": CreationStageEnum.SCHEMA_GENERATED.value,
             "node_history": ["generate_schema"],
         }
 
@@ -81,10 +82,10 @@ async def generate_schema_node(state: ProjectState) -> dict:
         log.exception(f"Schema generation error for project {project_id}")
         async with PsqlHelper.get_session(engine) as db:
             await crud_project.update(
-                db, project_id, creation_stage="failed"
+                db, project_id, creation_stage=CreationStageEnum.FAILED.value
             )
         return {
             "error_message": str(e),
-            "current_stage": "failed",
+            "current_stage": CreationStageEnum.FAILED.value,
             "node_history": ["generate_schema"],
         }

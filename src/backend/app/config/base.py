@@ -146,11 +146,6 @@ class SMTP(BaseSettings):
     # 验证码有效期
     expire_time_seconds: int
 
-class AIConfig(BaseSettings):
-    modelscope_api_key: str = "dummy_key"
-    mermaid_api_key: str = ""
-
-
 class ChromaConfig(BaseSettings):
     """
     ChromaDB 向量数据库配置
@@ -302,8 +297,6 @@ class BaseConfig(BaseSettings):
 
     # 应用配置
     app: Appconfig
-    #  ai 配置！
-    ai: AIConfig = AIConfig()
     # PostgresSQL数据库配置
     db: DatabaseConfig
     # Redis配置
@@ -335,4 +328,4 @@ class BaseConfig(BaseSettings):
     # SQL权限配置
     sql_permissions: SQLPermissions
     # 任务→模型映射（Phase 2 新增，用户可在 config.yaml 中配置）
-    tasks: dict = Field(default_factory=dict, description="任务到模型的默认映射")
+    tasks: dict

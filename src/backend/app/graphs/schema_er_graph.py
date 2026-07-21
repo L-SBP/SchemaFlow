@@ -1,3 +1,7 @@
+"""
+Schema → ER 序列图。前端等两个都完成后停止轮询，展示 Schema + ER 图。
+"""
+
 from langgraph.constants import START, END
 from langgraph.graph import StateGraph
 
@@ -5,11 +9,12 @@ from graphs.nodes.er_node import generate_er_node
 from graphs.nodes.schema_node import generate_schema_node
 from graphs.state import ProjectState
 
+
 def route_after_schema(state: ProjectState) -> str:
-    """Schema 生成后的条件路由"""
     if state.get("error_message"):
         return "failed"
     return "success"
+
 
 builder = StateGraph(ProjectState)
 

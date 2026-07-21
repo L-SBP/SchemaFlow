@@ -1,6 +1,7 @@
 from typing import Optional, Dict, Any
 
 from langchain_anthropic import ChatAnthropic
+from core.log import log
 from langchain_core.language_models import BaseChatModel
 from langchain_ollama import ChatOllama
 from langchain_openai import ChatOpenAI
@@ -171,46 +172,57 @@ def resolve_model_name(user_hint: Optional[str] = None, task_type: Optional[str]
 
 async def init_model_registry(db):
     """
-    启动时从数据库加载所有模型到内存注册表。
+    启动时从数据库加载所有模型到内存注册表，并同步预设模型的 api_key。
     在 server.py startup 中调用。
     """
     from crud.crud_ai_model_config import crud_ai_model_config
 
+    # 每次启动都同步预设模型（更新 api_key 等敏感字段）
+    await _seed_preset_models(db)
+
     registry_dict = await crud_ai_model_config.get_model_registry(db)
     if not registry_dict:
-        # 表为空则写入预设模型后重新加载
-        await _seed_preset_models(db)
-        registry_dict = await crud_ai_model_config.get_model_registry(db)
+        log.warning("[ModelRegistry] No models found in database after seeding")
 
     for model_data in registry_dict.values():
         model_registry.register(ModelDef(model_data))
 
 
 async def _seed_preset_models(db):
-    """首次启动时填充预设模型到 ai_model_config 表"""
+    """启动时同步预设模型到 ai_model_config 表，已有记录则更新 api_key/api_url"""
     import os
+    from sqlalchemy import select as sa_select
     from models.ai_model_config import AIModelConfig
 
     presets = [
-        AIModelConfig(
-            model_name="deepseek-v3",
-            provider="openai_compatible",
-            model_id="deepseek-ai/DeepSeek-V3.1",
-            api_url="https://api-inference.modelscope.cn/v1/chat/completions",
-            api_key=os.getenv("DEEPSEEK_API_KEY", ""),
-            model_type="general_llm",
-            is_preset=True,
-        ),
+        {
+            "model_name": "deepseek-v3",
+            "provider": "openai_compatible",
+            "model_id": "deepseek-v4-pro",
+            "api_url": "https://api.deepseek.com",
+            "api_key": os.getenv("DEEPSEEK_API_KEY", ""),
+            "model_type": "general_llm",
+            "is_preset": True,
+        },
     ]
 
-    existing_names = set()
-    for existing_config in (await db.execute(
-        __import__("sqlalchemy").select(AIModelConfig.model_name)
-    )).scalars().all():
-        existing_names.add(existing_config)
+    result = await db.execute(sa_select(AIModelConfig))
+    existing = {row.model_name: row for row in result.scalars().all()}
 
-    for p in presets:
-        if p.model_name not in existing_names:
-            db.add(p)
+    for cfg in presets:
+        name = cfg["model_name"]
+        if name in existing:
+            existing_row = existing[name]
+            if not existing_row.is_preset:
+                continue
+            changed = False
+            for field in ("api_key", "api_url", "model_id", "provider"):
+                if getattr(existing_row, field, None) != cfg[field]:
+                    setattr(existing_row, field, cfg[field])
+                    changed = True
+            if changed:
+                log.info(f"[ModelRegistry] Synced preset model '{name}' from env")
+        else:
+            db.add(AIModelConfig(**cfg))
 
     await db.commit()

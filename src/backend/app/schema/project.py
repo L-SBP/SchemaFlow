@@ -33,6 +33,7 @@ class CreationStageEnum(str, Enum):
     DDL_GENERATED = 'ddl_generated'
     EXECUTING_DDL = 'executing_ddl'
     COMPLETED = 'completed'
+    FAILED = 'failed'
 
 class ProjectStatusEnum(str, Enum):
     """

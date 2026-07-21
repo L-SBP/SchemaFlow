@@ -5,7 +5,7 @@ from graphs.state import ProjectState
 from redis_client.cache_service import cache_service
 from redis_client.redis_keys import redis_key_manager
 from schema.project import CreationStageEnum
-from server import my_app
+from graphs.db import _get_shared_engine
 from service.ai_service import AIService
 
 
@@ -13,7 +13,7 @@ async def generate_ddl_node(state: ProjectState) -> dict:
     """调用 AI 生成 DDL 语句"""
     project_id = state["project_id"]
     schema_text = state.get("schema_text", "")
-    engine = my_app.state.psql_engine
+    engine = _get_shared_engine()
 
     try:
         # 1. 更新阶段状态
@@ -28,16 +28,17 @@ async def generate_ddl_node(state: ProjectState) -> dict:
             schema_text=schema_text,
             requirements=state["requirements"],
             db_type=state["db_type"],
-            ai_model=state["ai_model"],
+            db_name=state.get("db_name", ""),
+            ai_model_hint=state["ai_model"],
         )
 
         if not ddl or "error" in ddl.lower():
             log.error(f"DDL generation failed for project {project_id}")
             async with PsqlHelper.get_session(engine) as db:
-                await crud_project.update(db, project_id, creation_stage="failed")
+                await crud_project.update(db, project_id, creation_stage=CreationStageEnum.FAILED.value)
             return {
                 "error_message": f"DDL generation failed: {ddl}",
-                "current_stage": "failed",
+                "current_stage": CreationStageEnum.FAILED.value,
                 "node_history": ["generate_ddl"],
             }
 
@@ -66,16 +67,16 @@ async def generate_ddl_node(state: ProjectState) -> dict:
         log.info(f"[Graph] DDL generated for project {project_id}")
         return {
             "ddl_statement": ddl,
-            "current_stage": "ddl_generated",
+            "current_stage": CreationStageEnum.DDL_GENERATED.value,
             "node_history": ["generate_ddl"],
         }
 
     except Exception as e:
         log.exception(f"DDL generation error for project {project_id}")
         async with PsqlHelper.get_session(engine) as db:
-            await crud_project.update(db, project_id, creation_stage="failed")
+            await crud_project.update(db, project_id, creation_stage=CreationStageEnum.FAILED.value)
         return {
             "error_message": str(e),
-            "current_stage": "failed",
+            "current_stage": CreationStageEnum.FAILED.value,
             "node_history": ["generate_ddl"],
         }

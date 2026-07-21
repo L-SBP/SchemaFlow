@@ -176,6 +176,7 @@ async def _run_graph(task_id: str, graph, state: ProjectState):
     except Exception as e:
         _running_tasks[task_id] = {"status": "FAILURE", "project_id": state["project_id"], "error": str(e)}
 
+
 _running_tasks: dict[str, dict] = {}
 
 def _dispatch_schema_er_task(
@@ -346,7 +347,7 @@ async def create_project_service(
     # 2. 解析请求参数
     project_data = project_in.model_dump()
     db_type = project_data.pop('db_type')
-    ai_model = project_data.get('ai_model') or model_registry.get_default_name()
+    ai_model = project_data.pop('ai_model', None) or model_registry.get_default_name()
 
     requirements_text = project_data.get('description', '')
     project_name = project_data.get('project_name', 'project')
@@ -360,7 +361,7 @@ async def create_project_service(
     # 5. 创建项目记录
     db_obj = await _create_project_record(db, project_data, user_id, new_instance.instance_id)
 
-    # 6. 调度 Celery 任务：Schema + ER 生成流水线
+    # 6. 调度 Schema 生成（完成后自动触发 ER 图生成）
     task_id = _dispatch_schema_er_task(
         project_id=db_obj.project_id,
         requirements=requirements_text,

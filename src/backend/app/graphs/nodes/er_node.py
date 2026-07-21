@@ -4,7 +4,7 @@ from crud.crud_project import crud_project
 from graphs.state import ProjectState
 from redis_client.cache_service import cache_service
 from redis_client.redis_keys import redis_key_manager
-from server import my_app
+from graphs.db import _get_shared_engine
 from service.ai_service import AIService
 
 
@@ -12,12 +12,12 @@ async def generate_er_node(state: ProjectState) -> dict:
     """调用 AI 生成 Mermaid ER 图"""
     project_id = state["project_id"]
     schema_text = state.get("schema_text", "")
-    engine = my_app.state.psql_engine
+    engine = _get_shared_engine()
 
     try:
         er_code = await AIService.generate_mermaid_code(
             schema_text=schema_text,
-            ai_model=state["ai_model"],
+            ai_model_hint=state["ai_model"],
         )
 
         async with PsqlHelper.get_session(engine) as db:
